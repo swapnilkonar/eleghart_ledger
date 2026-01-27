@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'theme/eleghart_colors.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/home_dashboard.dart';
+
+void main() {
+  runApp(const EleghartLedgerApp());
+}
+
+class EleghartLedgerApp extends StatelessWidget {
+  const EleghartLedgerApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Eleghart Ledger',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: EleghartColors.bgLight,
+
+        appBarTheme: const AppBarTheme(
+          backgroundColor: EleghartColors.accentDark,
+          elevation: 0,
+          titleTextStyle: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: 0.4,
+          ),
+          iconTheme: IconThemeData(color: Colors.white),
+        ),
+
+        cardTheme: const CardThemeData(
+          color: EleghartColors.cardBg,
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+        ),
+
+
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: EleghartColors.accentDark,
+        ),
+      ),
+      home: const AppEntryGate(),
+    );
+  }
+}
+
+class AppEntryGate extends StatefulWidget {
+  const AppEntryGate({super.key});
+
+  @override
+  State<AppEntryGate> createState() => _AppEntryGateState();
+}
+
+class _AppEntryGateState extends State<AppEntryGate> {
+  String? _userName;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('user_name');
+
+    setState(() {
+      _userName = name;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_userName == null || _userName!.isEmpty) {
+      return const OnboardingScreen();
+    }
+
+    return HomeDashboard(userName: _userName!);
+  }
+}
