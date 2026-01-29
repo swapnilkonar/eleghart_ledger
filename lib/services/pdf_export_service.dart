@@ -1,3 +1,4 @@
+// PdfExportService — Ledger-aware PDF (Debit/Credit + Net Balance)
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -30,18 +31,33 @@ class PdfExportService {
       return !e.date.isBefore(from) && !e.date.isAfter(to);
     }).toList();
 
-    // ---- Member totals ----
+    // ---- Totals ----
+    double totalDebit = 0;
+    double totalCredit = 0;
+
+    for (final e in filtered) {
+      if (e.type == 'credit') {
+        totalCredit += e.amount;
+      } else {
+        totalDebit += e.amount;
+      }
+    }
+
+    final netBalance = totalCredit - totalDebit;
+
+    // ---- Member totals (ledger-aware) ----
     final Map<String, double> memberTotals = {};
 
     for (final e in filtered) {
       final share = e.amount / e.categories.length;
       for (final m in e.categories) {
-        memberTotals[m] = (memberTotals[m] ?? 0) + share;
+        final signedShare = e.type == 'credit' ? share : -share;
+        memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
       }
     }
 
-    final totalSpent =
-        filtered.fold<double>(0, (sum, e) => sum + e.amount);
+    // ---- Sort expenses by date ----
+    filtered.sort((a, b) => a.date.compareTo(b.date));
 
     pdf.addPage(
       pw.MultiPage(
@@ -61,7 +77,14 @@ class PdfExportService {
           ),
         ),
         build: (context) => [
-          _header(group.name, from, to, totalSpent),
+          _header(
+            group.name,
+            from,
+            to,
+            totalDebit,
+            totalCredit,
+            netBalance,
+          ),
           pw.SizedBox(height: 18),
 
           _memberSummaryTable(memberTotals),
@@ -95,14 +118,18 @@ class PdfExportService {
     String groupName,
     DateTime from,
     DateTime to,
-    double totalSpent,
+    double totalDebit,
+    double totalCredit,
+    double netBalance,
   ) {
+    final netIsPositive = netBalance >= 0;
+
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
       decoration: pw.BoxDecoration(
         borderRadius: pw.BorderRadius.circular(14),
 
-        // 👇 Eleghart reddish gradient
+        // Eleghart reddish gradient
         gradient: const pw.LinearGradient(
           begin: pw.Alignment.topLeft,
           end: pw.Alignment.bottomRight,
@@ -116,7 +143,7 @@ class PdfExportService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'Eleghart Expense Report',
+            'Eleghart Ledger Report',
             style: pw.TextStyle(
               fontSize: 20,
               fontWeight: pw.FontWeight.bold,
@@ -126,7 +153,7 @@ class PdfExportService {
           pw.SizedBox(height: 6),
           pw.Text(
             groupName,
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 14,
               color: PdfColors.white,
             ),
@@ -139,15 +166,46 @@ class PdfExportService {
               color: PdfColors.white,
             ),
           ),
-          pw.SizedBox(height: 10),
-          pw.Text(
-            'Total Spent: Rs. ${totalSpent.toStringAsFixed(0)}',
-            style: pw.TextStyle(
-              fontSize: 15,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.white,
+          pw.SizedBox(height: 12),
+
+          // ---- Totals ----
+          pw.Row(children: [
+            pw.Text('Total Debit: ',
+                style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
+                style: const pw.TextStyle(
+                    fontSize: 12, color: PdfColors.white)),
+          ]),
+          pw.SizedBox(height: 4),
+          pw.Row(children: [
+            pw.Text('Total Credit: ',
+                style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
+                style: const pw.TextStyle(
+                    fontSize: 12, color: PdfColors.white)),
+          ]),
+          pw.SizedBox(height: 6),
+          pw.Row(children: [
+            pw.Text('Net Balance: ',
+                style: pw.TextStyle(
+                    fontSize: 13,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text(
+              '${netIsPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
+              style: pw.TextStyle(
+                fontSize: 13,
+                fontWeight: pw.FontWeight.bold,
+                color: netIsPositive ? PdfColors.green200 : PdfColors.red200,
+              ),
             ),
-          ),
+          ]),
         ],
       ),
     );
@@ -160,7 +218,7 @@ class PdfExportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          'Member Summary',
+          'Member Summary (Net)',
           style: pw.TextStyle(
             fontSize: 15,
             fontWeight: pw.FontWeight.bold,
@@ -171,12 +229,15 @@ class PdfExportService {
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300),
           children: [
-            _tableRow(['Member', 'Amount'], isHeader: true),
-            ...totals.entries.map(
-              (e) => _tableRow(
-                [e.key, 'Rs. ${e.value.toStringAsFixed(0)}'],
-              ),
-            ),
+            _tableRow(['Member', 'Net Amount'], isHeader: true),
+            ...totals.entries.map((e) {
+              final isPositive = e.value >= 0;
+              final sign = isPositive ? '+' : '-';
+              return _tableRow([
+                e.key,
+                '$sign Rs. ${e.value.abs().toStringAsFixed(0)}',
+              ]);
+            }),
           ],
         ),
       ],
@@ -190,7 +251,7 @@ class PdfExportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          'Expenses',
+          'Transactions',
           style: pw.TextStyle(
             fontSize: 15,
             fontWeight: pw.FontWeight.bold,
@@ -200,19 +261,30 @@ class PdfExportService {
         pw.SizedBox(height: 10),
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(1.2),
+            1: const pw.FlexColumnWidth(1),
+            2: const pw.FlexColumnWidth(2.5),
+            3: const pw.FlexColumnWidth(2.5),
+            4: const pw.FlexColumnWidth(1.4),
+          },
           children: [
             _tableRow(
-              ['Date', 'Description', 'Members', 'Amount'],
+              ['Date', 'Type', 'Description', 'Members', 'Amount'],
               isHeader: true,
             ),
-            ...expenses.map(
-              (e) => _tableRow([
+            ...expenses.map((e) {
+              final isCredit = e.type == 'credit';
+              final sign = isCredit ? '+' : '-';
+
+              return _tableRow([
                 DateFormat('dd MMM yyyy').format(e.date),
+                e.type.toUpperCase(),
                 e.description.isEmpty ? 'Expense' : e.description,
                 e.categories.join(', '),
-                'Rs. ${e.amount.toStringAsFixed(0)}',
-              ]),
-            ),
+                '$sign Rs. ${e.amount.toStringAsFixed(0)}',
+              ]);
+            }),
           ],
         ),
       ],

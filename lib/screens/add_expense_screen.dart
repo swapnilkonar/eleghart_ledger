@@ -1,3 +1,4 @@
+// Fully Updated AddExpenseScreen with Transaction Type (Debit/Credit)
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,7 +12,7 @@ import '../theme/eleghart_colors.dart';
 class AddExpenseScreen extends StatefulWidget {
   final GroupModel group;
   final List<String> categories;
-  final ExpenseModel? existingExpense; // 👈 NEW (edit mode)
+  final ExpenseModel? existingExpense; // edit mode
 
   const AddExpenseScreen({
     super.key,
@@ -33,21 +34,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   File? _image;
   bool _saving = false;
 
+  // Transaction type
+  String _type = 'debit'; // default
+
   bool get isEditMode => widget.existingExpense != null;
 
   @override
   void initState() {
     super.initState();
 
-    // 👇 Prefill fields when editing
     if (isEditMode) {
       final e = widget.existingExpense!;
-
       _amountController.text = e.amount.toStringAsFixed(0);
       _descController.text = e.description;
       _date = e.date;
-
       _selected.addAll(e.categories);
+      _type = e.type;
 
       if (e.imagePath != null && File(e.imagePath!).existsSync()) {
         _image = File(e.imagePath!);
@@ -137,12 +139,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
+    if (totalAmount <= 0) {
+      _toast('Amount must be greater than zero');
+      return;
+    }
+
     setState(() => _saving = true);
 
     final expenses = await StorageService.loadExpenses();
 
     if (isEditMode) {
-      // 🔁 UPDATE EXISTING EXPENSE
       final index = expenses.indexWhere(
         (e) => e.id == widget.existingExpense!.id,
       );
@@ -151,24 +157,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         expenses[index] = ExpenseModel(
           id: widget.existingExpense!.id,
           groupId: widget.group.id,
-          amount: totalAmount, // 👈 keep total here
+          amount: totalAmount,
           description: _descController.text.trim(),
           categories: _selected.toList(),
           date: _date,
           imagePath: _image?.path,
+          type: _type,
         );
       }
     } else {
-      // ➕ CREATE NEW EXPENSE
       expenses.add(
         ExpenseModel(
           id: const Uuid().v4(),
           groupId: widget.group.id,
-          amount: totalAmount, // 👈 keep total here
+          amount: totalAmount,
           description: _descController.text.trim(),
           categories: _selected.toList(),
           date: _date,
           imagePath: _image?.path,
+          type: _type,
         ),
       );
     }
@@ -176,7 +183,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     await StorageService.saveExpenses(expenses);
 
     if (!mounted) return;
-    Navigator.pop(context, true); // 👈 notify GroupDetailScreen
+    Navigator.pop(context, true);
   }
 
   void _toast(String msg) {
@@ -196,35 +203,44 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       appBar: AppBar(
         title: Text(isEditMode ? 'Edit Expense' : 'Add Expense'),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // -------- AMOUNT --------
             _sectionTitle('Amount'),
             const SizedBox(height: 8),
             _luxuryField(
               controller: _amountController,
               hint: 'Enter amount (₹)',
-              keyboardType: TextInputType.number,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => setState(() {}),
             ),
 
             const SizedBox(height: 18),
 
-            // -------- DESCRIPTION --------
-            _sectionTitle('Description (optional)'),
-            const SizedBox(height: 8),
-            _luxuryField(
-              controller: _descController,
-              hint: 'Dinner, Taxi, Groceries...',
+            _sectionTitle('Transaction Type'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _typeChip('debit', 'Debit', Colors.redAccent),
+                const SizedBox(width: 12),
+                _typeChip('credit', 'Credit', Colors.green),
+              ],
             ),
 
             const SizedBox(height: 22),
 
-            // -------- FOR WHOM --------
+            _sectionTitle('Description (optional)'),
+            const SizedBox(height: 8),
+            _luxuryField(
+              controller: _descController,
+              hint: 'Dinner, Taxi, Refund...',
+            ),
+
+            const SizedBox(height: 22),
+
             _sectionTitle('For whom?'),
             const SizedBox(height: 10),
 
@@ -262,9 +278,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     shadowColor: Colors.black26,
                     onSelected: (_) {
                       setState(() {
-                        selected
-                            ? _selected.remove(c)
-                            : _selected.add(c);
+                        selected ? _selected.remove(c) : _selected.add(c);
                       });
                     },
                   );
@@ -273,7 +287,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 22),
 
-            // -------- DATE --------
             _sectionTitle('Date'),
             const SizedBox(height: 8),
             GestureDetector(
@@ -299,7 +312,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 22),
 
-            // -------- RECEIPT --------
             _sectionTitle('Receipt (optional)'),
             const SizedBox(height: 10),
             GestureDetector(
@@ -338,7 +350,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 36),
 
-            // -------- SAVE BUTTON --------
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -379,6 +390,33 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   // ---------------- UI HELPERS ----------------
+
+  Widget _typeChip(String value, String label, Color color) {
+    final selected = _type == value;
+
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            value == 'debit' ? Icons.remove_circle : Icons.add_circle,
+            size: 18,
+            color: selected ? Colors.white : color,
+          ),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+      selected: selected,
+      selectedColor: color,
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : EleghartColors.textPrimary,
+        fontWeight: FontWeight.w600,
+      ),
+      onSelected: (_) => setState(() => _type = value),
+    );
+  }
 
   Widget _sectionTitle(String text) {
     return Text(

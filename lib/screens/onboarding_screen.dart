@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/eleghart_colors.dart';
 import 'home_dashboard.dart';
+import 'set_pin_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -28,7 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => HomeDashboard(userName: name),
+        builder: (_) => SetPinScreen(userName: name),
       ),
     );
   }
