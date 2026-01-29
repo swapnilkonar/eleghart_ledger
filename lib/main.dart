@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/eleghart_colors.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_dashboard.dart';
+import 'screens/set_pin_screen.dart';
+import 'screens/pin_unlock_screen.dart';
 
 void main() {
   runApp(const EleghartLedgerApp());
@@ -41,7 +43,6 @@ class EleghartLedgerApp extends StatelessWidget {
           ),
         ),
 
-
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: EleghartColors.accentDark,
         ),
@@ -60,20 +61,23 @@ class AppEntryGate extends StatefulWidget {
 
 class _AppEntryGateState extends State<AppEntryGate> {
   String? _userName;
+  String? _userPin;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserName();
+    _loadUserState();
   }
 
-  Future<void> _loadUserName() async {
+  Future<void> _loadUserState() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('user_name');
+    final pin = prefs.getString('user_pin');
 
     setState(() {
       _userName = name;
+      _userPin = pin;
       _loading = false;
     });
   }
@@ -86,10 +90,17 @@ class _AppEntryGateState extends State<AppEntryGate> {
       );
     }
 
+    // 1️⃣ First launch → ask name
     if (_userName == null || _userName!.isEmpty) {
       return const OnboardingScreen();
     }
 
-    return HomeDashboard(userName: _userName!);
+    // 2️⃣ Name exists but PIN not set yet
+    if (_userPin == null || _userPin!.isEmpty) {
+      return SetPinScreen(userName: _userName!);
+    }
+
+    // 3️⃣ Normal launch → require PIN unlock ✅
+    return PinUnlockScreen(userName: _userName!);
   }
 }

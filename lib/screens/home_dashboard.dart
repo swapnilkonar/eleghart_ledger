@@ -1,7 +1,10 @@
+// HomeDashboard — Ledger-aware + Font & Screen-Resilient UI + Profile
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'group_detail_screen.dart';
+import 'profile_sheet.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
@@ -22,14 +25,37 @@ class _HomeDashboardState extends State<HomeDashboard> {
   List<ExpenseModel> _expenses = [];
   bool _loading = true;
 
-  double _totalSpent = 0;
+  // -------- LEDGER TOTALS --------
+  double _totalDebit = 0;
+  double _totalCredit = 0;
+  double _netBalance = 0;
+
   String _lastExpenseDate = '-';
   int _totalExpensesCount = 0;
+
+  // -------- PROFILE --------
+  String _userName = '';
+  File? _avatar;
 
   @override
   void initState() {
     super.initState();
+    _userName = widget.userName;
+    _loadProfile();
     _loadDashboardData();
+  }
+
+  Future<void> _loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('user_name');
+    final avatarPath = prefs.getString('user_avatar_path');
+
+    setState(() {
+      if (name != null) _userName = name;
+      if (avatarPath != null && File(avatarPath).existsSync()) {
+        _avatar = File(avatarPath);
+      }
+    });
   }
 
   // ---------------- LOAD DASHBOARD DATA ----------------
@@ -52,13 +78,29 @@ class _HomeDashboardState extends State<HomeDashboard> {
     List<ExpenseModel> expenses,
   ) {
     if (expenses.isEmpty) {
-      _totalSpent = 0;
+      _totalDebit = 0;
+      _totalCredit = 0;
+      _netBalance = 0;
       _lastExpenseDate = '-';
       _totalExpensesCount = 0;
       return;
     }
 
-    _totalSpent = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+    double debit = 0;
+    double credit = 0;
+
+    for (final e in expenses) {
+      if (e.type == 'credit') {
+        credit += e.amount;
+      } else {
+        debit += e.amount;
+      }
+    }
+
+    _totalDebit = debit;
+    _totalCredit = credit;
+    _netBalance = credit - debit;
+
     _totalExpensesCount = expenses.length;
 
     final last = expenses
@@ -90,6 +132,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
     }
   }
 
+  Future<void> _openProfileSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => ProfileSheet(
+        onUpdated: () async {
+          await _loadProfile();
+        },
+      ),
+    );
+  }
+
   Future<void> _deleteGroup(GroupModel group) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -115,24 +172,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
     if (confirmed != true) return;
 
-    // 1️⃣ Remove group
     final updatedGroups = List<GroupModel>.from(_groups)
       ..removeWhere((g) => g.id == group.id);
 
-    // 2️⃣ Remove all expenses of this group
     final allExpenses = await StorageService.loadExpenses();
-    final updatedExpenses = allExpenses
-        .where((e) => e.groupId != group.id)
-        .toList();
+    final updatedExpenses =
+        allExpenses.where((e) => e.groupId != group.id).toList();
 
-    // 3️⃣ Persist both
     await StorageService.saveGroups(updatedGroups);
     await StorageService.saveExpenses(updatedExpenses);
 
-    // 4️⃣ Reload dashboard (recalculates summary correctly)
     _loadDashboardData();
   }
-
 
   // ---------------- UI ----------------
 
@@ -144,8 +195,23 @@ class _HomeDashboardState extends State<HomeDashboard> {
       appBar: AppBar(
         title: const Text('Eleghart Ledger'),
         elevation: 0,
+        actions: [
+          GestureDetector(
+            onTap: _openProfileSheet,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: EleghartColors.accentDark,
+                backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
+                child: _avatar == null
+                    ? const Icon(Icons.person, color: Colors.white, size: 18)
+                    : null,
+              ),
+            ),
+          ),
+        ],
       ),
-
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -153,14 +219,20 @@ class _HomeDashboardState extends State<HomeDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '$greeting, ${widget.userName} 👋',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: EleghartColors.textPrimary,
+                  Row(children: [
+                    Flexible(
+                      child: Text(
+                        '$greeting, $_userName 👋',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: EleghartColors.textPrimary,
+                        ),
+                      ),
                     ),
-                  ),
+                  ]),
 
                   const SizedBox(height: 18),
 
@@ -177,20 +249,34 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ),
             ),
 
-      // 👇 only show + when at least 1 group exists
       floatingActionButton: _groups.isNotEmpty
-          ? FloatingActionButton(
-              onPressed: _openCreateGroup,
-              backgroundColor: EleghartColors.accentDark,
-              child: const Icon(Icons.add, color: Colors.white, size: 26),
-            )
-          : null,
+        ? FloatingActionButton.extended(
+            onPressed: _openCreateGroup,
+            backgroundColor: EleghartColors.accentDark,
+            elevation: 10,
+            icon: const Icon(Icons.add, color: Colors.white, size: 22),
+            label: const Text(
+              'Add Group',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                color: Colors.white,
+              ),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          )
+        : null,
     );
   }
 
   // ---------------- SUMMARY CARD ----------------
 
   Widget _buildSummaryCard() {
+    final netIsPositive = _netBalance >= 0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -211,78 +297,123 @@ class _HomeDashboardState extends State<HomeDashboard> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Overall Summary',
-            style: TextStyle(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w700,
-              color: Colors.white70,
-              letterSpacing: 0.4,
-            ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text(
+          'Overall Summary',
+          style: TextStyle(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.white70,
+            letterSpacing: 0.4,
           ),
+        ),
 
-          const SizedBox(height: 12),
+        const SizedBox(height: 12),
 
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '₹${_totalSpent.toStringAsFixed(0)}',
+        Row(children: [
+          const Icon(Icons.remove_circle, size: 18, color: Colors.white70),
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '₹${_totalDebit.toStringAsFixed(0)}',
                 style: const TextStyle(
-                  fontSize: 32,
+                  fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
-                  letterSpacing: 0.6,
                 ),
               ),
-              const SizedBox(width: 10),
-              const Text(
-                'Total Spent',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
+            ),
           ),
-
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              _summaryChip(
-                icon: Icons.groups,
-                label: '${_groups.length} Groups',
-              ),
-              const SizedBox(width: 10),
-              _summaryChip(
-                icon: Icons.receipt_long,
-                label: '$_totalExpensesCount Expenses',
-              ),
-            ],
+          const SizedBox(width: 8),
+          const Text(
+            'Total Debit',
+            style: TextStyle(fontSize: 13, color: Colors.white70),
           ),
+        ]),
 
-          const SizedBox(height: 12),
+        const SizedBox(height: 6),
 
-          Row(
-            children: [
-              const Icon(Icons.calendar_today,
-                  size: 16, color: Colors.white70),
-              const SizedBox(width: 8),
-              Text(
-                'Last expense: $_lastExpenseDate',
+        Row(children: [
+          const Icon(Icons.add_circle, size: 18, color: Colors.white70),
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '₹${_totalCredit.toStringAsFixed(0)}',
                 style: const TextStyle(
-                  fontSize: 13.5,
-                  color: Colors.white70,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
                 ),
               ),
-            ],
+            ),
           ),
-        ],
-      ),
+          const SizedBox(width: 8),
+          const Text(
+            'Total Credit',
+            style: TextStyle(fontSize: 13, color: Colors.white70),
+          ),
+        ]),
+
+        const SizedBox(height: 10),
+
+        Row(children: [
+          const Icon(Icons.account_balance_wallet,
+              size: 18, color: Colors.white70),
+          const SizedBox(width: 6),
+          Text(
+            '${netIsPositive ? '+' : '–'} ₹${_netBalance.abs().toStringAsFixed(0)}',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: netIsPositive
+                  ? Colors.greenAccent
+                  : Colors.redAccent,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Net Balance',
+            style: TextStyle(fontSize: 13, color: Colors.white70),
+          ),
+        ]),
+
+        const SizedBox(height: 14),
+
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          _summaryChip(
+            icon: Icons.groups,
+            label: '${_groups.length} Groups',
+          ),
+          _summaryChip(
+            icon: Icons.receipt_long,
+            label: '$_totalExpensesCount Expenses',
+          ),
+        ]),
+
+        const SizedBox(height: 12),
+
+        Row(children: [
+          const Icon(Icons.calendar_today, size: 16, color: Colors.white70),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Last expense: $_lastExpenseDate',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13.5,
+                color: Colors.white70,
+              ),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 
@@ -293,21 +424,22 @@ class _HomeDashboardState extends State<HomeDashboard> {
         color: Colors.white.withOpacity(0.18),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 16, color: Colors.white),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
@@ -315,9 +447,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.groups_2_outlined,
               size: 64, color: EleghartColors.textSecondary),
           const SizedBox(height: 18),
@@ -355,13 +486,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
             icon: const Icon(Icons.group_add, size: 20),
             label: const Text(
               'Create your first group',
-              style: TextStyle(
-                fontSize: 15.5,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600),
             ),
           ),
-        ],
+        ]),
       ),
     );
   }
@@ -407,58 +535,51 @@ class _HomeDashboardState extends State<HomeDashboard> {
             child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-
               leading: _buildGroupAvatar(group),
-
               title: Text(
                 group.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 16.5,
                   color: EleghartColors.textPrimary,
                 ),
               ),
-
               subtitle: const Text(
                 'Tap to view details',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: EleghartColors.textSecondary,
                   fontSize: 13.5,
                 ),
               ),
-
-              // 👇 EDIT + DELETE restored
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ✏️ EDIT GROUP
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined,
-                        color: EleghartColors.textSecondary),
-                    onPressed: () async {
-                      final updated = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CreateGroupScreen(
-                            existingGroup: group, // 👈 edit mode
-                          ),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined,
+                      color: EleghartColors.textSecondary),
+                  onPressed: () async {
+                    final updated = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CreateGroupScreen(
+                          existingGroup: group,
                         ),
-                      );
+                      ),
+                    );
 
-                      if (updated == true) {
-                        _loadDashboardData();
-                      }
-                    },
-                  ),
-
-                  // 🗑 DELETE GROUP
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.redAccent),
-                    onPressed: () => _deleteGroup(group),
-                  ),
-                ],
-              ),
+                    if (updated == true) {
+                      _loadDashboardData();
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      color: Colors.redAccent),
+                  onPressed: () => _deleteGroup(group),
+                ),
+              ]),
             ),
           ),
         );
@@ -474,10 +595,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
       );
     }
 
-    return CircleAvatar(
+    return const CircleAvatar(
       radius: 26,
       backgroundColor: EleghartColors.accentDark,
-      child: const Icon(Icons.group, color: Colors.white),
+      child: Icon(Icons.group, color: Colors.white),
     );
   }
 }
