@@ -79,16 +79,17 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
 
     setState(() => _exporting = true);
 
-    final file = await PdfExportService.exportGroupReport(
-        group: widget.group,
-        expenses: filtered,
-        from: from,
-        to: to,
-    );
+    try {
+      final file = await PdfExportService.exportGroupReport(
+          group: widget.group,
+          expenses: filtered,
+          from: from,
+          to: to,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _exporting = false);
+      setState(() => _exporting = false);
 
     // 👇 SHOW OPEN + SHARE UI INSTEAD OF JUST TOAST
     showModalBottomSheet(
@@ -168,6 +169,11 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
         ),
         ),
     );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _exporting = false);
+      _toast('Export failed: ${e.toString()}');
+    }
     }
 
     void _toast(String msg) {
