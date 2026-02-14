@@ -90,7 +90,7 @@ class PdfExportService {
           _memberSummaryTable(memberTotals),
           pw.SizedBox(height: 22),
 
-          _expensesTable(filtered),
+          ..._expensesTable(filtered),
         ],
       ),
     );
@@ -246,19 +246,31 @@ class PdfExportService {
 
   // ---------------- EXPENSE TABLE ----------------
 
-  static pw.Widget _expensesTable(List<ExpenseModel> expenses) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'Transactions',
-          style: pw.TextStyle(
-            fontSize: 15,
-            fontWeight: pw.FontWeight.bold,
-            color: PdfColor.fromInt(0xFF8B0000),
-          ),
+  static List<pw.Widget> _expensesTable(List<ExpenseModel> expenses) {
+    const int rowsPerPage = 20;
+    final List<pw.Widget> result = [];
+
+    // Add title once
+    result.add(
+      pw.Text(
+        'Transactions',
+        style: pw.TextStyle(
+          fontSize: 15,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColor.fromInt(0xFF8B0000),
         ),
-        pw.SizedBox(height: 10),
+      ),
+    );
+    result.add(pw.SizedBox(height: 10));
+
+    // Split transactions into chunks and create tables
+    for (int i = 0; i < expenses.length; i += rowsPerPage) {
+      final end = (i + rowsPerPage < expenses.length)
+          ? i + rowsPerPage
+          : expenses.length;
+      final pageExpenses = expenses.sublist(i, end);
+
+      result.add(
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300),
           columnWidths: {
@@ -269,11 +281,12 @@ class PdfExportService {
             4: const pw.FlexColumnWidth(1.4),
           },
           children: [
-            _tableRow(
-              ['Date', 'Type', 'Description', 'Members', 'Amount'],
-              isHeader: true,
-            ),
-            ...expenses.map((e) {
+            if (i == 0)
+              _tableRow(
+                ['Date', 'Type', 'Description', 'Members', 'Amount'],
+                isHeader: true,
+              ),
+            ...pageExpenses.map((e) {
               final isCredit = e.type == 'credit';
               final sign = isCredit ? '+' : '-';
 
@@ -287,8 +300,14 @@ class PdfExportService {
             }),
           ],
         ),
-      ],
-    );
+      );
+
+      if (i + rowsPerPage < expenses.length) {
+        result.add(pw.SizedBox(height: 12));
+      }
+    }
+
+    return result;
   }
 
   // ---------------- TABLE ROW ----------------
