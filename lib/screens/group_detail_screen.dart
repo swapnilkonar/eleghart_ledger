@@ -1,5 +1,6 @@
-// GroupDetailScreen — Ledger UX: Net Balance, Filters, Search, Type Badge, Date Visible, Expense Details Popup
+// GroupDetailScreen — Modern Glassmorphic UI with Interactive Effects
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/pdf_export_service.dart';
 import '../screens/export_pdf_screen.dart';
@@ -7,6 +8,8 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
 import 'add_expense_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
@@ -101,12 +104,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          title: Text(widget.group.name),
+          title: Text(
+            widget.group.name,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: EleghartColors.textPrimary,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-              onPressed: () async {
+            GlassContainer(
+              borderRadius: 12,
+              padding: const EdgeInsets.all(6),
+              interactive: true,
+              onTap: () async {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -117,16 +129,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   ),
                 );
               },
+              child: const Icon(Icons.picture_as_pdf,
+                  color: EleghartColors.accentDark, size: 24),
             ),
+            const SizedBox(width: 8),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: EleghartColors.accentDark,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('Add Expense',
-              style:
-                  TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
-          onPressed: () async {
+        floatingActionButton: GestureDetector(
+          onTap: () async {
             if (_categories.isEmpty) {
               _toast('Please add at least one member / category first 👥');
               return;
@@ -147,6 +157,24 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               _markChanged();
             }
           },
+          child: GlassContainer(
+            borderRadius: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add, color: Colors.white, size: 24),
+                const SizedBox(width: 10),
+                Text(
+                  'Add Expense',
+                  style: GlassTheme.headingSmall.copyWith(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(22),
@@ -231,138 +259,142 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             .toString()
             .split(' ')[0];
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            EleghartColors.accentDark,
-            EleghartColors.accentLight.withOpacity(0.85),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: EleghartColors.accentDark.withOpacity(0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _buildGroupAvatarThemed(),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.group.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 0.4,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.scale(
+          scale: 0.8 + (value * 0.2),
+          alignment: Alignment.topCenter,
+          child: Opacity(
+            opacity: value,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        EleghartColors.accentDark.withOpacity(0.25),
+                        EleghartColors.accentLight.withOpacity(0.15),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: EleghartColors.accentDark.withOpacity(0.2),
+                        blurRadius: 32,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      _buildGroupAvatarThemed(),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.group.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(Icons.remove_circle,
+                                    size: 18, color: Colors.white70),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '₹${totalDebit.toStringAsFixed(0)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Debit',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.white70)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(Icons.add_circle,
+                                    size: 18, color: Colors.white70),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '₹${totalCredit.toStringAsFixed(0)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Credit',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.white70)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Icon(Icons.account_balance_wallet,
+                                    size: 18, color: Colors.white70),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '$netSign ₹${netBalance.abs().toStringAsFixed(0)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: netColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.remove_circle,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '₹${totalDebit.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Total Debit',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.add_circle,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '₹${totalCredit.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Total Credit',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.account_balance_wallet,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '$netSign ₹${netBalance.abs().toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: netColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Net Balance',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 14, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Last expense: $lastDate',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
+          );
+        );
+      },
     );
   }
 
@@ -657,14 +689,37 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget _filterChip(String value, String label) {
     final selected = _expenseFilter == value;
 
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      selectedColor: EleghartColors.accentDark,
-      labelStyle: TextStyle(
-          color: selected ? Colors.white : EleghartColors.textPrimary,
-          fontWeight: FontWeight.w700),
-      onSelected: (_) => setState(() => _expenseFilter = value),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: selected
+                ? EleghartColors.accentDark.withOpacity(0.25)
+                : Colors.white.withOpacity(0.15),
+            border: Border.all(
+              color: selected
+                  ? EleghartColors.accentLight.withOpacity(0.5)
+                  : Colors.white.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          child: GestureDetector(
+            onTap: () => setState(() => _expenseFilter = value),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : EleghartColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -674,19 +729,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Widget _buildAddMemberField() {
-    return Container(
-      decoration: _cardDecoration(),
+    return GlassContainer(
+      borderRadius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      interactive: false,
       child: TextField(
         controller: _categoryController,
         decoration: InputDecoration(
           hintText: 'Add member / category',
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          suffixIcon: IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              color: EleghartColors.accentDark,
-              onPressed: _addCategory),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          suffixIcon: GestureDetector(
+            onTap: _addCategory,
+            child: const Icon(Icons.add_circle_outline,
+                color: EleghartColors.accentDark),
+          ),
         ),
       ),
     );
@@ -699,7 +756,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
 
     return Column(
-      children: _categories.map((c) {
+      children: _categories.asMap().entries.map((entry) {
+        final index = entry.key;
+        final c = entry.value;
         final stats = _memberStats[c] ?? {'total': 0.0, 'lastDate': '-'};
 
         final total = stats['total'] as double;
@@ -707,40 +766,82 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         final sign = isPositive ? '+' : '–';
         final color = isPositive ? Colors.green : Colors.red;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: _cardDecoration(),
-          child: Row(children: [
-            const CircleAvatar(
-                radius: 18,
-                backgroundColor: EleghartColors.accentDark,
-                child: Icon(Icons.person, size: 18, color: Colors.white)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Duration(milliseconds: 400 + (index * 100)),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, _) {
+            return Transform.translate(
+              offset: Offset(30 * (1 - value), 0),
+              child: Opacity(
+                opacity: value,
+                child: GlassMorphicCard(
+                  borderRadius: 20,
+                  bgColor: Colors.white,
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
                     children: [
-                  Text(c,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text('$sign ₹${total.abs().toStringAsFixed(0)} • Last: ${stats['lastDate']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 13, color: color)),
-                ])),
-            IconButton(
-                icon: const Icon(Icons.edit, size: 20),
-                onPressed: () => _editCategory(c)),
-            IconButton(
-                icon: const Icon(Icons.delete,
-                    size: 20, color: Colors.red),
-                onPressed: () => _deleteCategory(c)),
-          ]),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              EleghartColors.accentDark,
+                              EleghartColors.accentLight,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.person,
+                            size: 22, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              c,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$sign ₹${total.abs().toStringAsFixed(0)} • Last: ${stats['lastDate']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _editCategory(c),
+                        child: const Icon(Icons.edit,
+                            size: 20,
+                            color: EleghartColors.textSecondary),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => _deleteCategory(c),
+                        child: const Icon(Icons.delete,
+                            size: 20, color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            );
+          },
         );
       }).toList(),
     );
@@ -749,20 +850,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text,
-          style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+      child: Text(
+        text,
+        style: GlassTheme.headingSmall.copyWith(
+          fontSize: 16.5,
+        ),
+      ),
     );
   }
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
       borderRadius: BorderRadius.circular(18),
+      color: Colors.white,
       boxShadow: [
         BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 8)),
+          color: Colors.black.withOpacity(0.06),
+          blurRadius: 14,
+          offset: const Offset(0, 8),
+        ),
       ],
     );
   }

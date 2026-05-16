@@ -1,9 +1,12 @@
-// ProfileSheet — Clean UI + Inline Validation + Eleghart Theme
+// ProfileSheet — Clean UI + Inline Validation + Glassmorphic Effects
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
 
 class ProfileSheet extends StatefulWidget {
   final VoidCallback onUpdated;

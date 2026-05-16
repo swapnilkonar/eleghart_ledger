@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -6,6 +7,8 @@ import 'package:uuid/uuid.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   final GroupModel? existingGroup; // 👈 edit support
@@ -143,120 +146,252 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final isNameEmpty = _controller.text.trim().isEmpty;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(isEditMode ? 'Edit Group' : 'Create Group'),
+        title: Text(
+          isEditMode ? 'Edit Group' : 'Create Group',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: EleghartColors.textPrimary,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 10),
-
-            // ---- Avatar Picker ----
-            GestureDetector(
-              onTap: _pickImage,
+      body: Stack(
+        children: [
+          // Floating background effects
+          Positioned(
+            top: -80,
+            right: -80,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(150),
               child: Container(
+                width: 300,
+                height: 300,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 46,
-                  backgroundColor: EleghartColors.divider,
-                  backgroundImage:
-                      _imageFile != null ? FileImage(_imageFile!) : null,
-                  child: _imageFile == null
-                      ? const Icon(
-                          Icons.camera_alt,
-                          size: 30,
-                          color: EleghartColors.textSecondary,
-                        )
-                      : null,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            Text(
-              isEditMode
-                  ? 'Change group photo (optional)'
-                  : 'Add a group photo (optional)',
-              style: const TextStyle(
-                fontSize: 13.5,
-                color: EleghartColors.textSecondary,
-              ),
-            ),
-
-            const SizedBox(height: 28),
-
-            // ---- Group Name ----
-            TextField(
-              controller: _controller,
-              textCapitalization: TextCapitalization.words,
-              onChanged: (_) => setState(() {}), // 👈 live button enable
-              decoration: InputDecoration(
-                hintText: 'Group name (e.g. Friends, Trip)',
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 34),
-
-            // ---- Create / Save Button ----
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed:
-                    _saving || isNameEmpty ? null : _saveGroup,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: EleghartColors.accentDark,
-                  foregroundColor: Colors.white,
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                  gradient: RadialGradient(
+                    colors: [
+                      EleghartColors.accentDark.withOpacity(0.06),
+                      EleghartColors.accentLight.withOpacity(0.02),
+                    ],
                   ),
                 ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.6,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        isEditMode
-                            ? 'Save Changes'
-                            : 'Create Group',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
               ),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            bottom: -60,
+            left: -60,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(120),
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.blue.withOpacity(0.03),
+                      Colors.cyan.withOpacity(0.02),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+
+                // ---- Animated Avatar Picker ----
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.scale(
+                        scale: 0.6 + (value * 0.4),
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(60),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                              child: Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.15),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: EleghartColors.accentDark.withOpacity(0.2),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    if (_imageFile != null)
+                                      Image.file(
+                                        _imageFile!,
+                                        fit: BoxFit.cover,
+                                        width: 120,
+                                        height: 120,
+                                      )
+                                    else
+                                      Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.camera_alt,
+                                            size: 40,
+                                            color: EleghartColors.accentDark,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Tap to add',
+                                            style: GlassTheme.bodySmall.copyWith(
+                                              color: EleghartColors.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    if (_imageFile != null)
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: EleghartColors.accentDark,
+                                          ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    },
+                  ),
+
+                const SizedBox(height: 18),
+
+                Text(
+                  isEditMode
+                      ? 'Change group photo (optional)'
+                      : 'Add a group photo (optional)',
+                  style: GlassTheme.bodySmall.copyWith(
+                    color: EleghartColors.textSecondary,
+                  ),
+                ),
+
+                const SizedBox(height: 36),
+
+                // ---- Group Name Glass Input ----
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) {
+                    return Transform.translate(
+                      offset: Offset(0, 20 * (1 - value)),
+                      child: Opacity(
+                        opacity: value,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: Colors.white.withOpacity(0.15),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: TextField(
+                                controller: _controller,
+                                textCapitalization: TextCapitalization.words,
+                                onChanged: (_) => setState(() {}),
+                                decoration: InputDecoration(
+                                  hintText: 'Group name (e.g. Friends, Trip)',
+                                  border: InputBorder.none,
+                                  hintStyle: TextStyle(
+                                    color: EleghartColors.textHint.withOpacity(0.6),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                style: const TextStyle(
+                                  color: EleghartColors.textPrimary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    },
+                  ),
+
+                const SizedBox(height: 40),
+
+                // ---- Create / Save Button ----
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) {
+                    return Transform.scale(
+                      scale: 0.8 + (value * 0.2),
+                      alignment: Alignment.center,
+                      child: Opacity(
+                        opacity: value,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: GlassButton(
+                            label: isEditMode ? 'Save Changes' : 'Create Group',
+                            icon: isEditMode ? Icons.save : Icons.add,
+                            onPressed: _saving || isNameEmpty ? () {} : _saveGroup,
+                            isLoading: _saving,
+                            borderRadius: 20,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
