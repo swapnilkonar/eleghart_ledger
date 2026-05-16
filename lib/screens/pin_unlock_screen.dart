@@ -1,7 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
 import 'home_dashboard.dart';
 import 'set_pin_screen.dart';
 
@@ -143,158 +146,217 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: EleghartColors.bgLight,
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(28, 16, 28, bottomInset + 16),
-          child: Column(
-            children: [
-              // ---- BIG LOGO (RESPONSIVE TO KEYBOARD) ----
-              SizedBox(
-                height: keyboardOpen ? h * 0.22 : h * 0.42,
-                child: Center(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 22,
-                          offset: const Offset(0, 10),
-                        ),
+        child: Stack(
+          children: [
+            // Background effects
+            Positioned(
+              top: -100,
+              left: -80,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(150),
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      colors: [
+                        EleghartColors.accentDark.withOpacity(0.06),
+                        Colors.transparent,
                       ],
                     ),
-                    child: Image.asset(
-                      'assets/images/eleghart_logo.png',
-                      fit: BoxFit.contain,
-                    ),
                   ),
                 ),
               ),
+            ),
+            // Content
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(28, 16, 28, bottomInset + 16),
+              child: Column(
+                children: [
+                  // Logo
+                  SizedBox(
+                    height: keyboardOpen ? h * 0.22 : h * 0.42,
+                    child: Center(
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) {
+                          return Opacity(
+                            opacity: value,
+                            child: Transform.scale(scale: 0.7 + (value * 0.3)),
+                          );
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 22,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/eleghart_logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // ---- PIN SECTION ----
-              const Text(
-                'Enter your PIN',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: EleghartColors.textPrimary,
-                ),
-              ),
+                  // Heading
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) {
+                      return Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: Text(
+                            'Enter your PIN',
+                            style: GlassTheme.headingSmall.copyWith(
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
 
-              const SizedBox(height: 18),
+                  const SizedBox(height: 24),
 
-              AnimatedBuilder(
-                animation: _shakeAnimation,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(_shakeAnimation.value, 0),
-                    child: child,
-                  );
-                },
-                child: Center(
-                  child: SizedBox(
-                    width: 230,
-                    child: TextField(
-                      controller: _pinController,
-                      maxLength: 4,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        letterSpacing: 16,
+                  // PIN Input
+                  AnimatedBuilder(
+                    animation: _shakeAnimation,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(_shakeAnimation.value, 0),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 600),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) {
+                            return Opacity(
+                              opacity: value,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 230,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                        sigmaX: 10,
+                                        sigmaY: 10,
+                                      ),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(18),
+                                          color: Colors.white.withOpacity(0.15),
+                                          border: Border.all(
+                                            color: _errorGlow
+                                                ? Colors.redAccent
+                                                    .withOpacity(0.4)
+                                                : Colors.white
+                                                    .withOpacity(0.3),
+                                            width: _errorGlow ? 2 : 1.5,
+                                          ),
+                                        ),
+                                        child: TextField(
+                                          controller: _pinController,
+                                          maxLength: 4,
+                                          keyboardType: TextInputType.number,
+                                          obscureText: true,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            letterSpacing: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: EleghartColors.textPrimary,
+                                          ),
+                                          decoration: InputDecoration(
+                                            counterText: '',
+                                            border: InputBorder.none,
+                                            hintText: '• • • •',
+                                            hintStyle: TextStyle(
+                                              letterSpacing: 14,
+                                              color: EleghartColors.textHint
+                                                  .withOpacity(0.4),
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  GlassContainer(
+                    borderRadius: 14,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    interactive: true,
+                    onTap: _forgotPin,
+                    child: Text(
+                      'Forgot PIN?',
+                      style: GlassTheme.label.copyWith(
+                        color: EleghartColors.accentDark,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: Colors.white,
-                        hintText: '• • • •',
-                        hintStyle: const TextStyle(
-                          letterSpacing: 14,
-                          color: EleghartColors.textHint,
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: _errorGlow
-                                ? Colors.redAccent
-                                : EleghartColors.accentDark,
-                            width: 1.6,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: _errorGlow
-                                ? Colors.redAccent
-                                : EleghartColors.accentDark,
-                            width: 2.2,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
-                ),
-              ),
 
-              const SizedBox(height: 10),
+                  const SizedBox(height: 28),
 
-              TextButton(
-                onPressed: _forgotPin,
-                child: const Text(
-                  'Forgot PIN?',
-                  style: TextStyle(
-                    color: EleghartColors.accentDark,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ---- UNLOCK BUTTON ----
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _unlocking ? null : _unlock,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EleghartColors.accentDark,
-                    elevation: 10,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: _unlocking
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Unlock',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: Colors.white,
+                  // Unlock button
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) {
+                      return Transform.scale(
+                        scale: 0.8 + (value * 0.2),
+                        alignment: Alignment.center,
+                        child: Opacity(
+                          opacity: value,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: GlassButton(
+                              label: 'Unlock',
+                              icon: Icons.lock_open,
+                              onPressed: _unlocking ? () {} : _unlock,
+                              isLoading: _unlocking,
+                              borderRadius: 20,
+                            ),
                           ),
                         ),
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
       ),
     );
   }

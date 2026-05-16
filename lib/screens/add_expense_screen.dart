@@ -1,5 +1,6 @@
-// Fully Updated AddExpenseScreen with Transaction Type (Debit/Credit)
+// Fully Updated AddExpenseScreen with Glassmorphic UI
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -8,6 +9,8 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final GroupModel group;

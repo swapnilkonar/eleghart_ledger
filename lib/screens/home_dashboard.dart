@@ -1,19 +1,20 @@
-// HomeDashboard — Ledger-aware + Font & Screen-Resilient UI + Profile
 import 'dart:io';
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'group_detail_screen.dart';
-import 'profile_sheet.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import '../widgets/glass_widgets.dart';
+import 'group_detail_screen.dart';
+import 'profile_sheet.dart';
 import 'create_group_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
-
+  
   const HomeDashboard({super.key, required this.userName});
 
   @override
@@ -21,118 +22,88 @@ class HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<HomeDashboard> {
-  List<GroupModel> _groups = [];
-  List<ExpenseModel> _expenses = [];
-  bool _loading = true;
-
-  // -------- LEDGER TOTALS --------
-  double _totalDebit = 0;
-  double _totalCredit = 0;
-  double _netBalance = 0;
-
-  String _lastExpenseDate = '-';
-  int _totalExpensesCount = 0;
-
-  // -------- PROFILE --------
-  String _userName = '';
-  File? _avatar;
+  List<GroupModel> groups = [];
+  List<ExpenseModel> expenses = [];
+  bool loading = true;
+  String userName = '';
+  File? avatar;
+  double totalDebit = 0;
+  double totalCredit = 0;
+  double netBalance = 0;
+  String lastExpenseDate = '-';
+  int totalExpensesCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _userName = widget.userName;
-    _loadProfile();
-    _loadDashboardData();
+    userName = widget.userName;
+    loadData();
   }
 
-  Future<void> _loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('user_name');
-    final avatarPath = prefs.getString('user_avatar_path');
-
-    setState(() {
-      if (name != null) _userName = name;
-      if (avatarPath != null && File(avatarPath).existsSync()) {
-        _avatar = File(avatarPath);
-      }
-    });
+  loadData() async {
+    try {
+      final loadedGroups = await StorageService.loadGroups();
+      final loadedExpenses = await StorageService.loadExpenses();
+      
+      final prefs = await SharedPreferences.getInstance();
+      final avatarPath = prefs.getString('user_avatar_path');
+      
+      calculateSummary(loadedExpenses);
+      
+      setState(() {
+        groups = loadedGroups;
+        expenses = loadedExpenses;
+        loading = false;
+        if (avatarPath != null && File(avatarPath).existsSync()) {
+          avatar = File(avatarPath);
+        }
+      });
+    } catch (e) {
+      setState(() {
+        loading = false;
+      });
+    }
   }
 
-  // ---------------- LOAD DASHBOARD DATA ----------------
-
-  Future<void> _loadDashboardData() async {
-    final groups = await StorageService.loadGroups();
-    final expenses = await StorageService.loadExpenses();
-
-    _recalculateSummary(groups, expenses);
-
-    setState(() {
-      _groups = groups;
-      _expenses = expenses;
-      _loading = false;
-    });
-  }
-
-  void _recalculateSummary(
-    List<GroupModel> groups,
-    List<ExpenseModel> expenses,
-  ) {
-    if (expenses.isEmpty) {
-      _totalDebit = 0;
-      _totalCredit = 0;
-      _netBalance = 0;
-      _lastExpenseDate = '-';
-      _totalExpensesCount = 0;
+  calculateSummary(List<ExpenseModel> list) {
+    if (list.isEmpty) {
+      totalDebit = 0;
+      totalCredit = 0;
+      netBalance = 0;
+      lastExpenseDate = '-';
+      totalExpensesCount = 0;
       return;
     }
 
-    double debit = 0;
-    double credit = 0;
-
-    for (final e in expenses) {
+    double db = 0, cr = 0;
+    for (final e in list) {
       if (e.type == 'credit') {
-        credit += e.amount;
+        cr += e.amount;
       } else {
-        debit += e.amount;
+        db += e.amount;
       }
     }
 
-    _totalDebit = debit;
-    _totalCredit = credit;
-    _netBalance = credit - debit;
+    totalDebit = db;
+    totalCredit = cr;
+    netBalance = cr - db;
+    totalExpensesCount = list.length;
 
-    _totalExpensesCount = expenses.length;
-
-    final last = expenses
-        .map((e) => e.date)
-        .reduce((a, b) => a.isAfter(b) ? a : b);
-
-    _lastExpenseDate = last.toString().split(' ')[0];
+    if (list.isNotEmpty) {
+      final last = list.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
+      lastExpenseDate = last.toString().split(' ')[0];
+    }
   }
 
-  // ---------------- GREETING ----------------
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
-
-  // ---------------- NAVIGATION ----------------
-
-  Future<void> _openCreateGroup() async {
+  openCreateGroup() async {
     final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
     );
-
-    if (created == true) {
-      _loadDashboardData();
-    }
+    if (created == true) loadData();
   }
 
-  Future<void> _openProfileSheet() async {
+  openProfileSheet() async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -141,464 +112,290 @@ class _HomeDashboardState extends State<HomeDashboard> {
       ),
       builder: (_) => ProfileSheet(
         onUpdated: () async {
-          await _loadProfile();
+          await loadData();
         },
       ),
     );
   }
 
-  Future<void> _deleteGroup(GroupModel group) async {
+  deleteGroup(GroupModel group) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete group?'),
-        content: Text(
-          'Are you sure you want to delete "${group.name}"?\n\n'
-          'All expenses inside this group will also be deleted.',
-        ),
+        content: Text('Delete "${group.name}"? All expenses will also be deleted.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: Colors.red), child: const Text('Delete')),
         ],
       ),
     );
 
     if (confirmed != true) return;
 
-    final updatedGroups = List<GroupModel>.from(_groups)
-      ..removeWhere((g) => g.id == group.id);
-
+    final updatedGroups = List<GroupModel>.from(groups)..removeWhere((g) => g.id == group.id);
     final allExpenses = await StorageService.loadExpenses();
-    final updatedExpenses =
-        allExpenses.where((e) => e.groupId != group.id).toList();
+    final updatedExpenses = allExpenses.where((e) => e.groupId != group.id).toList();
 
     await StorageService.saveGroups(updatedGroups);
     await StorageService.saveExpenses(updatedExpenses);
 
-    _loadDashboardData();
+    loadData();
   }
-
-  // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
-    final greeting = _getGreeting();
-
+    final netIsPositive = netBalance >= 0;
+    
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Eleghart Ledger'),
+        title: const Text('Eleghart Ledger', style: TextStyle(fontWeight: FontWeight.w800)),
         elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: EleghartColors.textPrimary,
         actions: [
           GestureDetector(
-            onTap: _openProfileSheet,
+            onTap: openProfileSheet,
             child: Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: EleghartColors.accentDark,
-                backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-                child: _avatar == null
-                    ? const Icon(Icons.person, color: Colors.white, size: 18)
-                    : null,
+              padding: const EdgeInsets.only(right: 16),
+              child: GlassContainer(
+                borderRadius: 50,
+                padding: const EdgeInsets.all(2),
+                interactive: false,
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: EleghartColors.accentDark,
+                  backgroundImage: avatar != null ? FileImage(avatar!) : null,
+                  child: avatar == null ? const Icon(Icons.person, color: Colors.white, size: 18) : null,
+                ),
               ),
             ),
           ),
         ],
       ),
-      body: _loading
+      body: loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          : groups.isEmpty
+              ? buildEmptyState()
+              : buildContent(netIsPositive),
+      floatingActionButton: GlassContainer(
+        borderRadius: 50,
+        padding: const EdgeInsets.all(8),
+        onTap: openCreateGroup,
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+    );
+  }
+
+  Widget buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.groups_2_outlined, size: 64, color: EleghartColors.textSecondary),
+          const SizedBox(height: 24),
+          Text('No groups yet', style: GlassTheme.headingMedium.copyWith(fontSize: 22)),
+          const SizedBox(height: 8),
+          const Text('Create a group to get started'),
+          const SizedBox(height: 32),
+          GlassContainer(
+            borderRadius: 24,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            onTap: openCreateGroup,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.group_add, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('New Group', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildContent(bool netIsPositive) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSummary(netIsPositive),
+            const SizedBox(height: 24),
+            Text('Groups', style: GlassTheme.headingSmall.copyWith(fontSize: 16)),
+            const SizedBox(height: 12),
+            buildGroupsList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildSummary(bool netIsPositive) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: EleghartColors.accentDark.withOpacity(0.2),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Summary', style: GlassTheme.headingSmall.copyWith(color: Colors.white, fontSize: 18)),
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  Row(children: [
-                    Flexible(
-                      child: Text(
-                        '$greeting, $_userName 👋',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: EleghartColors.textPrimary,
-                        ),
-                      ),
+                  Expanded(child: buildStatBox('Debit', '₹${totalDebit.toStringAsFixed(0)}', Colors.redAccent)),
+                  const SizedBox(width: 12),
+                  Expanded(child: buildStatBox('Credit', '₹${totalCredit.toStringAsFixed(0)}', Colors.greenAccent)),
+                  const SizedBox(width: 12),
+                  Expanded(child: buildStatBox('Balance', '₹${netBalance.abs().toStringAsFixed(0)}', netIsPositive ? Colors.greenAccent : Colors.redAccent)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.groups, size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text('${groups.length} Groups', style: const TextStyle(fontSize: 12, color: Colors.white)),
+                      ],
                     ),
-                  ]),
-
-                  const SizedBox(height: 18),
-
-                  if (_groups.isNotEmpty) _buildSummaryCard(),
-
-                  const SizedBox(height: 26),
-
-                  Expanded(
-                    child: _groups.isEmpty
-                        ? _buildEmptyState(context)
-                        : _buildGroupsList(),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.receipt_long, size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text('$totalExpensesCount Expenses', style: const TextStyle(fontSize: 12, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today, size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text('Last: $lastExpenseDate', style: const TextStyle(fontSize: 12, color: Colors.white)),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-
-      floatingActionButton: _groups.isNotEmpty
-        ? FloatingActionButton.extended(
-            onPressed: _openCreateGroup,
-            backgroundColor: EleghartColors.accentDark,
-            elevation: 10,
-            icon: const Icon(Icons.add, color: Colors.white, size: 22),
-            label: const Text(
-              'Add Group',
-              style: TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                color: Colors.white,
-              ),
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          )
-        : null,
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  // ---------------- SUMMARY CARD ----------------
-
-  Widget _buildSummaryCard() {
-    final netIsPositive = _netBalance >= 0;
-
+  Widget buildStatBox(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            EleghartColors.accentDark,
-            EleghartColors.accentLight.withOpacity(0.85),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: EleghartColors.accentDark.withOpacity(0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 12),
-          ),
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
         ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text(
-          'Overall Summary',
-          style: TextStyle(
-            fontSize: 15.5,
-            fontWeight: FontWeight.w700,
-            color: Colors.white70,
-            letterSpacing: 0.4,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(children: [
-          const Icon(Icons.remove_circle, size: 18, color: Colors.white70),
-          const SizedBox(width: 6),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '₹${_totalDebit.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Total Debit',
-            style: TextStyle(fontSize: 13, color: Colors.white70),
-          ),
-        ]),
-
-        const SizedBox(height: 6),
-
-        Row(children: [
-          const Icon(Icons.add_circle, size: 18, color: Colors.white70),
-          const SizedBox(width: 6),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '₹${_totalCredit.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Total Credit',
-            style: TextStyle(fontSize: 13, color: Colors.white70),
-          ),
-        ]),
-
-        const SizedBox(height: 10),
-
-        Row(children: [
-          const Icon(Icons.account_balance_wallet,
-              size: 18, color: Colors.white70),
-          const SizedBox(width: 6),
-          Text(
-            '${netIsPositive ? '+' : '–'} ₹${_netBalance.abs().toStringAsFixed(0)}',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: netIsPositive
-                  ? Colors.greenAccent
-                  : Colors.redAccent,
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Net Balance',
-            style: TextStyle(fontSize: 13, color: Colors.white70),
-          ),
-        ]),
-
-        const SizedBox(height: 14),
-
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          _summaryChip(
-            icon: Icons.groups,
-            label: '${_groups.length} Groups',
-          ),
-          _summaryChip(
-            icon: Icons.receipt_long,
-            label: '$_totalExpensesCount Expenses',
-          ),
-        ]),
-
-        const SizedBox(height: 12),
-
-        Row(children: [
-          const Icon(Icons.calendar_today, size: 16, color: Colors.white70),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              'Last expense: $_lastExpenseDate',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13.5,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-        ]),
-      ]),
     );
   }
 
-  Widget _summaryChip({required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: Colors.white),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  // ---------------- EMPTY STATE ----------------
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.groups_2_outlined,
-              size: 64, color: EleghartColors.textSecondary),
-          const SizedBox(height: 18),
-          const Text(
-            'No expenses yet',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              height: 2,
-              color: EleghartColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Start by creating a group\n(e.g. Friends, Family, Trip)',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14.5,
-              color: EleghartColors.textSecondary,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 28),
-          ElevatedButton.icon(
-            onPressed: _openCreateGroup,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: EleghartColors.accentDark,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 26, vertical: 15),
-            ),
-            icon: const Icon(Icons.group_add, size: 20),
-            label: const Text(
-              'Create your first group',
-              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  // ---------------- GROUPS LIST ----------------
-
-  Widget _buildGroupsList() {
+  Widget buildGroupsList() {
     return ListView.separated(
-      itemCount: _groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: groups.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final group = _groups[index];
-
-        return GestureDetector(
+        final group = groups[index];
+        final hasImage = group.imagePath != null && File(group.imagePath!).existsSync();
+        
+        return GlassMorphicCard(
+          borderRadius: 16,
           onTap: () async {
-            final changed = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GroupDetailScreen(group: group),
-              ),
-            );
-
-            if (changed == true) {
-              _loadDashboardData();
-            }
+            final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => GroupDetailScreen(group: group)));
+            if (changed == true) loadData();
           },
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.white, Color(0xFFF6F7FB)],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              leading: _buildGroupAvatar(group),
-              title: Text(
-                group.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16.5,
-                  color: EleghartColors.textPrimary,
-                ),
-              ),
-              subtitle: const Text(
-                'Tap to view details',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: EleghartColors.textSecondary,
-                  fontSize: 13.5,
-                ),
-              ),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined,
-                      color: EleghartColors.textSecondary),
-                  onPressed: () async {
-                    final updated = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CreateGroupScreen(
-                          existingGroup: group,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                hasImage
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(File(group.imagePath!), width: 48, height: 48, fit: BoxFit.cover),
+                      )
+                    : Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [EleghartColors.accentDark, EleghartColors.accentLight],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        child: const Icon(Icons.group, color: Colors.white, size: 24),
                       ),
-                    );
-
-                    if (updated == true) {
-                      _loadDashboardData();
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(group.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      const Text('Tap to view', style: TextStyle(fontSize: 12, color: EleghartColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (result) async {
+                    if (result == 'edit') {
+                      final updated = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => CreateGroupScreen(existingGroup: group)));
+                      if (updated == true) loadData();
+                    } else if (result == 'delete') {
+                      deleteGroup(group);
                     }
                   },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
+                    const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 18), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red))])),
+                  ],
+                  child: Icon(Icons.more_vert, color: EleghartColors.textSecondary, size: 20),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      color: Colors.redAccent),
-                  onPressed: () => _deleteGroup(group),
-                ),
-              ]),
+              ],
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildGroupAvatar(GroupModel group) {
-    if (group.imagePath != null && File(group.imagePath!).existsSync()) {
-      return CircleAvatar(
-        radius: 26,
-        backgroundImage: FileImage(File(group.imagePath!)),
-      );
-    }
-
-    return const CircleAvatar(
-      radius: 26,
-      backgroundColor: EleghartColors.accentDark,
-      child: Icon(Icons.group, color: Colors.white),
     );
   }
 }
