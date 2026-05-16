@@ -291,7 +291,7 @@ class _GlassMorphicCardState extends State<GlassMorphicCard>
                 ),
                 child: child,
               ),
-            ),
+            );
           },
           child: widget.child,
         ),

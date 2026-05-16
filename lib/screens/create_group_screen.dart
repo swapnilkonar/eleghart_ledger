@@ -146,15 +146,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final isNameEmpty = _controller.text.trim().isEmpty;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: EleghartColors.bgLight,
       appBar: AppBar(
         title: Text(
           isEditMode ? 'Edit Group' : 'Create Group',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: EleghartColors.textPrimary,
       ),
       body: Stack(
         children: [
@@ -292,8 +289,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           ),
                         ),
                       ),
-                    },
-                  ),
+                    );
+                  },
+                ),
 
                 const SizedBox(height: 18),
 
@@ -356,8 +354,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           ),
                         ),
                       ),
-                    },
-                  ),
+                    );
+                  },
+                ),
 
                 const SizedBox(height: 40),
 

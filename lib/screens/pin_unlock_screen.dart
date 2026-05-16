@@ -146,7 +146,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: Colors.white,
+      backgroundColor: EleghartColors.bgLight,
       body: SafeArea(
         child: Stack(
           children: [
@@ -302,10 +302,10 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                      ),
+                      );
                     },
                   ),
 
@@ -350,13 +350,14 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                             ),
                           ),
                         ),
-                      },
-                    ),
-                  ],
-                ),
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ),
     );
   }

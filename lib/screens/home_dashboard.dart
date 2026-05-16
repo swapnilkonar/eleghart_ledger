@@ -148,12 +148,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final netIsPositive = netBalance >= 0;
     
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: EleghartColors.bgLight,
       appBar: AppBar(
         title: const Text('Eleghart Ledger', style: TextStyle(fontWeight: FontWeight.w800)),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: EleghartColors.textPrimary,
         actions: [
           GestureDetector(
             onTap: openProfileSheet,

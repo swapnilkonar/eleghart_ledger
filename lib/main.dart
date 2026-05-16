@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'theme/eleghart_colors.dart';
+import 'theme/glass_theme.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_dashboard.dart';
 import 'screens/set_pin_screen.dart';
@@ -19,34 +19,7 @@ class EleghartLedgerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Eleghart Ledger',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: EleghartColors.bgLight,
-
-        appBarTheme: const AppBarTheme(
-          backgroundColor: EleghartColors.accentDark,
-          elevation: 0,
-          titleTextStyle: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-            letterSpacing: 0.4,
-          ),
-          iconTheme: IconThemeData(color: Colors.white),
-        ),
-
-        cardTheme: const CardThemeData(
-          color: EleghartColors.cardBg,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
-        ),
-
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: EleghartColors.accentDark,
-        ),
-      ),
+      theme: GlassTheme.appTheme(),
       home: const AppEntryGate(),
     );
   }

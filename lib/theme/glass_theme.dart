@@ -3,6 +3,85 @@ import 'eleghart_colors.dart';
 
 /// Glass Morphism & Interactive Design System
 class GlassTheme {
+  static ThemeData appTheme() {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: EleghartColors.bgLight,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: EleghartColors.accentDark,
+        primary: EleghartColors.accentDark,
+        secondary: EleghartColors.accentLight,
+        surface: Colors.white.withOpacity(0.72),
+      ),
+    );
+
+    return base.copyWith(
+      appBarTheme: AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.white.withOpacity(0.34),
+        foregroundColor: EleghartColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: headingSmall.copyWith(fontSize: 18),
+        iconTheme: const IconThemeData(color: EleghartColors.textPrimary),
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white.withOpacity(0.72),
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: Colors.white.withOpacity(0.55), width: 1.2),
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: EleghartColors.accentDark,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.22),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.32)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.32)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: EleghartColors.accentDark.withOpacity(0.7),
+            width: 1.8,
+          ),
+        ),
+        hintStyle: label,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: EleghartColors.metalDark.withOpacity(0.92),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: EleghartColors.accentDark,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          textStyle: const TextStyle(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ====== GLASS MORPHISM UTILITIES ======
 
   /// Primary glass overlay with blur for premium feel

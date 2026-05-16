@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import 'glass_widgets.dart';
 
 class EmptyState extends StatelessWidget {
   const EmptyState({super.key});
@@ -7,8 +9,11 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: GlassMorphicCard(
+        borderRadius: 28,
+        padding: const EdgeInsets.all(26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
             Icons.account_balance_wallet_outlined,
@@ -16,13 +21,9 @@ class EmptyState extends StatelessWidget {
             color: EleghartColors.textSecondary,
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'No expenses yet',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: EleghartColors.textPrimary,
-            ),
+            style: GlassTheme.headingMedium.copyWith(fontSize: 20),
           ),
           const SizedBox(height: 10),
           const Text(
@@ -38,19 +39,15 @@ class EmptyState extends StatelessWidget {
           SizedBox(
             width: 220,
             height: 48,
-            child: ElevatedButton.icon(
+            child: GlassButton(
+              label: 'Add your first expense',
+              icon: Icons.add,
               onPressed: () {},
-              icon: const Icon(Icons.add),
-              label: const Text('Add your first expense'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: EleghartColors.accentDark,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
+              borderRadius: 14,
             ),
           ),
         ],
+        ),
       ),
     );
   }

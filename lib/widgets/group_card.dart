@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/eleghart_colors.dart';
+import '../theme/glass_theme.dart';
+import 'glass_widgets.dart';
 
 class GroupCard extends StatelessWidget {
   final String name;
@@ -15,28 +17,27 @@ class GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        title: Text(
-          name,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: EleghartColors.textPrimary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassMorphicCard(
+        borderRadius: 18,
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          title: Text(
+            name,
+            style: GlassTheme.headingSmall.copyWith(fontSize: 15),
           ),
-        ),
-        subtitle: Text(
-          lastExpense,
-          style: const TextStyle(
-            color: EleghartColors.textSecondary,
+          subtitle: Text(
+            lastExpense,
+            style: GlassTheme.bodySmall,
           ),
-        ),
-        trailing: Text(
-          amount,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: EleghartColors.textPrimary,
+          trailing: Text(
+            amount,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: EleghartColors.textPrimary,
+            ),
           ),
         ),
       ),

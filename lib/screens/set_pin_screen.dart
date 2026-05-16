@@ -63,7 +63,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: Colors.white,
+      backgroundColor: EleghartColors.bgLight,
       body: SafeArea(
         child: Stack(
           children: [
@@ -265,8 +265,8 @@ class _SetPinScreenState extends State<SetPinScreen> {
                   ),
                 ),
               ],
-            );
-          );
+            ),
+          ),
         );
       },
     );

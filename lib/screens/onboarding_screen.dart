@@ -40,7 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: EleghartColors.bgLight,
       body: SafeArea(
         child: Stack(
           children: [
@@ -118,8 +118,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 fit: BoxFit.contain,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        );
+                      },
                       ),
 
                     const SizedBox(height: 28),
@@ -242,6 +243,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 borderRadius: 20,
                               ),
                             ),
+                          ),
                         );
                       },
                     ),

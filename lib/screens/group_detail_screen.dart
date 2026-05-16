@@ -104,15 +104,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: EleghartColors.bgLight,
         appBar: AppBar(
           title: Text(
             widget.group.name,
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: EleghartColors.textPrimary,
           actions: [
             GlassContainer(
               borderRadius: 12,
@@ -392,7 +389,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 ),
               ),
             ),
-          );
+          ),
         );
       },
     );
@@ -839,7 +836,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     ],
                   ),
                 ),
-              );
+              ),
             );
           },
         );
