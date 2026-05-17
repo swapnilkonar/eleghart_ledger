@@ -2,8 +2,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'group_detail_screen.dart';
+import 'groups_screen.dart';
 import 'profile_sheet.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
@@ -24,6 +26,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
   List<GroupModel> _groups = [];
   List<ExpenseModel> _expenses = [];
   bool _loading = true;
+
+  int _currentTab = 0;
 
   // -------- LEDGER TOTALS --------
   double _totalDebit = 0;
@@ -187,88 +191,247 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   // ---------------- UI ----------------
 
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.black.withOpacity(0.6),
+      elevation: 0,
+      titleSpacing: 20,
+      title: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: 'Eleghart ',
+              style: GoogleFonts.sora(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            TextSpan(
+              text: 'Ledger',
+              style: GoogleFonts.sora(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFCC0020),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
+          onPressed: () {},
+        ),
+        IconButton(
+          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white70, size: 22),
+          onPressed: () {},
+        ),
+        GestureDetector(
+          onTap: _openProfileSheet,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF1A0A0A),
+              backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
+              child: _avatar == null
+                  ? Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Image.asset(
+                        'assets/icons/eleghart_icon.png',
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return BottomAppBar(
+      color: const Color(0xFF0D0D0D),
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 8,
+      child: SizedBox(
+        height: 60,
+        child: Row(
+          children: [
+            _navItem(0, Icons.home_rounded, 'Home'),
+            _navItem(1, Icons.groups_rounded, 'Groups'),
+            const Expanded(child: SizedBox()),
+            _navItem(2, Icons.bar_chart_rounded, 'Insights'),
+            _navItem(3, Icons.person_rounded, 'Profile'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(int index, IconData icon, String label) {
+    final isActive = _currentTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentTab = index),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+              size: 22,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: GoogleFonts.sora(
+                fontSize: 10,
+                color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final greeting = _getGreeting();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Eleghart Ledger'),
-        elevation: 0,
-        actions: [
-          GestureDetector(
-            onTap: _openProfileSheet,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: EleghartColors.accentDark,
-                backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-                child: _avatar == null
-                    ? const Icon(Icons.person, color: Colors.white, size: 18)
-                    : null,
-              ),
+      backgroundColor: Colors.black,
+      extendBody: true,
+      appBar: _buildAppBar(),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/background_theme_top_glow.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(color: Colors.black.withOpacity(0.65)),
+          ),
+          if (_loading)
+            const Center(
+              child: CircularProgressIndicator(color: Color(0xFFCC0020)),
+            )
+          else
+            IndexedStack(
+              index: _currentTab,
+              children: [
+                _buildHomeTab(greeting),
+                GroupsScreen(userName: _userName),
+                _buildPlaceholder('Insights', Icons.bar_chart_rounded),
+                _buildPlaceholder('Profile', Icons.person_rounded),
+              ],
+            ),
+        ],
+      ),
+      bottomNavigationBar: _buildBottomNav(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCreateGroup,
+        backgroundColor: const Color(0xFFCC0020),
+        elevation: 6,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  Widget _buildHomeTab(String greeting) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$greeting, $_userName 👋',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.sora(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Your financial spaces',
+            style: GoogleFonts.sora(
+              fontSize: 13,
+              color: Colors.white54,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const Spacer(),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCC0020).withOpacity(0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.dashboard_rounded,
+                    color: Color(0xFFCC0020),
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Dashboard',
+                  style: GoogleFonts.sora(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Coming soon',
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    color: Colors.white30,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(String title, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.white24),
+          const SizedBox(height: 16),
+          Text(
+            '$title coming soon',
+            style: GoogleFonts.sora(
+              fontSize: 16,
+              color: Colors.white38,
             ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Flexible(
-                      child: Text(
-                        '$greeting, $_userName 👋',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: EleghartColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ]),
-
-                  const SizedBox(height: 18),
-
-                  if (_groups.isNotEmpty) _buildSummaryCard(),
-
-                  const SizedBox(height: 26),
-
-                  Expanded(
-                    child: _groups.isEmpty
-                        ? _buildEmptyState(context)
-                        : _buildGroupsList(),
-                  ),
-                ],
-              ),
-            ),
-
-      floatingActionButton: _groups.isNotEmpty
-        ? FloatingActionButton.extended(
-            onPressed: _openCreateGroup,
-            backgroundColor: EleghartColors.accentDark,
-            elevation: 10,
-            icon: const Icon(Icons.add, color: Colors.white, size: 22),
-            label: const Text(
-              'Add Group',
-              style: TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                color: Colors.white,
-              ),
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          )
-        : null,
     );
   }
 
