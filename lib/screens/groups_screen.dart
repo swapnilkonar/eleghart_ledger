@@ -1,11 +1,15 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
+import '../utils/date_filter.dart';
+import '../widgets/date_filter_pill.dart';
+import 'categories_list_screen.dart';
 import 'create_group_screen.dart';
 import 'group_detail_screen.dart';
 
@@ -14,18 +18,19 @@ class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key, required this.userName});
 
   @override
-  State<GroupsScreen> createState() => _GroupsScreenState();
+  State<GroupsScreen> createState() => GroupsScreenState();
 }
 
-class _GroupsScreenState extends State<GroupsScreen>
+class GroupsScreenState extends State<GroupsScreen>
     with SingleTickerProviderStateMixin {
   List<GroupModel> _groups = [];
   List<ExpenseModel> _expenses = [];
+  Map<String, String> _categoryImages = {};
   bool _loading = true;
   String _selectedFilter = 'All';
   late AnimationController _glowController;
 
-  final List<String> _filters = ['All', 'Trips', 'Friends', 'Family', 'Work'];
+  final List<String> _filters = ['All', 'Trips', 'Friends', 'Family', 'Work', 'Others'];
   final List<Color> _avatarColors = [
     const Color(0xFFCC0020),
     const Color(0xFF0066CC),
@@ -42,24 +47,75 @@ class _GroupsScreenState extends State<GroupsScreen>
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
     _loadData();
+    DateFilter.notifier.addListener(_onFilterChanged);
   }
+
+  void _onFilterChanged() => setState(() {});
 
   @override
   void dispose() {
+    DateFilter.notifier.removeListener(_onFilterChanged);
     _glowController.dispose();
     super.dispose();
   }
 
+  Future<void> reload() => _loadData();
+
   Future<void> _loadData() async {
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
+    final catImages = await StorageService.loadCategoryImages();
     if (mounted) {
       setState(() {
         _groups = groups;
         _expenses = expenses;
+        _categoryImages = catImages;
         _loading = false;
       });
     }
+  }
+
+  Future<void> _deleteGroup(GroupModel group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF120404),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete "${group.name}"?',
+            style: GoogleFonts.sora(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700)),
+        content: Text(
+            'All expenses in this group will be deleted. This cannot be undone.',
+            style: GoogleFonts.sora(color: Colors.white54, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel',
+                style: GoogleFonts.sora(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete',
+                style: GoogleFonts.sora(
+                    color: const Color(0xFFFF3355),
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final groups = await StorageService.loadGroups();
+    groups.removeWhere((g) => g.id == group.id);
+    await StorageService.saveGroups(groups);
+
+    final expenses = await StorageService.loadExpenses();
+    expenses.removeWhere((e) => e.groupId == group.id);
+    await StorageService.saveExpenses(expenses);
+
+    _loadData();
   }
 
   Future<void> _openCreateGroup({GroupModel? existing}) async {
@@ -80,7 +136,7 @@ class _GroupsScreenState extends State<GroupsScreen>
   }
 
   List<ExpenseModel> _expensesFor(GroupModel g) =>
-      _expenses.where((e) => e.groupId == g.id).toList();
+      _expenses.where((e) => e.groupId == g.id && DateFilter.isInRange(e.date)).toList();
 
   double _spentFor(GroupModel g) => _expensesFor(g)
       .where((e) => e.isDebit)
@@ -93,32 +149,38 @@ class _GroupsScreenState extends State<GroupsScreen>
     return credit - debit;
   }
 
-  double _totalBalance() =>
-      _groups.fold(0.0, (s, g) => s + _balanceFor(g));
+  double _totalBalance() {
+    final filtered = _expenses.where((e) => DateFilter.isInRange(e.date));
+    final credit = filtered.where((e) => e.isCredit).fold(0.0, (s, e) => s + e.amount);
+    final debit = filtered.where((e) => e.isDebit).fold(0.0, (s, e) => s + e.amount);
+    return credit - debit;
+  }
 
   double _thisMonthSpent() {
-    final now = DateTime.now();
     return _expenses
-        .where((e) => e.isDebit && e.date.month == now.month && e.date.year == now.year)
+        .where((e) => e.isDebit && DateFilter.isInRange(e.date))
         .fold(0.0, (s, e) => s + e.amount);
   }
 
   String _lastExpenseLabel(GroupModel g) {
     final ex = _expensesFor(g);
-    if (ex.isEmpty) return 'No expenses';
+    if (ex.isEmpty) return '—';
     final last = ex.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
     final diff = DateTime.now().difference(last);
-    if (diff.inHours < 1) return 'Last expense just now';
-    if (diff.inHours < 24) return 'Last expense ${diff.inHours}h ago';
-    return 'Last expense ${diff.inDays}d ago';
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   List<GroupModel> get _filteredGroups {
     if (_selectedFilter == 'All') return _groups;
-    final keyword = _selectedFilter.toLowerCase().replaceAll('s', '');
+    final filter = _selectedFilter.toLowerCase();
     return _groups
         .where((g) => g.categories
-            .any((c) => c.toLowerCase().contains(keyword)))
+            .any((c) => c.toLowerCase() == filter ||
+                        filter.startsWith(c.toLowerCase()) ||
+                        c.toLowerCase().startsWith(filter.replaceAll('s', ''))))
         .toList();
   }
 
@@ -182,10 +244,17 @@ class _GroupsScreenState extends State<GroupsScreen>
                     color: Colors.white,
                   ),
                 ),
-                Text(
-                  'Your financial spaces',
-                  style: GoogleFonts.sora(
-                      fontSize: 13, color: Colors.white38),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Your financial spaces',
+                      style: GoogleFonts.sora(
+                          fontSize: 13, color: Colors.white38),
+                    ),
+                    const DateFilterPill(),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
@@ -213,15 +282,15 @@ class _GroupsScreenState extends State<GroupsScreen>
                           _statBlock(
                             Icons.groups_rounded,
                             'Total Groups',
-                            '${_groups.length}',
-                            'Active',
+                            '${DateFilter.current == DateFilterType.allTime ? _groups.length : _groups.where((g) => _expensesFor(g).isNotEmpty).length}',
+                            DateFilter.current == DateFilterType.allTime ? 'Active' : 'With activity',
                             Colors.white70,
                           ),
                           _verticalDivider(),
                           _statBlock(
                             null,
                             'Total Balance',
-                            '${totalBal >= 0 ? '+' : ''}₹${totalBal.abs().toStringAsFixed(0)}',
+                            '₹${totalBal.abs().toStringAsFixed(0)}',
                             totalBal >= 0 ? 'You are owed' : 'You owe',
                             totalBal >= 0
                                 ? const Color(0xFF00CC66)
@@ -242,37 +311,52 @@ class _GroupsScreenState extends State<GroupsScreen>
                           height: 1,
                           color: Colors.white.withOpacity(0.07)),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFCC0020).withOpacity(0.15),
-                              shape: BoxShape.circle,
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CategoriesListScreen(
+                              allGroups: _groups,
+                              allExpenses: _expenses,
                             ),
-                            child: const Icon(Icons.auto_awesome_rounded,
-                                color: Color(0xFFCC0020), size: 14),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _groups.isEmpty
-                                  ? 'Add expenses to get insights.'
-                                  : 'You have ${_groups.length} active group${_groups.length > 1 ? 's' : ''} this month.',
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFCC0020).withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.person_rounded,
+                                  color: Color(0xFFCC0020), size: 14),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                () {
+                                  final total = _groups
+                                      .expand((g) => g.categories)
+                                      .toSet()
+                                      .length;
+                                  return '$total categor${total != 1 ? 'ies' : 'y'} across all groups';
+                                }(),
+                                style: GoogleFonts.sora(
+                                    fontSize: 12, color: Colors.white60),
+                              ),
+                            ),
+                            Text(
+                              'View All  ›',
                               style: GoogleFonts.sora(
-                                  fontSize: 12, color: Colors.white60),
+                                fontSize: 12,
+                                color: const Color(0xFFCC0020),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'View Details  ›',
-                            style: GoogleFonts.sora(
-                              fontSize: 12,
-                              color: const Color(0xFFCC0020),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -435,6 +519,7 @@ class _GroupsScreenState extends State<GroupsScreen>
     final status = _statusFor(group);
     final lastLabel = _lastExpenseLabel(group);
     final balPositive = balance >= 0;
+    final sparkColor = status.color;
 
     return GestureDetector(
       onTap: () => _openGroup(group),
@@ -443,159 +528,225 @@ class _GroupsScreenState extends State<GroupsScreen>
           color: const Color(0xFF0E0505),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: Colors.white.withOpacity(0.07), width: 1),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Image ────────────────────────────────────────────────────
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                bottomLeft: Radius.circular(18),
-              ),
-              child: Stack(
-                children: [
-                  SizedBox(
-                    width: 90,
-                    height: 130,
-                    child: group.imagePath != null &&
-                            File(group.imagePath!).existsSync()
-                        ? Image.file(File(group.imagePath!),
-                            fit: BoxFit.cover)
-                        : Container(
-                            color: const Color(0xFF1A0505),
-                            child: Center(
-                              child: Icon(
-                                _categoryIcon(group.categories),
-                                color: const Color(0xFFCC0020)
-                                    .withOpacity(0.5),
-                                size: 36,
-                              ),
-                            ),
-                          ),
-                  ),
-                  // Bottom-left icon badge
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFCC0020).withOpacity(0.9),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _categoryIcon(group.categories),
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              color: const Color(0xFFCC0020).withOpacity(0.18), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFCC0020).withOpacity(0.18),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
             ),
-
-            // ── Content ──────────────────────────────────────────────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Left image ─────────────────────────────────────────────
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                ),
+                child: Stack(
                   children: [
-                    // Name + status + menu
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            group.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.sora(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                    SizedBox(
+                      width: 88,
+                      child: group.imagePath != null &&
+                              File(group.imagePath!).existsSync()
+                          ? Image.file(File(group.imagePath!),
+                              fit: BoxFit.cover)
+                          : Container(
+                              color: const Color(0xFF1A0505),
+                              child: Center(
+                                child: Icon(
+                                  _categoryIcon(group.categories),
+                                  color: const Color(0xFFCC0020)
+                                      .withOpacity(0.5),
+                                  size: 36,
+                                ),
+                              ),
                             ),
-                          ),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      left: 8,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCC0020).withOpacity(0.9),
+                          shape: BoxShape.circle,
                         ),
-                        _buildStatusBadge(status),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.more_vert_rounded,
-                            color: Colors.white38, size: 18),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Member avatars
-                    _buildMemberAvatars(group),
-
-                    const SizedBox(height: 10),
-
-                    // Spent + balance
-                    Text(
-                      '₹${spent.toStringAsFixed(0)} spent',
-                      style: GoogleFonts.sora(
-                          fontSize: 13,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${balPositive ? '+' : '-'} ₹${balance.abs().toStringAsFixed(0)} balance',
-                      style: GoogleFonts.sora(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: balPositive
-                            ? const Color(0xFF00CC66)
-                            : const Color(0xFFFF3355),
+                        child: Icon(
+                          _categoryIcon(group.categories),
+                          color: Colors.white,
+                          size: 13,
+                        ),
                       ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Expense count + last expense + sparkline
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${expenses.length} expenses',
-                                style: GoogleFonts.sora(
-                                    fontSize: 11,
-                                    color: Colors.white38),
-                              ),
-                              Text(
-                                lastLabel,
-                                style: GoogleFonts.sora(
-                                    fontSize: 10,
-                                    color: Colors.white24),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 60,
-                          height: 28,
-                          child: CustomPaint(
-                            painter: _SparklinePainter(
-                              expenses: expenses,
-                              color: balPositive
-                                  ? const Color(0xFF00CC66)
-                                  : const Color(0xFFFF3355),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+
+              // ── Middle: name + avatars + spent + balance ───────────────
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildMemberAvatars(group),
+                      const SizedBox(height: 10),
+                      Text(
+                        '₹${spent.toStringAsFixed(0)} spent',
+                        style: GoogleFonts.sora(
+                            fontSize: 13,
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${balPositive ? '+' : '-'} ₹${balance.abs().toStringAsFixed(0)} balance',
+                        style: GoogleFonts.sora(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: balPositive
+                              ? const Color(0xFF00CC66)
+                              : const Color(0xFFFF3355),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── Right: status+⋮ / count+last / sparkline ──────────────
+              ClipRect(
+                child: SizedBox(
+                  width: 124,
+                  child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Status badge + 3-dots
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: _buildStatusBadge(status),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            iconSize: 16,
+                            icon: const Icon(Icons.more_vert_rounded,
+                                color: Colors.white38, size: 16),
+                            color: const Color(0xFF1A0505),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            onSelected: (v) {
+                              if (v == 'edit')
+                                _openCreateGroup(existing: group);
+                              if (v == 'delete') _deleteGroup(group);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [
+                                  const Icon(Icons.edit_rounded,
+                                      size: 15, color: Colors.white70),
+                                  const SizedBox(width: 8),
+                                  Text('Edit Group',
+                                      style: GoogleFonts.sora(
+                                          fontSize: 13,
+                                          color: Colors.white70)),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(children: [
+                                  const Icon(Icons.delete_rounded,
+                                      size: 15,
+                                      color: Color(0xFFFF3355)),
+                                  const SizedBox(width: 8),
+                                  Text('Delete Group',
+                                      style: GoogleFonts.sora(
+                                          fontSize: 13,
+                                          color:
+                                              const Color(0xFFFF3355))),
+                                ]),
+                              ),
+                            ],
+                          ),
+                          ),  // SizedBox
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // Expense count
+                      Text(
+                        '${expenses.length} expense${expenses.length != 1 ? 's' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                            fontSize: 11, color: Colors.white54),
+                      ),
+                      const SizedBox(height: 1),
+                      // Last expense label + time
+                      Text(
+                        'Last expense',
+                        style: GoogleFonts.sora(
+                            fontSize: 9, color: Colors.white24),
+                      ),
+                      Text(
+                        lastLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.sora(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white54),
+                      ),
+                      const Spacer(),
+                      // Sparkline
+                      SizedBox(
+                        height: 44,
+                        width: double.infinity,
+                        child: _buildSparkLine(expenses, sparkColor),
+                      ),
+                    ],
+                  ),
+                ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -628,44 +779,55 @@ class _GroupsScreenState extends State<GroupsScreen>
   }
 
   Widget _buildMemberAvatars(GroupModel group) {
-    final seed = group.name.hashCode;
-    final rng = Random(seed);
-    final count = 3 + rng.nextInt(3);
-    final letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    final cats = group.categories;
+    if (cats.isEmpty) return const SizedBox(height: 24);
+    final display = cats.take(5).toList();
+    final overflow = cats.length > 5 ? cats.length - 5 : 0;
 
     return SizedBox(
       height: 24,
       child: Stack(
         children: [
-          ...List.generate(min(count, 5), (i) {
-            final color = _avatarColors[i % _avatarColors.length];
-            final letter = letters[(seed + i * 7) % 26];
+          ...display.asMap().entries.map((entry) {
+            final i = entry.key;
+            final cat = entry.value;
+            final color =
+                _avatarColors[cat.hashCode.abs() % _avatarColors.length];
+            final imgPath = _categoryImages[cat];
+            final hasImg = imgPath != null && File(imgPath).existsSync();
             return Positioned(
               left: i * 16.0,
               child: Container(
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.8),
+                  color: color.withOpacity(0.85),
                   shape: BoxShape.circle,
                   border: Border.all(
                       color: const Color(0xFF0E0505), width: 1.5),
+                  image: hasImg
+                      ? DecorationImage(
+                          image: FileImage(File(imgPath!)),
+                          fit: BoxFit.cover)
+                      : null,
                 ),
-                child: Center(
-                  child: Text(
-                    letter,
-                    style: const TextStyle(
-                        fontSize: 9,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
+                child: hasImg
+                    ? null
+                    : Center(
+                        child: Text(
+                          cat.isNotEmpty ? cat[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                              fontSize: 9,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ),
               ),
             );
           }),
-          if (count > 5)
+          if (overflow > 0)
             Positioned(
-              left: 5 * 16.0,
+              left: display.length * 16.0,
               child: Container(
                 width: 24,
                 height: 24,
@@ -677,7 +839,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                 ),
                 child: Center(
                   child: Text(
-                    '+${count - 5}',
+                    '+$overflow',
                     style: const TextStyle(
                         fontSize: 8,
                         color: Colors.white54,
@@ -964,48 +1126,83 @@ class _StatusInfo {
   const _StatusInfo(this.label, this.color);
 }
 
-// ── Sparkline painter ─────────────────────────────────────────────────────────
+// ── Sparkline builder ─────────────────────────────────────────────────────────
 
-class _SparklinePainter extends CustomPainter {
-  final List<ExpenseModel> expenses;
-  final Color color;
+Widget _buildSparkLine(List<ExpenseModel> expenses, Color color) {
+  final debits = expenses
+      .where((e) => e.isDebit)
+      .toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
 
-  _SparklinePainter({required this.expenses, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (expenses.length < 2) return;
-
-    final debits = expenses
-        .where((e) => e.isDebit)
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    if (debits.length < 2) return;
-
-    final amounts = debits.map((e) => e.amount).toList();
-    final maxAmt = amounts.reduce(max);
-    if (maxAmt == 0) return;
-
-    final paint = Paint()
-      ..color = color.withOpacity(0.85)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    final step = size.width / (amounts.length - 1);
-
-    for (int i = 0; i < amounts.length; i++) {
-      final x = i * step;
-      final y = size.height - (amounts[i] / maxAmt) * size.height;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
-
-    canvas.drawPath(path, paint);
+  // Flat line for insufficient data
+  if (debits.length < 3) {
+    return LineChart(
+      LineChartData(
+        minX: 0, maxX: 6, minY: 0, maxY: 6,
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: const [FlSpot(0, 3), FlSpot(6, 3)],
+            isCurved: false,
+            barWidth: 1.5,
+            color: color.withOpacity(0.45),
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: false),
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(_SparklinePainter old) =>
-      old.expenses != expenses || old.color != color;
+  final pts = debits.length > 8 ? debits.sublist(debits.length - 8) : debits;
+  final amounts = pts.map((e) => e.amount).toList();
+  final maxAmt = amounts.reduce(max);
+  final minAmt = amounts.reduce(min);
+  final range = max(maxAmt - minAmt, maxAmt * 0.2).clamp(1.0, double.infinity);
+
+  final spots = List.generate(pts.length, (i) {
+    final y = 0.5 + ((amounts[i] - minAmt) / range) * 5.0;
+    return FlSpot(i.toDouble(), y.clamp(0.2, 5.8));
+  });
+
+  return LineChart(
+    LineChartData(
+      minX: 0,
+      maxX: (pts.length - 1).toDouble(),
+      minY: 0,
+      maxY: 6,
+      gridData: const FlGridData(show: false),
+      titlesData: const FlTitlesData(show: false),
+      borderData: FlBorderData(show: false),
+      lineTouchData: const LineTouchData(enabled: false),
+      lineBarsData: [
+        LineChartBarData(
+          spots: spots,
+          isCurved: true,
+          curveSmoothness: 0.25,
+          barWidth: 1.6,
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.7), color, color.withOpacity(0.85)],
+          ),
+          shadow: Shadow(
+            color: color.withOpacity(0.35),
+            blurRadius: 6,
+          ),
+          dotData: FlDotData(
+            show: true,
+            getDotPainter: (spot, percent, barData, index) =>
+                FlDotCirclePainter(
+              radius: 2.5,
+              color: color,
+              strokeWidth: 1.5,
+              strokeColor: const Color(0xFF0E0505),
+            ),
+          ),
+          belowBarData: BarAreaData(show: false),
+        ),
+      ],
+    ),
+  );
 }

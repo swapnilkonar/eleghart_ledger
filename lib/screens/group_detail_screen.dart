@@ -1,6 +1,8 @@
 // GroupDetailScreen — Ledger UX: Net Balance, Filters, Search, Type Badge, Date Visible, Expense Details Popup
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/pdf_export_service.dart';
 import '../screens/export_pdf_screen.dart';
 import '../models/group_model.dart';
@@ -8,6 +10,8 @@ import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import 'add_expense_screen.dart';
+import '../utils/date_filter.dart';
+import '../widgets/date_filter_pill.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final GroupModel group;
@@ -24,6 +28,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   late List<String> _categories;
   List<ExpenseModel> _expenses = [];
   bool _loadingExpenses = true;
+  Map<String, String> _categoryImages = {};
 
   final Map<String, Map<String, dynamic>> _memberStats = {};
   bool _dataChanged = false;
@@ -37,10 +42,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     super.initState();
     _categories = [...widget.group.categories];
     _loadExpenses();
+    DateFilter.notifier.addListener(_onFilterChanged);
+  }
+
+  void _onFilterChanged() {
+    _buildMemberStats(_expenses);
+    setState(() {});
   }
 
   @override
   void dispose() {
+    DateFilter.notifier.removeListener(_onFilterChanged);
     _categoryController.dispose();
     super.dispose();
   }
@@ -55,6 +67,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Future<void> _loadExpenses() async {
+    final catImages = await StorageService.loadCategoryImages();
+    if (mounted) setState(() => _categoryImages = catImages);
     final all = await StorageService.loadExpenses();
 
     final groupExpenses =
@@ -76,7 +90,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     _memberStats.clear();
 
     for (final c in _categories) {
-      final related = expenses.where((e) => e.categories.contains(c)).toList();
+      final related = expenses.where((e) => e.categories.contains(c) && DateFilter.isInRange(e.date)).toList();
 
       final total = related.fold<double>(0, (s, e) {
         final share = e.amount / e.categories.length;
@@ -94,111 +108,286 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
+  Future<void> _addExpense() async {
+    if (_categories.isEmpty) {
+      _toast('Please add at least one member / category first 👥');
+      return;
+    }
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(
+          group: widget.group,
+          categories: _categories,
+        ),
+      ),
+    );
+    if (result == true) {
+      await _loadExpenses();
+      _markChanged();
+    }
+  }
+
   // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.group.name),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ExportPdfScreen(
-                      group: widget.group,
-                      allExpenses: _expenses,
+        backgroundColor: Colors.black,
+        resizeToAvoidBottomInset: true,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/background_theme_top_glow.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned.fill(
+              child: Container(color: Colors.black.withOpacity(0.72)),
+            ),
+            SafeArea(
+              child: Column(
+                children: [
+                  // ── Custom AppBar ──────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context, _dataChanged),
+                          child: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFCC0020).withOpacity(0.6),
+                                width: 1.5,
+                              ),
+                              color: const Color(0xFFCC0020).withOpacity(0.10),
+                            ),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white, size: 16),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            widget.group.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.sora(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ExportPdfScreen(
+                                group: widget.group,
+                                allExpenses: _expenses,
+                              ),
+                            ),
+                          ),
+                          child: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFCC0020).withOpacity(0.4),
+                                width: 1,
+                              ),
+                              color: const Color(0xFFCC0020).withOpacity(0.08),
+                            ),
+                            child: const Icon(Icons.picture_as_pdf_rounded,
+                                color: Color(0xFFCC0020), size: 18),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: EleghartColors.accentDark,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('Add Expense',
-              style:
-                  TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
-          onPressed: () async {
-            if (_categories.isEmpty) {
-              _toast('Please add at least one member / category first 👥');
-              return;
-            }
 
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AddExpenseScreen(
-                  group: widget.group,
-                  categories: _categories,
-                ),
-              ),
-            );
+                  // ── Scrollable body ────────────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 22),
+                          _sectionTitle('Members / Category'),
+                          _buildAddMemberField(),
+                          const SizedBox(height: 10),
+                          _buildMemberCards(),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _sectionTitle('Expenses'),
+                              const DateFilterPill(),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              _filterChip('all', 'All'),
+                              const SizedBox(width: 8),
+                              _filterChip('debit', 'Debit'),
+                              const SizedBox(width: 8),
+                              _filterChip('credit', 'Credit'),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Search
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: Colors.white.withOpacity(0.10)),
+                            ),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 14),
+                                const Icon(Icons.search_rounded,
+                                    color: Colors.white38, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    style: GoogleFonts.sora(
+                                        fontSize: 13, color: Colors.white),
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'Search by name, amount, description...',
+                                      hintStyle: GoogleFonts.sora(
+                                          fontSize: 13, color: Colors.white30),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              vertical: 14),
+                                    ),
+                                    onChanged: (v) =>
+                                        setState(() => _searchQuery = v.trim()),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.tune_rounded,
+                                    color: const Color(0xFFCC0020)
+                                        .withOpacity(0.7),
+                                    size: 18),
+                                const SizedBox(width: 14),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          if (_loadingExpenses)
+                            const Center(
+                              child: CircularProgressIndicator(
+                                  color: Color(0xFFCC0020)),
+                            )
+                          else
+                            _buildExpenseList(),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
 
-            if (result == true) {
-              await _loadExpenses();
-              _markChanged();
-            }
-          },
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 22),
-              _sectionTitle('Members / Category'),
-              _buildAddMemberField(),
-              const SizedBox(height: 14),
-              _buildMemberCards(),
-              const SizedBox(height: 26),
-              _sectionTitle('Expenses'),
-              const SizedBox(height: 10),
-
-              // -------- FILTER CHIPS --------
-              Row(
-                children: [
-                  _filterChip('all', 'All'),
-                  const SizedBox(width: 8),
-                  _filterChip('debit', 'Debit'),
-                  const SizedBox(width: 8),
-                  _filterChip('credit', 'Credit'),
+                  // ── Add Expense button ─────────────────────────────────
+                  Padding(
+                    padding:
+                        EdgeInsets.fromLTRB(20, 8, 20, safeBottom + 16),
+                    child: GestureDetector(
+                      onTap: _addExpense,
+                      child: Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: const RadialGradient(
+                            center: Alignment.center,
+                            radius: 0.9,
+                            colors: [
+                              Color(0xFFCC0020),
+                              Color(0xFF6B0010),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  const Color(0xFFCC0020).withOpacity(0.5),
+                              blurRadius: 22,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 4),
+                            ),
+                            BoxShadow(
+                              color:
+                                  const Color(0xFFCC0020).withOpacity(0.2),
+                              blurRadius: 40,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                          border: Border.all(
+                            color:
+                                const Color(0xFFFF2040).withOpacity(0.4),
+                            width: 1,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 6,
+                              left: 60,
+                              right: 60,
+                              child: Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.white.withOpacity(0.22),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.add_rounded,
+                                    color: Colors.white, size: 22),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Add Expense',
+                                  style: GoogleFonts.sora(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-
-              const SizedBox(height: 12),
-
-              // -------- SEARCH FIELD --------
-              Container(
-                decoration: _cardDecoration(),
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search by name, amount, description…',
-                    prefixIcon: Icon(Icons.search),
-                    border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  ),
-                  onChanged: (v) => setState(() => _searchQuery = v.trim()),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              if (_loadingExpenses)
-                const Center(child: CircularProgressIndicator()),
-              if (!_loadingExpenses) _buildExpenseList(),
-              const SizedBox(height: 90),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -207,210 +396,166 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- SUMMARY HEADER ----------------
 
   Widget _buildHeader() {
+    final filtered = _expenses.where((e) => DateFilter.isInRange(e.date)).toList();
     double totalDebit = 0;
     double totalCredit = 0;
-
-    for (final e in _expenses) {
-      if (e.type == 'credit') {
-        totalCredit += e.amount;
-      } else {
-        totalDebit += e.amount;
-      }
+    for (final e in filtered) {
+      if (e.type == 'credit') totalCredit += e.amount;
+      else totalDebit += e.amount;
     }
-
     final netBalance = totalCredit - totalDebit;
     final isPositive = netBalance >= 0;
-    final netColor = isPositive ? Colors.greenAccent : Colors.redAccent;
-    final netSign = isPositive ? '+' : '–';
-
-    final lastDate = _expenses.isEmpty
+    final netColor = isPositive ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
+    final lastDate = filtered.isEmpty
         ? '-'
-        : _expenses
-            .map((e) => e.date)
-            .reduce((a, b) => a.isAfter(b) ? a : b)
-            .toString()
-            .split(' ')[0];
+        : filtered.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b).toString().split(' ')[0];
 
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            EleghartColors.accentDark,
-            EleghartColors.accentLight.withOpacity(0.85),
-          ],
-        ),
+        color: const Color(0xFF120404),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: const Color(0xFFCC0020).withOpacity(0.45), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: EleghartColors.accentDark.withOpacity(0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 12),
+            color: const Color(0xFFCC0020).withOpacity(0.2),
+            blurRadius: 24,
+            spreadRadius: 2,
           ),
         ],
       ),
-      child: Row(
-        children: [
-          _buildGroupAvatarThemed(),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.group.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 0.4,
-                  ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(19),
+        child: Stack(
+          children: [
+            // Mountain silhouette background
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Opacity(
+                opacity: 0.18,
+                child: Image.asset(
+                  'assets/images/background_theme_top_glow.png',
+                  height: 90,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.bottomCenter,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.remove_circle,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '₹${totalDebit.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Total Debit',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.add_circle,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '₹${totalCredit.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Total Credit',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.account_balance_wallet,
-                        size: 18, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '$netSign ₹${netBalance.abs().toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: netColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Net Balance',
-                        style: TextStyle(fontSize: 13, color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 14, color: Colors.white70),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Last expense: $lastDate',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.group.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.sora(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildGroupAvatar(),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _statRow(
+                              Icons.remove_circle_rounded,
+                              const Color(0xFFFF3355),
+                              '₹${totalDebit.toStringAsFixed(0)}',
+                              'Total Debit',
+                            ),
+                            const SizedBox(height: 10),
+                            _statRow(
+                              Icons.add_circle_rounded,
+                              const Color(0xFF00CC66),
+                              '₹${totalCredit.toStringAsFixed(0)}',
+                              'Total Credit',
+                            ),
+                            const SizedBox(height: 10),
+                            _statRow(
+                              Icons.account_balance_wallet_rounded,
+                              const Color(0xFF00BBCC),
+                              '₹${netBalance.abs().toStringAsFixed(0)}',
+                              'Net Balance',
+                              valueColor: netColor,
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today_rounded,
+                                    size: 13, color: Colors.white38),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Last expense: $lastDate',
+                                  style: GoogleFonts.sora(
+                                      fontSize: 12, color: Colors.white38),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildGroupAvatarThemed() {
+  Widget _statRow(IconData icon, Color iconColor, String value, String label,
+      {Color? valueColor}) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: iconColor),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: GoogleFonts.sora(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: valueColor ?? Colors.white,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: GoogleFonts.sora(fontSize: 12, color: Colors.white54),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupAvatar() {
     if (widget.group.imagePath != null &&
         File(widget.group.imagePath!).existsSync()) {
-      return Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: CircleAvatar(
-          radius: 28,
-          backgroundImage: FileImage(File(widget.group.imagePath!)),
-        ),
+      return CircleAvatar(
+        radius: 36,
+        backgroundImage: FileImage(File(widget.group.imagePath!)),
       );
     }
-
     return Container(
-      width: 56,
-      height: 56,
+      width: 72,
+      height: 72,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.85),
-            Colors.white.withOpacity(0.65),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        color: const Color(0xFF1A0505),
+        border: Border.all(
+            color: const Color(0xFFCC0020).withOpacity(0.2), width: 1),
       ),
-      child: const Icon(
-        Icons.group,
-        color: EleghartColors.accentDark,
-        size: 28,
-      ),
+      child: const Icon(Icons.groups_rounded,
+          color: Color(0xFFCC0020), size: 32),
     );
   }
 
@@ -418,129 +563,174 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Widget _buildExpenseList() {
     final visibleExpenses = _expenses.where((e) {
-      // ---- TYPE FILTER ----
-      if (_expenseFilter != 'all' && e.type != _expenseFilter) {
-        return false;
-      }
-
-      // ---- SEARCH FILTER ----
+      if (!DateFilter.isInRange(e.date)) return false;
+      if (_expenseFilter != 'all' && e.type != _expenseFilter) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
-
-        final desc = e.description.toLowerCase();
-        final cats = e.categories.join(',').toLowerCase();
-        final amt = e.amount.toString();
-
-        if (!desc.contains(q) && !cats.contains(q) && !amt.contains(q)) {
-          return false;
-        }
+        if (!e.description.toLowerCase().contains(q) &&
+            !e.categories.join(',').toLowerCase().contains(q) &&
+            !e.amount.toString().contains(q)) return false;
       }
-
       return true;
     }).toList();
 
     if (visibleExpenses.isEmpty) {
-      return const Text('No matching expenses.',
-          style: TextStyle(color: EleghartColors.textSecondary));
+      return Column(
+        children: [
+          const SizedBox(height: 28),
+          Center(
+            child: Image.asset(
+              'assets/images/empty_expenses.png',
+              height: 150,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No matching expenses.',
+            style: GoogleFonts.sora(fontSize: 14, color: Colors.white38),
+          ),
+          const SizedBox(height: 28),
+        ],
+      );
     }
 
     return Column(
       children: visibleExpenses.map((e) {
         final isCredit = e.type == 'credit';
+        final typeColor =
+            isCredit ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
         final typeLabel = isCredit ? 'CREDIT' : 'DEBIT';
-        final typeColor = isCredit ? Colors.green : Colors.red;
 
         return GestureDetector(
           onTap: () => _openExpenseDetails(e),
           child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: _cardDecoration(),
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E0505),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: Colors.white.withOpacity(0.07), width: 1),
+            ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Type icon
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: typeColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    shape: BoxShape.circle,
                   ),
-                  child: Text(typeLabel,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: typeColor)),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: e.imagePath == null
-                      ? null
-                      : () => _openReceiptPreview(e.imagePath!),
-                  child: e.imagePath == null
-                      ? const Icon(Icons.receipt, size: 22)
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(File(e.imagePath!),
-                              width: 36, height: 36, fit: BoxFit.cover),
-                        ),
+                  child: Icon(
+                    isCredit
+                        ? Icons.add_rounded
+                        : Icons.remove_rounded,
+                    color: typeColor,
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 12),
+                // Details
                 Expanded(
                   child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e.description.isEmpty
-                            ? 'Expense'
-                            : e.description,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 4),
-                        Text(e.categories.join(', '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 12.5,
-                                color: EleghartColors.textSecondary)),
-                        const SizedBox(height: 2),
-                        Text(e.date.toString().split(' ')[0],
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: EleghartColors.textSecondary)),
-                      ]),
-                ),
-                const SizedBox(width: 8),
-                FittedBox(
-                  child: Text('₹${e.amount.toStringAsFixed(0)}',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: typeColor)),
-                ),
-                IconButton(
-                    icon: const Icon(Icons.edit, size: 20),
-                    onPressed: () async {
-                      final updated = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AddExpenseScreen(
-                            group: widget.group,
-                            categories: _categories,
-                            existingExpense: e,
-                          ),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        e.description.isEmpty ? 'Expense' : e.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
                         ),
-                      );
-
-                      if (updated == true) {
-                        await _loadExpenses();
-                        _markChanged();
-                      }
-                    }),
-                IconButton(
-                    icon: const Icon(Icons.delete,
-                        size: 20, color: Colors.red),
-                    onPressed: () => _deleteExpense(e)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${e.categories.join(', ')} · ${e.date.toString().split(' ')[0]}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                            fontSize: 11, color: Colors.white38),
+                      ),
+                    ],
+                  ),
+                ),
+                // Receipt thumbnail
+                if (e.imagePath != null &&
+                    File(e.imagePath!).existsSync()) ...[
+                  const SizedBox(width: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(e.imagePath!),
+                        width: 36, height: 36, fit: BoxFit.cover),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                // Amount + type badge
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹${e.amount.toStringAsFixed(0)}',
+                      style: GoogleFonts.sora(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: typeColor,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        typeLabel,
+                        style: GoogleFonts.sora(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: typeColor),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 4),
+                // Action icons
+                Column(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        final updated = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddExpenseScreen(
+                              group: widget.group,
+                              categories: _categories,
+                              existingExpense: e,
+                            ),
+                          ),
+                        );
+                        if (updated == true) {
+                          await _loadExpenses();
+                          _markChanged();
+                        }
+                      },
+                      child: const Icon(Icons.edit_rounded,
+                          size: 16, color: Colors.white30),
+                    ),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => _deleteExpense(e),
+                      child: const Icon(Icons.delete_rounded,
+                          size: 16, color: Color(0xFFFF3355)),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -553,98 +743,121 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   void _openExpenseDetails(ExpenseModel e) {
     final isCredit = e.type == 'credit';
+    final typeColor =
+        isCredit ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
     final typeLabel = isCredit ? 'CREDIT' : 'DEBIT';
-    final typeColor = isCredit ? Colors.green : Colors.red;
+    final hasReceipt =
+        e.imagePath != null && File(e.imagePath!).existsSync();
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.7),
       builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(18),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF120404),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: const Color(0xFFCC0020).withOpacity(0.25), width: 1),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 8, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
                         color: typeColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14)),
-                    child: Text(typeLabel,
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: typeColor))),
-                const Spacer(),
-                IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context))
-              ]),
-              const SizedBox(height: 10),
-              Text('₹${e.amount.toStringAsFixed(0)}',
-                  style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: typeColor)),
-              const SizedBox(height: 10),
-              if (e.description.isNotEmpty) ...[
-                const Text('Description',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: EleghartColors.textSecondary)),
-                const SizedBox(height: 4),
-                Text(e.description,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-              ],
-              const Text('Members / Category',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: EleghartColors.textSecondary)),
-              const SizedBox(height: 4),
-              Text(e.categories.join(', '),
-                  style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              const Text('Date',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: EleghartColors.textSecondary)),
-              const SizedBox(height: 4),
-              Text(e.date.toString().split(' ')[0],
-                  style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 14),
-              if (e.imagePath != null && File(e.imagePath!).existsSync()) ...[
-                const Text('Receipt',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: EleghartColors.textSecondary)),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openReceiptPreview(e.imagePath!);
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.file(File(e.imagePath!),
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover),
-                  ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(typeLabel,
+                          style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: typeColor)),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white38, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '₹${e.amount.toStringAsFixed(0)}',
+                      style: GoogleFonts.sora(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: typeColor),
+                    ),
+                    const SizedBox(height: 14),
+                    if (e.description.isNotEmpty) ...[
+                      _detailLabel('Description'),
+                      const SizedBox(height: 4),
+                      Text(e.description,
+                          style: GoogleFonts.sora(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                      const SizedBox(height: 12),
+                    ],
+                    _detailLabel('Members / Category'),
+                    const SizedBox(height: 4),
+                    Text(e.categories.join(', '),
+                        style: GoogleFonts.sora(
+                            fontSize: 14, color: Colors.white70)),
+                    const SizedBox(height: 12),
+                    _detailLabel('Date'),
+                    const SizedBox(height: 4),
+                    Text(e.date.toString().split(' ')[0],
+                        style: GoogleFonts.sora(
+                            fontSize: 14, color: Colors.white70)),
+                    if (hasReceipt) ...[
+                      const SizedBox(height: 14),
+                      _detailLabel('Receipt'),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _openReceiptPreview(e.imagePath!);
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(e.imagePath!),
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Center(
+                        child: Text(
+                          'Tap image to expand',
+                          style: GoogleFonts.sora(
+                              fontSize: 11, color: Colors.white30),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -652,19 +865,64 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  Widget _detailLabel(String text) => Text(
+        text,
+        style: GoogleFonts.sora(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.white38,
+            letterSpacing: 0.8),
+      );
+
   // ---------------- HELPERS ----------------
 
   Widget _filterChip(String value, String label) {
     final selected = _expenseFilter == value;
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      selectedColor: EleghartColors.accentDark,
-      labelStyle: TextStyle(
-          color: selected ? Colors.white : EleghartColors.textPrimary,
-          fontWeight: FontWeight.w700),
-      onSelected: (_) => setState(() => _expenseFilter = value),
+    return GestureDetector(
+      onTap: () => setState(() => _expenseFilter = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFCC0020).withOpacity(0.18)
+              : Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFCC0020)
+                : Colors.white.withOpacity(0.18),
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  )
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[  
+              const Icon(Icons.check_rounded,
+                  color: Color(0xFFCC0020), size: 13),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.sora(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : Colors.white60,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -675,96 +933,333 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Widget _buildAddMemberField() {
     return Container(
-      decoration: _cardDecoration(),
-      child: TextField(
-        controller: _categoryController,
-        decoration: InputDecoration(
-          hintText: 'Add member / category',
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          suffixIcon: IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              color: EleghartColors.accentDark,
-              onPressed: _addCategory),
-        ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: Colors.white.withOpacity(0.10), width: 1),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 14),
+          // Dashed circle + button
+          GestureDetector(
+            onTap: _addCategory,
+            child: CustomPaint(
+              size: const Size(32, 32),
+              painter: _DashedCirclePainter(),
+              child: const SizedBox(
+                width: 32, height: 32,
+                child: Icon(Icons.add_rounded,
+                    color: Color(0xFFCC0020), size: 16),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _categoryController,
+              style: GoogleFonts.sora(
+                  fontSize: 13, color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Add member / category',
+                hintStyle: GoogleFonts.sora(
+                    fontSize: 13, color: Colors.white38),
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onSubmitted: (_) => _addCategory(),
+            ),
+          ),
+          GestureDetector(
+            onTap: _pickExistingCategories,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              child: const Icon(Icons.people_alt_rounded,
+                  color: Color(0xFFCC0020), size: 18),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMemberCards() {
     if (_categories.isEmpty) {
-      return const Text('No members / category yet.',
-          style: TextStyle(color: EleghartColors.textSecondary));
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(14),
+          border:
+              Border.all(color: Colors.white.withOpacity(0.07), width: 1),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.group_off_rounded,
+                size: 28, color: Colors.white.withOpacity(0.2)),
+            const SizedBox(height: 8),
+            Text(
+              'No members / category yet.',
+              style: GoogleFonts.sora(
+                  fontSize: 13, color: Colors.white30),
+            ),
+          ],
+        ),
+      );
     }
 
     return Column(
       children: _categories.map((c) {
         final stats = _memberStats[c] ?? {'total': 0.0, 'lastDate': '-'};
-
         final total = stats['total'] as double;
         final isPositive = total >= 0;
-        final sign = isPositive ? '+' : '–';
-        final color = isPositive ? Colors.green : Colors.red;
+        final color = isPositive
+            ? const Color(0xFF00CC66)
+            : const Color(0xFFFF3355);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: _cardDecoration(),
+          margin: const EdgeInsets.only(bottom: 8),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0E0505),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: Colors.white.withOpacity(0.07), width: 1),
+          ),
           child: Row(children: [
-            const CircleAvatar(
-                radius: 18,
-                backgroundColor: EleghartColors.accentDark,
-                child: Icon(Icons.person, size: 18, color: Colors.white)),
+            GestureDetector(
+              onTap: () => _pickCategoryImage(c),
+              child: _categoryAvatar(c, size: 36),
+            ),
             const SizedBox(width: 12),
             Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(c,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text('$sign ₹${total.abs().toStringAsFixed(0)} • Last: ${stats['lastDate']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 13, color: color)),
-                ])),
-            IconButton(
-                icon: const Icon(Icons.edit, size: 20),
-                onPressed: () => _editCategory(c)),
-            IconButton(
-                icon: const Icon(Icons.delete,
-                    size: 20, color: Colors.red),
-                onPressed: () => _deleteCategory(c)),
+                      style: GoogleFonts.sora(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white)),
+                  const SizedBox(height: 3),
+                  Text(
+                    '₹${total.abs().toStringAsFixed(0)} · Last: ${stats['lastDate']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.sora(
+                        fontSize: 11, color: color),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _editCategory(c),
+              child: const Icon(Icons.edit_rounded,
+                  size: 16, color: Colors.white30),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => _deleteCategory(c),
+              child: const Icon(Icons.delete_rounded,
+                  size: 16, color: Color(0xFFFF3355)),
+            ),
           ]),
         );
       }).toList(),
     );
   }
 
+  // ── Category avatar (image or initial with consistent colour) ─────────────
+  static const _avatarPalette = [
+    Color(0xFFCC0020), Color(0xFF0066CC), Color(0xFF00AA55),
+    Color(0xFFCC6600), Color(0xFF8833CC), Color(0xFF0099AA),
+  ];
+
+  Widget _categoryAvatar(String cat, {double size = 36}) {
+    final imgPath = _categoryImages[cat];
+    final hasImg = imgPath != null && File(imgPath).existsSync();
+    final color = _avatarPalette[cat.hashCode.abs() % _avatarPalette.length];
+
+    return Stack(
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.18),
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withOpacity(0.5), width: 1.2),
+            image: hasImg
+                ? DecorationImage(
+                    image: FileImage(File(imgPath!)), fit: BoxFit.cover)
+                : null,
+          ),
+          child: hasImg
+              ? null
+              : Center(
+                  child: Text(
+                    cat.isNotEmpty ? cat[0].toUpperCase() : '?',
+                    style: TextStyle(
+                        fontSize: size * 0.38,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white),
+                  ),
+                ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: size * 0.32,
+            height: size * 0.32,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A0505),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.4), width: 0.8),
+            ),
+            child: Icon(Icons.camera_alt_rounded,
+                size: size * 0.18, color: color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickCategoryImage(String categoryName) async {
+    final picker = ImagePicker();
+
+    // 'camera' | 'gallery' | 'remove' | null (dismissed)
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF120404),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded,
+                  color: Color(0xFFCC0020)),
+              title: Text('Take photo',
+                  style: GoogleFonts.sora(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded,
+                  color: Color(0xFFCC0020)),
+              title: Text('Choose from gallery',
+                  style: GoogleFonts.sora(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            if (_categoryImages.containsKey(categoryName))
+              ListTile(
+                leading: const Icon(Icons.delete_rounded,
+                    color: Color(0xFFFF3355)),
+                title: Text('Remove photo',
+                    style: GoogleFonts.sora(color: const Color(0xFFFF3355))),
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (action == 'remove') {
+      _categoryImages.remove(categoryName);
+      await StorageService.saveCategoryImages(_categoryImages);
+      setState(() {});
+      return;
+    }
+
+    if (action == null) return;
+
+    final source =
+        action == 'camera' ? ImageSource.camera : ImageSource.gallery;
+    final picked =
+        await picker.pickImage(source: source, imageQuality: 75);
+    if (picked == null) return;
+
+    _categoryImages[categoryName] = picked.path;
+    await StorageService.saveCategoryImages(_categoryImages);
+    setState(() {});
+  }
+
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text,
-          style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+      child: Text(
+        text,
+        style: GoogleFonts.sora(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [
-        BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 8)),
-      ],
+      color: const Color(0xFF0E0505),
+      borderRadius: BorderRadius.circular(16),
+      border:
+          Border.all(color: Colors.white.withOpacity(0.07), width: 1),
     );
+  }
+
+  // ---------------- PICK FROM EXISTING ----------------
+
+  Future<void> _pickExistingCategories() async {
+    final allGroups = await StorageService.loadGroups();
+
+    // Gather all categories from OTHER groups, excluding already added ones
+    final existing = allGroups
+        .where((g) => g.id != widget.group.id)
+        .expand((g) => g.categories)
+        .toSet()
+        .where((c) => !_categories.any(
+            (existing) => existing.toLowerCase() == c.toLowerCase()))
+        .toList()
+          ..sort();
+
+    if (existing.isEmpty) {
+      _toast('No new categories from other groups');
+      return;
+    }
+
+    final picked = await showModalBottomSheet<List<String>>(
+      context: context,
+      backgroundColor: const Color(0xFF120404),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _ExistingCategoryPicker(existing: existing),
+    );
+
+    if (picked == null || picked.isEmpty) return;
+
+    setState(() {
+      _categories = [..._categories, ...picked];
+    });
+    await _persistCategories();
+    _markChanged();
   }
 
   // ---------------- CATEGORY CRUD ----------------
@@ -962,6 +1457,324 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Custom painter: dashed red circle for add member button ──────────────────
+class _DashedCirclePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    const dashCount = 12;
+    const dashAngle = 3.14159 * 2 / dashCount;
+    const gapRatio = 0.4;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = (size.width / 2) - 2;
+    for (int i = 0; i < dashCount; i++) {
+      final startAngle = i * dashAngle;
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r),
+        startAngle,
+        dashAngle * (1 - gapRatio),
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Custom painter: empty receipts box illustration ──────────────────────────
+class _EmptyBoxPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // Glow under box
+    final glowPaint = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.18)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
+    canvas.drawOval(
+      Rect.fromCenter(
+          center: Offset(cx, size.height * 0.82),
+          width: size.width * 0.7,
+          height: 18),
+      glowPaint,
+    );
+
+    // Box body
+    final boxPaint = Paint()..color = const Color(0xFF1C0808);
+    final boxBorderPaint = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final boxRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(cx - 52, cy - 4, 104, 60),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(boxRect, boxPaint);
+    canvas.drawRRect(boxRect, boxBorderPaint);
+
+    // Box front panel (darker)
+    final frontPaint = Paint()..color = const Color(0xFF140505);
+    final frontRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(cx - 52, cy + 28, 104, 32),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(frontRect, frontPaint);
+    canvas.drawRRect(frontRect, boxBorderPaint);
+
+    // Handle on front
+    final handlePaint = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+        Offset(cx - 14, cy + 44), Offset(cx + 14, cy + 44), handlePaint);
+
+    // Papers sticking out
+    final paperPaint = Paint()..color = const Color(0xFF2A0A0A);
+    final paperBorder = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+
+    // Paper 1 (left, tilted)
+    final paper1 = Path()
+      ..moveTo(cx - 24, cy - 4)
+      ..lineTo(cx - 36, cy - 42)
+      ..lineTo(cx - 10, cy - 42)
+      ..lineTo(cx - 8, cy - 4)
+      ..close();
+    canvas.drawPath(paper1, paperPaint);
+    canvas.drawPath(paper1, paperBorder);
+
+    // Paper 2 (center, straight)
+    final paper2 = Path()
+      ..moveTo(cx - 14, cy - 4)
+      ..lineTo(cx - 14, cy - 50)
+      ..lineTo(cx + 14, cy - 50)
+      ..lineTo(cx + 14, cy - 4)
+      ..close();
+    canvas.drawPath(paper2, paperPaint);
+    canvas.drawPath(paper2, paperBorder);
+    // Lines on paper
+    final linePaint = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.3)
+      ..strokeWidth = 1.2;
+    canvas.drawLine(Offset(cx - 8, cy - 40), Offset(cx + 8, cy - 40), linePaint);
+    canvas.drawLine(Offset(cx - 8, cy - 32), Offset(cx + 8, cy - 32), linePaint);
+    canvas.drawLine(Offset(cx - 8, cy - 24), Offset(cx + 8, cy - 24), linePaint);
+
+    // Paper 3 (right, tilted)
+    final paper3 = Path()
+      ..moveTo(cx + 8, cy - 4)
+      ..lineTo(cx + 10, cy - 42)
+      ..lineTo(cx + 36, cy - 42)
+      ..lineTo(cx + 24, cy - 4)
+      ..close();
+    canvas.drawPath(paper3, paperPaint);
+    canvas.drawPath(paper3, paperBorder);
+
+    // Red bottom glow line
+    final glowLine = Paint()
+      ..color = const Color(0xFFCC0020).withOpacity(0.6)
+      ..strokeWidth = 2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawLine(
+      Offset(cx - 50, cy + 58),
+      Offset(cx + 50, cy + 58),
+      glowLine,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Existing category picker bottom sheet ────────────────────────────────────
+class _ExistingCategoryPicker extends StatefulWidget {
+  final List<String> existing;
+  const _ExistingCategoryPicker({required this.existing});
+
+  @override
+  State<_ExistingCategoryPicker> createState() =>
+      _ExistingCategoryPickerState();
+}
+
+class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
+  final Set<String> _selected = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(Icons.people_alt_rounded,
+                  color: Color(0xFFCC0020), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Add from existing members',
+                  style: GoogleFonts.sora(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white),
+                ),
+              ),
+              if (_selected.isNotEmpty)
+                Text(
+                  '${_selected.length} selected',
+                  style: GoogleFonts.sora(
+                      fontSize: 12,
+                      color: const Color(0xFFCC0020),
+                      fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: widget.existing.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, i) {
+                final cat = widget.existing[i];
+                final isSelected = _selected.contains(cat);
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    isSelected ? _selected.remove(cat) : _selected.add(cat);
+                  }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFCC0020).withOpacity(0.12)
+                          : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFFCC0020).withOpacity(0.6)
+                            : Colors.white.withOpacity(0.10),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFCC0020).withOpacity(0.15),
+                          ),
+                          child: Center(
+                            child: Text(
+                              cat.isNotEmpty ? cat[0].toUpperCase() : '?',
+                              style: GoogleFonts.sora(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            cat,
+                            style: GoogleFonts.sora(
+                              fontSize: 14,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(Icons.check_circle_rounded,
+                              color: Color(0xFFCC0020), size: 20)
+                        else
+                          const Icon(Icons.radio_button_unchecked_rounded,
+                              color: Colors.white24, size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _selected.isEmpty
+                ? null
+                : () => Navigator.pop(context, _selected.toList()),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: double.infinity,
+              height: 50,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(25),
+                gradient: _selected.isEmpty
+                    ? null
+                    : const RadialGradient(
+                        center: Alignment.center,
+                        radius: 0.9,
+                        colors: [Color(0xFFCC0020), Color(0xFF6B0010)],
+                      ),
+                color: _selected.isEmpty
+                    ? Colors.white.withOpacity(0.05)
+                    : null,
+                border: Border.all(
+                  color: _selected.isEmpty
+                      ? Colors.white12
+                      : const Color(0xFFFF2040).withOpacity(0.4),
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  _selected.isEmpty
+                      ? 'Select members to add'
+                      : 'Add ${_selected.length} member${_selected.length != 1 ? 's' : ''}',
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: _selected.isEmpty ? Colors.white30 : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

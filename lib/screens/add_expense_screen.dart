@@ -1,6 +1,8 @@
 // Fully Updated AddExpenseScreen with Transaction Type (Debit/Credit)
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
@@ -195,282 +197,542 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   bool get _isValid =>
       _amountController.text.trim().isNotEmpty && _selected.isNotEmpty;
 
+  Future<void> _showMemberPicker() async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF120404),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Select Members',
+                  style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+              const SizedBox(height: 16),
+              ...widget.categories.map((c) {
+                final sel = _selected.contains(c);
+                return GestureDetector(
+                  onTap: () {
+                    setModalState(() {
+                      sel ? _selected.remove(c) : _selected.add(c);
+                    });
+                    setState(() {});
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? const Color(0xFFCC0020).withOpacity(0.15)
+                          : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: sel
+                            ? const Color(0xFFCC0020).withOpacity(0.5)
+                            : Colors.white.withOpacity(0.10),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_rounded,
+                            size: 18,
+                            color: sel
+                                ? const Color(0xFFCC0020)
+                                : Colors.white38),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(c,
+                              style: GoogleFonts.sora(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                  fontWeight: sel
+                                      ? FontWeight.w600
+                                      : FontWeight.w400)),
+                        ),
+                        if (sel)
+                          const Icon(Icons.check_rounded,
+                              color: Color(0xFFCC0020), size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final selectedText = _selected.isEmpty
+        ? 'Select members'
+        : _selected.join(', ');
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditMode ? 'Edit Expense' : 'Add Expense'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionTitle('Amount'),
-            const SizedBox(height: 8),
-            _luxuryField(
-              controller: _amountController,
-              hint: 'Enter amount (₹)',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
+      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: true,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/background_theme_top_glow.png',
+              fit: BoxFit.cover,
             ),
-
-            const SizedBox(height: 18),
-
-            _sectionTitle('Transaction Type'),
-            const SizedBox(height: 10),
-            Row(
+          ),
+          Positioned.fill(
+            child: Container(color: Colors.black.withOpacity(0.72)),
+          ),
+          SafeArea(
+            child: Column(
               children: [
-                _typeChip('debit', 'Debit', Colors.redAccent),
-                const SizedBox(width: 12),
-                _typeChip('credit', 'Credit', Colors.green),
-              ],
-            ),
-
-            const SizedBox(height: 22),
-
-            _sectionTitle('Description (optional)'),
-            const SizedBox(height: 8),
-            _luxuryField(
-              controller: _descController,
-              hint: 'Dinner, Taxi, Refund...',
-            ),
-
-            const SizedBox(height: 22),
-
-            _sectionTitle('For whom?'),
-            const SizedBox(height: 10),
-
-            if (widget.categories.isEmpty)
-              const Text(
-                'No members available.\nPlease add members in group first.',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  color: EleghartColors.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-
-            if (widget.categories.isNotEmpty)
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: widget.categories.map((c) {
-                  final selected = _selected.contains(c);
-
-                  return FilterChip(
-                    label: Text(
-                      c,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: selected
-                            ? Colors.white
-                            : EleghartColors.textPrimary,
-                      ),
-                    ),
-                    selected: selected,
-                    selectedColor: EleghartColors.accentDark,
-                    backgroundColor: Colors.white,
-                    elevation: 4,
-                    shadowColor: Colors.black26,
-                    onSelected: (_) {
-                      setState(() {
-                        selected ? _selected.remove(c) : _selected.add(c);
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-
-            const SizedBox(height: 22),
-
-            _sectionTitle('Date'),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _pickDate,
-              child: _luxuryBox(
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 18, color: EleghartColors.textSecondary),
-                    const SizedBox(width: 10),
-                    Text(
-                      '${_date.toLocal()}'.split(' ')[0],
-                      style: const TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w600,
-                        color: EleghartColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 22),
-
-            _sectionTitle('Receipt (optional)'),
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: _pickImage,
-              child: _luxuryBox(
-                child: Row(
-                  children: [
-                    const Icon(Icons.receipt_long,
-                        size: 20, color: EleghartColors.textSecondary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _image == null
-                            ? 'Add receipt photo'
-                            : 'Receipt added',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: EleghartColors.textPrimary,
+                // ── App bar ──────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFCC0020).withOpacity(0.6),
+                              width: 1.5,
+                            ),
+                            color: const Color(0xFFCC0020).withOpacity(0.10),
+                          ),
+                          child: const Icon(
+                              Icons.arrow_back_ios_new_rounded,
+                              color: Colors.white, size: 16),
                         ),
                       ),
-                    ),
-                    if (_image != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          _image!,
-                          width: 42,
-                          height: 42,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 36),
-
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: !_isValid || _saving ? null : _saveExpense,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: EleghartColors.accentDark,
-                  foregroundColor: Colors.white,
-                  elevation: 10,
-                  shadowColor: Colors.black38,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.6,
+                      const SizedBox(width: 14),
+                      Text(
+                        isEditMode ? 'Edit Expense' : 'Add Expense',
+                        style: GoogleFonts.sora(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
-                      )
-                    : Text(
-                        isEditMode ? 'Save Changes' : 'Save Expense',
-                        style: const TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Scrollable form ──────────────────────────────────────
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Amount
+                        _label('Amount'),
+                        const SizedBox(height: 8),
+                        _darkField(
+                          controller: _amountController,
+                          hint: 'Enter amount (₹)',
+                          prefixIcon: Container(
+                            margin: const EdgeInsets.all(10),
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFCC0020).withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text('₹',
+                                  style: GoogleFonts.sora(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFFCC0020))),
+                            ),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d*')),
+                          ],
+                          onChanged: (_) => setState(() {}),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Transaction Type
+                        _label('Transaction Type'),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(child: _typeButton('debit', 'Debit',
+                                Icons.remove_circle_rounded,
+                                const Color(0xFFFF3355))),
+                            const SizedBox(width: 12),
+                            Expanded(child: _typeButton('credit', 'Credit',
+                                Icons.add_circle_rounded,
+                                const Color(0xFF00CC66))),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Description
+                        _label('Description (optional)'),
+                        const SizedBox(height: 8),
+                        _darkField(
+                          controller: _descController,
+                          hint: 'Dinner, Taxi, Refund...',
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Icon(Icons.description_rounded,
+                                size: 18,
+                                color: const Color(0xFFCC0020)
+                                    .withOpacity(0.7)),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // For whom
+                        _label('For whom?'),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: widget.categories.isEmpty
+                              ? null
+                              : _showMemberPicker,
+                          child: _darkRow(
+                            icon: Icons.groups_rounded,
+                            text: widget.categories.isEmpty
+                                ? 'No members in group yet'
+                                : selectedText,
+                            textColor: _selected.isEmpty
+                                ? Colors.white38
+                                : Colors.white,
+                            showChevron: widget.categories.isNotEmpty,
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Date
+                        _label('Date'),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: _pickDate,
+                          child: _darkRow(
+                            icon: Icons.calendar_month_rounded,
+                            text: '${_date.toLocal()}'.split(' ')[0],
+                            showChevron: true,
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Receipt
+                        _label('Receipt (optional)'),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            decoration: _darkBox(),
+                            child: Row(
+                              children: [
+                                Icon(Icons.receipt_long_rounded,
+                                    size: 18,
+                                    color: const Color(0xFFCC0020)
+                                        .withOpacity(0.7)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _image == null
+                                        ? 'Add receipt photo'
+                                        : 'Receipt added ✓',
+                                    style: GoogleFonts.sora(
+                                      fontSize: 14,
+                                      color: _image == null
+                                          ? Colors.white38
+                                          : const Color(0xFF00CC66),
+                                    ),
+                                  ),
+                                ),
+                                if (_image != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(_image!,
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover),
+                                  )
+                                else
+                                  const Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: Colors.white24, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Save button ──────────────────────────────────────────
+                Padding(
+                  padding:
+                      EdgeInsets.fromLTRB(20, 8, 20, safeBottom + 16),
+                  child: GestureDetector(
+                    onTap: !_isValid || _saving ? null : _saveExpense,
+                    child: AnimatedOpacity(
+                      opacity: _isValid ? 1.0 : 0.45,
+                      duration: const Duration(milliseconds: 200),
+                      child: Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: const RadialGradient(
+                            center: Alignment.center,
+                            radius: 0.9,
+                            colors: [
+                              Color(0xFFCC0020),
+                              Color(0xFF6B0010),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFCC0020)
+                                  .withOpacity(0.5),
+                              blurRadius: 22,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: const Color(0xFFFF2040).withOpacity(0.4),
+                            width: 1,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 6, left: 60, right: 60,
+                              child: Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  gradient: LinearGradient(colors: [
+                                    Colors.transparent,
+                                    Colors.white.withOpacity(0.22),
+                                    Colors.transparent,
+                                  ]),
+                                ),
+                              ),
+                            ),
+                            _saving
+                                ? const SizedBox(
+                                    width: 22, height: 22,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white),
+                                  )
+                                : Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                          Icons.save_rounded,
+                                          color: Colors.white, size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        isEditMode
+                                            ? 'Save Changes'
+                                            : 'Save Expense',
+                                        style: GoogleFonts.sora(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                          letterSpacing: 0.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ],
                         ),
                       ),
-              ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   // ---------------- UI HELPERS ----------------
 
-  Widget _typeChip(String value, String label, Color color) {
-    final selected = _type == value;
+  Widget _label(String text) => Text(
+        text,
+        style: GoogleFonts.sora(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.white),
+      );
 
-    return ChoiceChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            value == 'debit' ? Icons.remove_circle : Icons.add_circle,
-            size: 18,
-            color: selected ? Colors.white : color,
-          ),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
-      ),
-      selected: selected,
-      selectedColor: color,
-      backgroundColor: Colors.white,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : EleghartColors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
-      onSelected: (_) => setState(() => _type = value),
-    );
-  }
+  BoxDecoration _darkBox() => BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
+      );
 
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 15.5,
-        fontWeight: FontWeight.w700,
-        color: EleghartColors.textPrimary,
-      ),
-    );
-  }
-
-  Widget _luxuryField({
+  Widget _darkField({
     required TextEditingController controller,
     required String hint,
+    Widget? prefixIcon,
     TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
     void Function(String)? onChanged,
   }) {
     return Container(
-      decoration: _cardDecoration(),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: EleghartColors.textHint),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        ),
+      decoration: _darkBox(),
+      child: Row(
+        children: [
+          if (prefixIcon != null) prefixIcon,
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
+              onChanged: onChanged,
+              style: GoogleFonts.sora(fontSize: 14, color: Colors.white),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: GoogleFonts.sora(
+                    fontSize: 14, color: Colors.white30),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: prefixIcon == null ? 16 : 0,
+                  vertical: 16,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _luxuryBox({required Widget child}) {
+  Widget _darkRow({
+    required IconData icon,
+    required String text,
+    Color textColor = Colors.white,
+    bool showChevron = false,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: _cardDecoration(),
-      child: child,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: _darkBox(),
+      child: Row(
+        children: [
+          Icon(icon,
+              size: 18,
+              color: const Color(0xFFCC0020).withOpacity(0.7)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.sora(fontSize: 14, color: textColor),
+            ),
+          ),
+          if (showChevron)
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.white24, size: 20),
+        ],
+      ),
     );
   }
 
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
-          blurRadius: 14,
-          offset: const Offset(0, 8),
+  Widget _typeButton(
+      String value, String label, IconData icon, Color color) {
+    final selected = _type == value;
+    return GestureDetector(
+      onTap: () => setState(() => _type = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.12) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? color.withOpacity(0.8) : Colors.white.withOpacity(0.12),
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 12)]
+              : [],
         ),
-      ],
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : Colors.white54,
+                  ),
+                ),
+              ],
+            ),
+            if (selected)
+              Positioned(
+                top: 0, right: 8,
+                child: Container(
+                  width: 18, height: 18,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 11),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

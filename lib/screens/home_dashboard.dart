@@ -28,6 +28,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   bool _loading = true;
 
   int _currentTab = 0;
+  final _groupsKey = GlobalKey<GroupsScreenState>();
 
   // -------- LEDGER TOTALS --------
   double _totalDebit = 0;
@@ -133,6 +134,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
     if (created == true) {
       _loadDashboardData();
+      _groupsKey.currentState?.reload();
+      setState(() => _currentTab = 1);
     }
   }
 
@@ -328,7 +331,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               index: _currentTab,
               children: [
                 _buildHomeTab(greeting),
-                GroupsScreen(userName: _userName),
+                GroupsScreen(key: _groupsKey, userName: _userName),
                 _buildPlaceholder('Insights', Icons.bar_chart_rounded),
                 _buildPlaceholder('Profile', Icons.person_rounded),
               ],
