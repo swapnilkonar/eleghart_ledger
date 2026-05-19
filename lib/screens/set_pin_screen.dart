@@ -1,6 +1,9 @@
+import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../theme/eleghart_colors.dart';
 import 'home_dashboard.dart';
 
 class SetPinScreen extends StatefulWidget {
@@ -11,14 +14,62 @@ class SetPinScreen extends StatefulWidget {
   State<SetPinScreen> createState() => _SetPinScreenState();
 }
 
-class _SetPinScreenState extends State<SetPinScreen> {
+class _SetPinScreenState extends State<SetPinScreen>
+    with SingleTickerProviderStateMixin {
   final _pinController = TextEditingController();
   final _confirmController = TextEditingController();
+  final _pinFocus = FocusNode();
+  final _confirmFocus = FocusNode();
   bool _saving = false;
+  String _pin = '';
+  String _confirm = '';
+
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _pinFocus.addListener(() => setState(() {}));
+    _confirmFocus.addListener(() => setState(() {}));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pinFocus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _pinController.dispose();
+    _confirmController.dispose();
+    _pinFocus.dispose();
+    _confirmFocus.dispose();
+    super.dispose();
+  }
+
+  void _onPinChanged(String val) {
+    setState(() => _pin = val);
+    if (val.length == 4) {
+      Future.delayed(const Duration(milliseconds: 80), () {
+        if (mounted) _confirmFocus.requestFocus();
+      });
+    }
+  }
+
+  void _onConfirmChanged(String val) {
+    setState(() => _confirm = val);
+    if (val.length == 4) _savePin();
+  }
 
   Future<void> _savePin() async {
-    final pin = _pinController.text.trim();
-    final confirm = _confirmController.text.trim();
+    final pin = _pin.trim();
+    final confirm = _confirm.trim();
 
     if (pin.length != 4 || confirm.length != 4) {
       _toast('PIN must be exactly 4 digits');
@@ -27,6 +78,9 @@ class _SetPinScreenState extends State<SetPinScreen> {
 
     if (pin != confirm) {
       _toast('PINs do not match');
+      _confirmController.clear();
+      setState(() => _confirm = '');
+      _confirmFocus.requestFocus();
       return;
     }
 
@@ -47,161 +101,352 @@ class _SetPinScreenState extends State<SetPinScreen> {
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF8E1D1D),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final h = media.size.height;
-    final bottomInset = media.viewInsets.bottom;
-    final keyboardOpen = bottomInset > 0;
+    final size = MediaQuery.of(context).size;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: EleghartColors.bgLight,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(28, 16, 28, bottomInset + 16),
-          child: Column(
-            children: [
-              // ---- BIG LOGO (RESPONSIVE TO KEYBOARD) ----
-              SizedBox(
-                height: keyboardOpen ? h * 0.22 : h * 0.42,
-                child: Center(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 22,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Image.asset(
-                      'assets/images/eleghart_logo.png',
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ---- PIN SECTION ----
-              const Text(
-                'Set a 4-digit PIN',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: EleghartColors.textPrimary,
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              _pinRow(_pinController, label: 'Enter PIN'),
-              const SizedBox(height: 14),
-              _pinRow(_confirmController, label: 'Confirm PIN'),
-
-              const SizedBox(height: 24),
-
-              // ---- CONTINUE BUTTON ----
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _saving ? null : _savePin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EleghartColors.accentDark,
-                    elevation: 10,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Continue',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: Colors.white,
-                          ),
-                        ),
-                ),
-              ),
-            ],
+      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/background_theme_top_glow.png',
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
+
+          // Dark overlay to deepen background
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.25),
+            ),
+          ),
+
+          // Subtle light rays from logo
+          Positioned.fill(
+            child: CustomPaint(painter: _SetPinRaysPainter()),
+          ),
+
+          // Main content
+          SafeArea(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.translucent,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  children: [
+                    SizedBox(height: size.height * 0.04),
+
+                    // Logo with pulsing red glow
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (_, child) => Container(
+                        height: size.height * 0.28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(
+                                  0.15 + _pulseController.value * 0.14),
+                              blurRadius: 60 + _pulseController.value * 25,
+                              spreadRadius: 12,
+                            ),
+                          ],
+                        ),
+                        child: child,
+                      ),
+                      child: Image.asset(
+                        'assets/icons/eleghart_icon.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Title
+                    Text(
+                      'Set your PIN',
+                      style: GoogleFonts.sora(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose a 4-digit PIN to secure your app',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        color: Colors.white54,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+
+                    SizedBox(height: size.height * 0.04),
+
+                    // Enter PIN row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: _buildLabeledPinRow(
+                        label: 'Enter PIN',
+                        pin: _pin,
+                        focusNode: _pinFocus,
+                        isActive: _pinFocus.hasFocus,
+                        onTap: () => _pinFocus.requestFocus(),
+                      ),
+                    ),
+
+                    SizedBox(height: size.height * 0.02),
+
+                    // Confirm PIN row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: _buildLabeledPinRow(
+                        label: 'Confirm PIN',
+                        pin: _confirm,
+                        focusNode: _confirmFocus,
+                        isActive: _confirmFocus.hasFocus,
+                        onTap: () => _confirmFocus.requestFocus(),
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Continue button
+                    _buildContinueButton(),
+
+                    SizedBox(height: safeBottom + 24),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Hidden text fields for keyboard capture
+          Positioned(
+            left: -300,
+            top: 0,
+            child: SizedBox(
+              width: 10,
+              height: 10,
+              child: TextField(
+                controller: _pinController,
+                focusNode: _pinFocus,
+                maxLength: 4,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                obscureText: true,
+                decoration: const InputDecoration(
+                  counterText: '',
+                  border: InputBorder.none,
+                ),
+                onChanged: _onPinChanged,
+              ),
+            ),
+          ),
+          Positioned(
+            left: -300,
+            top: 50,
+            child: SizedBox(
+              width: 10,
+              height: 10,
+              child: TextField(
+                controller: _confirmController,
+                focusNode: _confirmFocus,
+                maxLength: 4,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                obscureText: true,
+                decoration: const InputDecoration(
+                  counterText: '',
+                  border: InputBorder.none,
+                ),
+                onChanged: _onConfirmChanged,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _pinRow(TextEditingController controller, {required String label}) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
-          color: EleghartColors.textSecondary,
-        ),
-      ),
-      const SizedBox(height: 10),
-      Center(
-        child: SizedBox(
-          width: 230,
-          child: TextField(
-            controller: controller,
-            maxLength: 4,
-            keyboardType: TextInputType.number,
-            obscureText: true,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 22,
-              letterSpacing: 16,
-              fontWeight: FontWeight.w700,
+  Widget _buildLabeledPinRow({
+    required String label,
+    required String pin,
+    required FocusNode focusNode,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    final borderColor =
+        isActive ? const Color(0xFFCC0020) : const Color(0xFF8E1D1D);
+    final glowColor = isActive
+        ? Colors.red.withOpacity(0.5)
+        : const Color(0xFF8E1D1D).withOpacity(0.3);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            label,
+            style: GoogleFonts.sora(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isActive ? Colors.white70 : Colors.white38,
+              letterSpacing: 0.3,
             ),
-            decoration: InputDecoration(
-              counterText: '',
-              filled: true,
-              fillColor: Colors.white,
-              hintText: '• • • •',
-              hintStyle: const TextStyle(
-                letterSpacing: 14,
-                color: EleghartColors.textHint,
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: EleghartColors.accentDark,
-                  width: 1.6,
+          ),
+        ),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            height: 68,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor, width: 1.8),
+              boxShadow: [
+                BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: 2),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(4, (i) {
+                final filled = i < pin.length;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: filled ? const Color(0xFFCC0020) : Colors.transparent,
+                    border: Border.all(
+                      color: filled ? const Color(0xFFCC0020) : Colors.white38,
+                      width: 2,
+                    ),
+                    boxShadow: filled
+                        ? [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.5),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContinueButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SizedBox(
+        width: double.infinity,
+        height: 58,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withOpacity(0.45),
+              blurRadius: 22,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: _saving ? null : _savePin,
+          icon: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.shield_rounded, color: Colors.white, size: 22),
+          label: _saving
+              ? const SizedBox.shrink()
+              : Text(
+                  'Continue',
+                  style: GoogleFonts.sora(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: EleghartColors.accentDark,
-                  width: 2.2,
-                ),
-              ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
             ),
           ),
         ),
       ),
-    ]);
+    ),
+    );
   }
+}
+
+class _SetPinRaysPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.22);
+    final angles = [-160.0, -140.0, -120.0, 120.0, 140.0, 160.0];
+
+    for (final angleDeg in angles) {
+      final rad = angleDeg * pi / 180.0;
+      final length = size.width * 0.95;
+      final end = Offset(
+        center.dx + cos(rad) * length,
+        center.dy + sin(rad) * length,
+      );
+
+      final paint = Paint()
+        ..strokeWidth = 1.0
+        ..shader = ui.Gradient.linear(
+          center,
+          end,
+          [
+            const Color(0xFFCC0020).withOpacity(0.18),
+            Colors.transparent,
+          ],
+        );
+
+      canvas.drawLine(center, end, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

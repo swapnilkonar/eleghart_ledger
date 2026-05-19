@@ -6,6 +6,19 @@ import '../models/expense_model.dart';
 class StorageService {
   static const _groupsKey = 'groups_v2';
   static const _expensesKey = 'expenses_v2';
+  static const _categoryImagesKey = 'category_images_v1';
+
+  static Future<Map<String, String>> loadCategoryImages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_categoryImagesKey) ?? '{}';
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return map.cast<String, String>();
+  }
+
+  static Future<void> saveCategoryImages(Map<String, String> images) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_categoryImagesKey, jsonEncode(images));
+  }
 
   static Future<List<GroupModel>> loadGroups() async {
     final prefs = await SharedPreferences.getInstance();

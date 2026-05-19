@@ -112,6 +112,242 @@ class PdfExportService {
     return file;
   }
 
+  // ---------------- CATEGORY REPORT (multi-group) ----------------
+
+  static Future<File> exportCategoryReport({
+    required String categoryName,
+    required List<ExpenseModel> expenses,
+    required List<GroupModel> groups,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final pdf = pw.Document();
+
+    final Uint8List logoBytes =
+        (await rootBundle.load('assets/images/eleghart_logo.png'))
+            .buffer
+            .asUint8List();
+
+    // Pre-filter by date
+    final filtered = expenses.where((e) {
+      return !e.date.isBefore(from) && !e.date.isAfter(to);
+    }).toList();
+
+    // Overall totals for this category
+    double totalDebit = 0;
+    double totalCredit = 0;
+    for (final e in filtered) {
+      final share = e.amount / e.categories.length;
+      if (e.type == 'credit') totalCredit += share;
+      else totalDebit += share;
+    }
+    final netBalance = totalCredit - totalDebit;
+
+    // Group map for name lookup
+    final groupMap = {for (final g in groups) g.id: g.name};
+
+    // Build per-group sections
+    final Map<String, List<ExpenseModel>> byGroup = {};
+    for (final e in filtered) {
+      byGroup.putIfAbsent(e.groupId, () => []).add(e);
+    }
+    for (final list in byGroup.values) {
+      list.sort((a, b) => a.date.compareTo(b.date));
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          margin: const pw.EdgeInsets.all(24),
+          theme: pw.ThemeData.withFont(base: pw.Font.helvetica()),
+          buildBackground: (context) => pw.Center(
+            child: pw.Opacity(
+              opacity: 0.08,
+              child: pw.Image(pw.MemoryImage(logoBytes), width: 320),
+            ),
+          ),
+        ),
+        build: (context) {
+          final widgets = <pw.Widget>[];
+
+          // ---- Overall header ----
+          widgets.add(_categoryHeader(
+            categoryName, from, to, totalDebit, totalCredit, netBalance,
+          ));
+          widgets.add(pw.SizedBox(height: 22));
+
+          // ---- Per-group section ----
+          for (final entry in byGroup.entries) {
+            final gName = groupMap[entry.key] ?? entry.key;
+            final gExpenses = entry.value;
+            double gDebit = 0, gCredit = 0;
+            for (final e in gExpenses) {
+              final share = e.amount / e.categories.length;
+              if (e.type == 'credit') gCredit += share;
+              else gDebit += share;
+            }
+            final gNet = gCredit - gDebit;
+            final gNetPositive = gNet >= 0;
+
+            widgets.add(
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromInt(0xFF8B0000),
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      gName,
+                      style: pw.TextStyle(
+                          fontSize: 13,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white),
+                    ),
+                    pw.Text(
+                      '${gNetPositive ? '+' : '-'} Rs. ${gNet.abs().toStringAsFixed(0)}  |  Debit: Rs. ${gDebit.toStringAsFixed(0)}  |  Credit: Rs. ${gCredit.toStringAsFixed(0)}',
+                      style: const pw.TextStyle(
+                          fontSize: 10, color: PdfColors.white),
+                    ),
+                  ],
+                ),
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 8));
+
+            // Transactions for this group
+            widgets.add(
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(1.2),
+                  1: const pw.FlexColumnWidth(0.9),
+                  2: const pw.FlexColumnWidth(2.8),
+                  3: const pw.FlexColumnWidth(2.0),
+                  4: const pw.FlexColumnWidth(1.2),
+                },
+                children: [
+                  _tableRow(['Date', 'Type', 'Description', 'Members', 'Amount'],
+                      isHeader: true),
+                  ...gExpenses.map((e) {
+                    final share = e.amount / e.categories.length;
+                    final isCredit = e.type == 'credit';
+                    return _tableRow([
+                      DateFormat('dd MMM yyyy').format(e.date),
+                      e.type.toUpperCase(),
+                      e.description.isEmpty ? 'Expense' : e.description,
+                      e.categories.join(', '),
+                      '${isCredit ? '+' : '-'} Rs. ${share.toStringAsFixed(0)}',
+                    ]);
+                  }),
+                ],
+              ),
+            );
+            widgets.add(pw.SizedBox(height: 18));
+          }
+
+          return widgets;
+        },
+      ),
+    );
+
+    Directory dir;
+    if (Platform.isAndroid) {
+      dir = (await getExternalStorageDirectory())!;
+    } else {
+      dir = await getApplicationDocumentsDirectory();
+    }
+
+    final file = File(
+      '${dir.path}/Eleghart_${categoryName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
+    );
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  // ---- Category header widget ----
+  static pw.Widget _categoryHeader(
+    String categoryName,
+    DateTime from,
+    DateTime to,
+    double totalDebit,
+    double totalCredit,
+    double netBalance,
+  ) {
+    final netPositive = netBalance >= 0;
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        borderRadius: pw.BorderRadius.circular(14),
+        gradient: const pw.LinearGradient(
+          begin: pw.Alignment.topLeft,
+          end: pw.Alignment.bottomRight,
+          colors: [
+            PdfColor.fromInt(0xFF8B0000),
+            PdfColor.fromInt(0xFFB11226),
+          ],
+        ),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('Eleghart Ledger — Category Report',
+              style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white)),
+          pw.SizedBox(height: 4),
+          pw.Text(categoryName,
+              style: const pw.TextStyle(fontSize: 14, color: PdfColors.white)),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'From ${DateFormat('dd MMM yyyy').format(from)}  to  ${DateFormat('dd MMM yyyy').format(to)}',
+            style: const pw.TextStyle(fontSize: 10, color: PdfColors.white),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Row(children: [
+            pw.Text('Total Debit: ',
+                style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
+                style: const pw.TextStyle(
+                    fontSize: 11, color: PdfColors.white)),
+            pw.SizedBox(width: 16),
+            pw.Text('Total Credit: ',
+                style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
+                style: const pw.TextStyle(
+                    fontSize: 11, color: PdfColors.white)),
+          ]),
+          pw.SizedBox(height: 4),
+          pw.Row(children: [
+            pw.Text('Net Balance: ',
+                style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white)),
+            pw.Text(
+              '${netPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: netPositive ? PdfColors.green200 : PdfColors.red200,
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
   // ---------------- HEADER ----------------
 
   static pw.Widget _header(

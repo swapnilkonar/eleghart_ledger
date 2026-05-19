@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/eleghart_colors.dart';
+import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_dashboard.dart';
 import 'screens/set_pin_screen.dart';
@@ -47,7 +48,7 @@ class EleghartLedgerApp extends StatelessWidget {
           backgroundColor: EleghartColors.accentDark,
         ),
       ),
-      home: const AppEntryGate(),
+      home: const PremiumSplashScreen(),
     );
   }
 }
