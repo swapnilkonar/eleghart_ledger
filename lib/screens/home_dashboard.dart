@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'group_detail_screen.dart';
 import 'groups_screen.dart';
-import 'profile_sheet.dart';
+import 'profile_screen.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
@@ -150,21 +150,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
     }
   }
 
-  Future<void> _openProfileSheet() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => ProfileSheet(
-        onUpdated: () async {
-          await _loadProfile();
-        },
-      ),
-    );
-  }
-
   Future<void> _deleteGroup(GroupModel group) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -241,24 +226,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
           icon: Icon(Icons.notifications_none_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
           onPressed: () {},
         ),
-        GestureDetector(
-          onTap: _openProfileSheet,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppThemeNotifier.isWhite ? const Color(0xFFFFD6D6) : const Color(0xFF1A0A0A),
-              backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-              child: _avatar == null
-                  ? Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Image.asset(
-                        'assets/icons/eleghart_icon.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : null,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppThemeNotifier.isWhite ? const Color(0xFFFFD6D6) : const Color(0xFF1A0A0A),
+            backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
+            child: _avatar == null
+                ? Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Image.asset(
+                      'assets/icons/eleghart_icon.png',
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : null,
           ),
         ),
       ],
@@ -277,6 +259,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             _navItem(1, Icons.receipt_long_rounded, 'Expenses'),
             _navItem(2, Icons.groups_rounded, 'Groups'),
             _navItem(3, Icons.bar_chart_rounded, 'Insights'),
+            _navItem(4, Icons.person_rounded, 'Profile'),
           ],
         ),
       ),
@@ -335,6 +318,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 _buildExpensesTab(),
                 GroupsScreen(key: _groupsKey, userName: _userName),
                 _buildPlaceholder('Insights', Icons.bar_chart_rounded),
+                ProfileScreen(
+                  userName: _userName,
+                  onNameChanged: (newName) {
+                    setState(() => _userName = newName);
+                  },
+                ),
               ],
             ),
         ],

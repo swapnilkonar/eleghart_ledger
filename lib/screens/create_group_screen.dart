@@ -26,11 +26,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   String? _selectedCategory;
 
   static const _categories = [
-    ('Trips',   Icons.airplanemode_active_rounded),
+    ('Trips', Icons.airplanemode_active_rounded),
     ('Friends', Icons.groups_rounded),
-    ('Family',  Icons.home_rounded),
-    ('Work',    Icons.work_rounded),
-    ('Others',  Icons.category_rounded),
+    ('Family', Icons.home_rounded),
+    ('Work', Icons.work_rounded),
+    ('Others', Icons.category_rounded),
   ];
 
   bool get isEditMode => widget.existingGroup != null;
@@ -92,10 +92,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     if (source == null) return;
 
-    final picked = await picker.pickImage(
-      source: source,
-      imageQuality: 75,
-    );
+    final picked = await picker.pickImage(source: source, imageQuality: 75);
 
     if (picked == null) return;
 
@@ -124,15 +121,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     if (isEditMode) {
       // 🔁 UPDATE EXISTING GROUP
-      final index =
-          groups.indexWhere((g) => g.id == widget.existingGroup!.id);
+      final index = groups.indexWhere((g) => g.id == widget.existingGroup!.id);
 
       if (index != -1) {
         groups[index] = GroupModel(
           id: widget.existingGroup!.id,
           name: name,
           imagePath: _imageFile?.path,
-          categories: _selectedCategory != null ? [_selectedCategory!] : widget.existingGroup!.categories,
+          categories: _selectedCategory != null
+              ? [_selectedCategory!]
+              : widget.existingGroup!.categories,
         );
       }
     } else {
@@ -148,6 +146,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     }
 
     await StorageService.saveGroups(groups);
+
+    if (_selectedCategory != null) {
+      final globalCategories = await StorageService.loadGlobalCategories();
+      if (!globalCategories.contains(_selectedCategory!)) {
+        globalCategories.add(_selectedCategory!);
+        globalCategories.sort();
+        await StorageService.saveGlobalCategories(globalCategories);
+      }
+    }
 
     if (!mounted) return;
 
@@ -185,12 +192,18 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: const Color(0xFFCC0020).withOpacity(0.6),
-                                width: 1.5),
+                              color: const Color(0xFFCC0020).withOpacity(0.6),
+                              width: 1.5,
+                            ),
                             color: const Color(0xFFCC0020).withOpacity(0.10),
                           ),
-                          child: Icon(Icons.arrow_back_ios_new_rounded,
-                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white, size: 16),
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark
+                                : Colors.white,
+                            size: 16,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -203,7 +216,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               style: GoogleFonts.sora(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                                color: AppThemeNotifier.isWhite
+                                    ? EleghartColors.accentDark
+                                    : Colors.white,
                               ),
                             ),
                             Text(
@@ -211,7 +226,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   ? 'Update your financial space'
                                   : 'Create a new financial space',
                               style: GoogleFonts.sora(
-                                  fontSize: 12, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
+                                fontSize: 12,
+                                color: AppThemeNotifier.isWhite
+                                    ? EleghartColors.accentDark.withOpacity(0.5)
+                                    : Colors.white38,
+                              ),
                             ),
                           ],
                         ),
@@ -223,8 +242,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: const Color(0xFFCC0020).withOpacity(0.4),
-                              width: 1),
+                            color: const Color(0xFFCC0020).withOpacity(0.4),
+                            width: 1,
+                          ),
                           color: const Color(0xFFCC0020).withOpacity(0.08),
                         ),
                         child: Padding(
@@ -259,14 +279,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: const Color(0xFFCC0020)
-                                        .withOpacity(0.7),
+                                    color: const Color(
+                                      0xFFCC0020,
+                                    ).withOpacity(0.7),
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFCC0020)
-                                          .withOpacity(0.18),
+                                      color: const Color(
+                                        0xFFCC0020,
+                                      ).withOpacity(0.18),
                                       blurRadius: 30,
                                       spreadRadius: 4,
                                     ),
@@ -280,7 +302,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   height: 136,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF1A0505),
+                                    color: AppThemeNotifier.isWhite
+                                        ? Colors.white
+                                        : const Color(0xFF1A0505),
                                     image: _imageFile != null
                                         ? DecorationImage(
                                             image: FileImage(_imageFile!),
@@ -302,8 +326,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                                   end: Alignment.bottomCenter,
                                                   colors: [
                                                     Colors.transparent,
-                                                    const Color(0xFFCC0020)
-                                                        .withOpacity(0.35),
+                                                    const Color(
+                                                      0xFFCC0020,
+                                                    ).withOpacity(0.35),
                                                   ],
                                                 ),
                                               ),
@@ -332,8 +357,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                       color: Color(0xFFCC0020),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.add,
-                                        color: Colors.white, size: 13),
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: Colors.white,
+                                      size: 13,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -349,14 +377,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           style: GoogleFonts.sora(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark
+                                : Colors.white,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Give your group a unique identity',
                           style: GoogleFonts.sora(
-                              fontSize: 12, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
+                            fontSize: 12,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withOpacity(0.5)
+                                : Colors.white38,
+                          ),
                         ),
 
                         const SizedBox(height: 32),
@@ -364,39 +398,61 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         // ── Group Name ──────────────────────────────────
                         Container(
                           decoration: BoxDecoration(
-                            color: AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.06),
+                            color: AppThemeNotifier.isWhite
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.06),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10),
-                                width: 1),
-                            boxShadow: AppThemeNotifier.isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.09), blurRadius: 8, offset: const Offset(0, 2))] : [],
+                              color: AppThemeNotifier.isWhite
+                                  ? const Color(0xFFEEEEEE)
+                                  : Colors.white.withOpacity(0.10),
+                              width: 1,
+                            ),
+                            boxShadow: AppThemeNotifier.isWhite
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFFCC0020,
+                                      ).withOpacity(0.09),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : [],
                           ),
                           child: Row(
                             children: [
                               const SizedBox(width: 16),
-                              Icon(Icons.group_rounded,
-                                  color: const Color(0xFFCC0020)
-                                      .withOpacity(0.8),
-                                  size: 20),
+                              Icon(
+                                Icons.group_rounded,
+                                color: const Color(0xFFCC0020).withOpacity(0.8),
+                                size: 20,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextField(
                                   controller: _controller,
-                                  textCapitalization:
-                                      TextCapitalization.words,
+                                  textCapitalization: TextCapitalization.words,
                                   onChanged: (_) => setState(() {}),
                                   style: GoogleFonts.sora(
-                                      fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
+                                    fontSize: 14,
+                                    color: AppThemeNotifier.isWhite
+                                        ? EleghartColors.accentDark
+                                        : Colors.white,
+                                  ),
                                   decoration: InputDecoration(
-                                    hintText:
-                                        'Group name (e.g. Friends, Trip)',
+                                    hintText: 'Group name (e.g. Friends, Trip)',
                                     hintStyle: GoogleFonts.sora(
-                                        fontSize: 14,
-                                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.35) : Colors.white30),
+                                      fontSize: 14,
+                                      color: AppThemeNotifier.isWhite
+                                          ? EleghartColors.accentDark
+                                                .withOpacity(0.35)
+                                          : Colors.white30,
+                                    ),
                                     border: InputBorder.none,
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(
-                                            vertical: 16),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -415,7 +471,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             style: GoogleFonts.sora(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54,
+                              color: AppThemeNotifier.isWhite
+                                  ? EleghartColors.accentDark.withOpacity(0.6)
+                                  : Colors.white54,
                             ),
                           ),
                         ),
@@ -428,34 +486,42 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             final active = _selectedCategory == label;
                             return GestureDetector(
                               onTap: () => setState(() {
-                                _selectedCategory =
-                                    active ? null : label;
+                                _selectedCategory = active ? null : label;
                               }),
                               child: AnimatedContainer(
-                                duration:
-                                    const Duration(milliseconds: 180),
+                                duration: const Duration(milliseconds: 180),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 9),
+                                  horizontal: 14,
+                                  vertical: 9,
+                                ),
                                 decoration: BoxDecoration(
                                   color: active
                                       ? const Color(0xFFCC0020)
-                                      : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.07)),
-                                  borderRadius:
-                                      BorderRadius.circular(20),
+                                      : (AppThemeNotifier.isWhite
+                                            ? Colors.white
+                                            : Colors.white.withOpacity(0.07)),
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: active
                                         ? Colors.transparent
-                                        : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.12)),
+                                        : (AppThemeNotifier.isWhite
+                                              ? const Color(0xFFEEEEEE)
+                                              : Colors.white.withOpacity(0.12)),
                                   ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(icon,
-                                        size: 14,
-                                        color: active
-                                            ? Colors.white
-                                            : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38)),
+                                    Icon(
+                                      icon,
+                                      size: 14,
+                                      color: active
+                                          ? Colors.white
+                                          : (AppThemeNotifier.isWhite
+                                                ? EleghartColors.accentDark
+                                                      .withOpacity(0.5)
+                                                : Colors.white38),
+                                    ),
                                     const SizedBox(width: 6),
                                     Text(
                                       label,
@@ -466,7 +532,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             : FontWeight.w400,
                                         color: active
                                             ? Colors.white
-                                            : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54),
+                                            : (AppThemeNotifier.isWhite
+                                                  ? EleghartColors.accentDark
+                                                        .withOpacity(0.6)
+                                                  : Colors.white54),
                                       ),
                                     ),
                                   ],
@@ -496,10 +565,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           gradient: const RadialGradient(
                             center: Alignment.center,
                             radius: 0.9,
-                            colors: [
-                              Color(0xFFCC0020),
-                              Color(0xFF6B0010),
-                            ],
+                            colors: [Color(0xFFCC0020), Color(0xFF6B0010)],
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -550,8 +616,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2.2,
-                                        color: Colors.white),
+                                      strokeWidth: 2.2,
+                                      color: Colors.white,
+                                    ),
                                   )
                                 else
                                   Icon(
@@ -566,8 +633,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   _saving
                                       ? 'Saving...'
                                       : isEditMode
-                                          ? 'Save Changes'
-                                          : 'Create Group',
+                                      ? 'Save Changes'
+                                      : 'Create Group',
                                   style: GoogleFonts.sora(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,

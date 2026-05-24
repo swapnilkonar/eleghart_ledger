@@ -7,6 +7,17 @@ class StorageService {
   static const _groupsKey = 'groups_v2';
   static const _expensesKey = 'expenses_v2';
   static const _categoryImagesKey = 'category_images_v1';
+  static const _globalCategoriesKey = 'global_categories_v1';
+
+  static Future<List<String>> loadGlobalCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_globalCategoriesKey) ?? [];
+  }
+
+  static Future<void> saveGlobalCategories(List<String> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_globalCategoriesKey, categories);
+  }
 
   static Future<Map<String, String>> loadCategoryImages() async {
     final prefs = await SharedPreferences.getInstance();

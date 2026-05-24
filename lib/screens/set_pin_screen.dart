@@ -10,7 +10,8 @@ import 'home_dashboard.dart';
 
 class SetPinScreen extends StatefulWidget {
   final String userName;
-  const SetPinScreen({super.key, required this.userName});
+  final bool isReset;
+  const SetPinScreen({super.key, required this.userName, this.isReset = false});
 
   @override
   State<SetPinScreen> createState() => _SetPinScreenState();
@@ -97,6 +98,11 @@ class _SetPinScreenState extends State<SetPinScreen>
 
     if (!mounted) return;
 
+    if (widget.isReset) {
+      Navigator.pop(context);
+      return;
+    }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -142,7 +148,24 @@ class _SetPinScreenState extends State<SetPinScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Column(
                   children: [
-                    SizedBox(height: size.height * 0.04),
+                    if (widget.isReset)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          alignment: Alignment.centerLeft,
+                          icon: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: AppThemeNotifier.isWhite
+                                ? const Color(0xFF8E1D1D)
+                                : Colors.white,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+
+                    SizedBox(
+                        height: widget.isReset ? size.height * 0.01 : size.height * 0.04),
 
                     // Logo with pulsing red glow
                     AnimatedBuilder(
@@ -172,7 +195,7 @@ class _SetPinScreenState extends State<SetPinScreen>
 
                     // Title
                     Text(
-                      'Set your PIN',
+                      widget.isReset ? 'Reset your PIN' : 'Set your PIN',
                       style: GoogleFonts.sora(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -182,7 +205,9 @@ class _SetPinScreenState extends State<SetPinScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a 4-digit PIN to secure your app',
+                      widget.isReset
+                          ? 'Choose a new 4-digit PIN to secure your app'
+                          : 'Choose a 4-digit PIN to secure your app',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.sora(
                         fontSize: 13,

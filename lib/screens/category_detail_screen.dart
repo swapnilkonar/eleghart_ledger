@@ -171,6 +171,14 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       await StorageService.saveCategoryImages(_categoryImages);
     }
 
+    final globalCategories = await StorageService.loadGlobalCategories();
+    if (globalCategories.contains(oldName)) {
+      globalCategories.remove(oldName);
+      if (!globalCategories.contains(newName)) globalCategories.add(newName);
+      globalCategories.sort();
+      await StorageService.saveGlobalCategories(globalCategories);
+    }
+
     setState(() {
       _categoryName = newName;
       _groups = updatedGroups;
