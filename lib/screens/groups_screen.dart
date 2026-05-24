@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/group_model.dart';
@@ -48,13 +50,17 @@ class GroupsScreenState extends State<GroupsScreen>
     )..repeat(reverse: true);
     _loadData();
     DateFilter.notifier.addListener(_onFilterChanged);
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
   }
+
+  void _onThemeChanged() => setState(() {});
 
   void _onFilterChanged() => setState(() {});
 
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _glowController.dispose();
     super.dispose();
   }
@@ -79,21 +85,21 @@ class GroupsScreenState extends State<GroupsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF120404),
+        backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Delete "${group.name}"?',
             style: GoogleFonts.sora(
-                color: Colors.white,
+                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w700)),
         content: Text(
             'All expenses in this group will be deleted. This cannot be undone.',
-            style: GoogleFonts.sora(color: Colors.white54, fontSize: 13)),
+            style: GoogleFonts.sora(color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white54, fontSize: 13)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel',
-                style: GoogleFonts.sora(color: Colors.white54)),
+                style: GoogleFonts.sora(color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white54)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -233,7 +239,7 @@ class GroupsScreenState extends State<GroupsScreen>
                   '$greeting, ${widget.userName} 👋',
                   style: GoogleFonts.sora(
                       fontSize: 13,
-                      color: Colors.white54),
+                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.55) : Colors.white54),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -241,7 +247,7 @@ class GroupsScreenState extends State<GroupsScreen>
                   style: GoogleFonts.sora(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -251,7 +257,7 @@ class GroupsScreenState extends State<GroupsScreen>
                     Text(
                       'Your financial spaces',
                       style: GoogleFonts.sora(
-                          fontSize: 13, color: Colors.white38),
+                          fontSize: 13, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38),
                     ),
                     const DateFilterPill(),
                   ],
@@ -262,18 +268,14 @@ class GroupsScreenState extends State<GroupsScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF120505),
+                    color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120505),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: const Color(0xFFCC0020).withOpacity(0.2),
+                        color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : const Color(0xFFCC0020).withOpacity(0.2),
                         width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFCC0020).withOpacity(0.15),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                    ],
+                    boxShadow: AppThemeNotifier.isWhite
+                        ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.10), blurRadius: 12, offset: const Offset(0, 2))]
+                        : [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.15), blurRadius: 20, spreadRadius: 2)],
                   ),
                   child: Column(
                     children: [
@@ -284,7 +286,7 @@ class GroupsScreenState extends State<GroupsScreen>
                             'Total Groups',
                             '${DateFilter.current == DateFilterType.allTime ? _groups.length : _groups.where((g) => _expensesFor(g).isNotEmpty).length}',
                             DateFilter.current == DateFilterType.allTime ? 'Active' : 'With activity',
-                            Colors.white70,
+                            AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70,
                           ),
                           _verticalDivider(),
                           _statBlock(
@@ -302,25 +304,28 @@ class GroupsScreenState extends State<GroupsScreen>
                             'This Month Spent',
                             '₹${monthSpent.toStringAsFixed(0)}',
                             '',
-                            Colors.white70,
+                            AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70,
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Container(
                           height: 1,
-                          color: Colors.white.withOpacity(0.07)),
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.08) : Colors.white.withOpacity(0.07)),
                       const SizedBox(height: 12),
                       GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CategoriesListScreen(
-                              allGroups: _groups,
-                              allExpenses: _expenses,
+                        onTap: () async {
+                          final changed = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CategoriesListScreen(
+                                allGroups: _groups,
+                                allExpenses: _expenses,
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                          if (changed == true) _loadData();
+                        },
                         child: Row(
                           children: [
                             Container(
@@ -344,7 +349,7 @@ class GroupsScreenState extends State<GroupsScreen>
                                   return '$total categor${total != 1 ? 'ies' : 'y'} across all groups';
                                 }(),
                                 style: GoogleFonts.sora(
-                                    fontSize: 12, color: Colors.white60),
+                                    fontSize: 12, fontWeight: FontWeight.w500, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.7) : Colors.white60),
                               ),
                             ),
                             Text(
@@ -380,12 +385,12 @@ class GroupsScreenState extends State<GroupsScreen>
                           decoration: BoxDecoration(
                             color: active
                                 ? const Color(0xFFCC0020)
-                                : Colors.white.withOpacity(0.06),
+                                : AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.06) : Colors.white.withOpacity(0.06),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: active
                                   ? Colors.transparent
-                                  : Colors.white.withOpacity(0.1),
+                                  : AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.12) : Colors.white.withOpacity(0.1),
                             ),
                           ),
                           child: Row(
@@ -405,7 +410,7 @@ class GroupsScreenState extends State<GroupsScreen>
                                       : FontWeight.w400,
                                   color: active
                                       ? Colors.white
-                                      : Colors.white54,
+                                      : AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54,
                                 ),
                               ),
                             ],
@@ -427,7 +432,7 @@ class GroupsScreenState extends State<GroupsScreen>
                       style: GoogleFonts.sora(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                       ),
                     ),
                     Row(
@@ -435,10 +440,10 @@ class GroupsScreenState extends State<GroupsScreen>
                         Text(
                           'Sort by: Recent',
                           style: GoogleFonts.sora(
-                              fontSize: 12, color: Colors.white38),
+                              fontSize: 12, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38),
                         ),
-                        const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: Colors.white38, size: 18),
+                        Icon(Icons.keyboard_arrow_down_rounded,
+                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38, size: 18),
                       ],
                     ),
                   ],
@@ -484,7 +489,7 @@ class GroupsScreenState extends State<GroupsScreen>
           ],
           Text(label,
               style: GoogleFonts.sora(
-                  fontSize: 11, color: Colors.white38)),
+                  fontSize: 11, fontWeight: FontWeight.w500, color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white38)),
           const SizedBox(height: 4),
           Text(
             value,
@@ -497,7 +502,7 @@ class GroupsScreenState extends State<GroupsScreen>
           if (sub.isNotEmpty)
             Text(sub,
                 style: GoogleFonts.sora(
-                    fontSize: 11, color: Colors.white38)),
+                    fontSize: 11, fontWeight: FontWeight.w500, color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white38)),
         ],
       ),
     );
@@ -507,7 +512,7 @@ class GroupsScreenState extends State<GroupsScreen>
         width: 1,
         height: 56,
         margin: const EdgeInsets.symmetric(horizontal: 10),
-        color: Colors.white.withOpacity(0.07),
+        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.08) : Colors.white.withOpacity(0.07),
       );
 
   // ── GROUP CARD ────────────────────────────────────────────────────────────
@@ -525,23 +530,16 @@ class GroupsScreenState extends State<GroupsScreen>
       onTap: () => _openGroup(group),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF0E0505),
+          color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF0E0505),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: const Color(0xFFCC0020).withOpacity(0.18), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFCC0020).withOpacity(0.18),
-              blurRadius: 18,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+              color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : const Color(0xFFCC0020).withOpacity(0.18), width: 1),
+          boxShadow: AppThemeNotifier.isWhite
+              ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.10), blurRadius: 10, offset: const Offset(0, 2))]
+              : [
+                  BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.18), blurRadius: 18, spreadRadius: 1, offset: const Offset(0, 4)),
+                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 2)),
+                ],
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -562,7 +560,7 @@ class GroupsScreenState extends State<GroupsScreen>
                           ? Image.file(File(group.imagePath!),
                               fit: BoxFit.cover)
                           : Container(
-                              color: const Color(0xFF1A0505),
+                              color: AppThemeNotifier.isWhite ? const Color(0xFFFFBEBE) : const Color(0xFF1A0505),
                               child: Center(
                                 child: Icon(
                                   _categoryIcon(group.categories),
@@ -609,7 +607,7 @@ class GroupsScreenState extends State<GroupsScreen>
                         style: GoogleFonts.sora(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -619,7 +617,7 @@ class GroupsScreenState extends State<GroupsScreen>
                         '₹${spent.toStringAsFixed(0)} spent',
                         style: GoogleFonts.sora(
                             fontSize: 13,
-                            color: Colors.white70,
+                            color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70,
                             fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
@@ -665,9 +663,9 @@ class GroupsScreenState extends State<GroupsScreen>
                             child: PopupMenuButton<String>(
                             padding: EdgeInsets.zero,
                             iconSize: 16,
-                            icon: const Icon(Icons.more_vert_rounded,
-                                color: Colors.white38, size: 16),
-                            color: const Color(0xFF1A0505),
+                            icon: Icon(Icons.more_vert_rounded,
+                                color: AppThemeNotifier.isWhite ? Colors.black38 : Colors.white38, size: 16),
+                            color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF1A0505),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             onSelected: (v) {
@@ -679,13 +677,13 @@ class GroupsScreenState extends State<GroupsScreen>
                               PopupMenuItem(
                                 value: 'edit',
                                 child: Row(children: [
-                                  const Icon(Icons.edit_rounded,
-                                      size: 15, color: Colors.white70),
+                                  Icon(Icons.edit_rounded,
+                                      size: 15, color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70),
                                   const SizedBox(width: 8),
                                   Text('Edit Group',
                                       style: GoogleFonts.sora(
                                           fontSize: 13,
-                                          color: Colors.white70)),
+                                          color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70)),
                                 ]),
                               ),
                               PopupMenuItem(
@@ -714,14 +712,14 @@ class GroupsScreenState extends State<GroupsScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.sora(
-                            fontSize: 11, color: Colors.white54),
+                            fontSize: 11, fontWeight: FontWeight.w500, color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white54),
                       ),
                       const SizedBox(height: 1),
                       // Last expense label + time
                       Text(
                         'Last expense',
                         style: GoogleFonts.sora(
-                            fontSize: 9, color: Colors.white24),
+                            fontSize: 9, fontWeight: FontWeight.w500, color: AppThemeNotifier.isWhite ? Colors.black38 : Colors.white24),
                       ),
                       Text(
                         lastLabel,
@@ -731,7 +729,7 @@ class GroupsScreenState extends State<GroupsScreen>
                         style: GoogleFonts.sora(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white54),
+                            color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white54),
                       ),
                       const Spacer(),
                       // Sparkline

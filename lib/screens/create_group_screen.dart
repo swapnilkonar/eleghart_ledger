@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -36,6 +38,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   @override
   void initState() {
     super.initState();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
 
     // 👇 Pre-fill data when editing
     if (isEditMode) {
@@ -49,9 +52,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     }
   }
 
+  void _onThemeChanged() => setState(() {});
+
   @override
   void dispose() {
-    _controller.dispose(); // ✅ memory safety
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    _controller.dispose();
     super.dispose();
   }
 
@@ -156,19 +162,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : Colors.black,
       body: Stack(
         children: [
           // Background
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.70)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.70)),
 
           SafeArea(
             child: Column(
@@ -191,8 +189,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 width: 1.5),
                             color: const Color(0xFFCC0020).withOpacity(0.10),
                           ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white, size: 16),
+                          child: Icon(Icons.arrow_back_ios_new_rounded,
+                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white, size: 16),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -205,7 +203,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               style: GoogleFonts.sora(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                               ),
                             ),
                             Text(
@@ -213,7 +211,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   ? 'Update your financial space'
                                   : 'Create a new financial space',
                               style: GoogleFonts.sora(
-                                  fontSize: 12, color: Colors.white38),
+                                  fontSize: 12, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
                             ),
                           ],
                         ),
@@ -282,7 +280,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   height: 136,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: const Color(0xFF1A0505),
+                                    color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF1A0505),
                                     image: _imageFile != null
                                         ? DecorationImage(
                                             image: FileImage(_imageFile!),
@@ -351,14 +349,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           style: GoogleFonts.sora(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Give your group a unique identity',
                           style: GoogleFonts.sora(
-                              fontSize: 12, color: Colors.white38),
+                              fontSize: 12, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
                         ),
 
                         const SizedBox(height: 32),
@@ -366,11 +364,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         // ── Group Name ──────────────────────────────────
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.06),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: Colors.white.withOpacity(0.10),
+                                color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10),
                                 width: 1),
+                            boxShadow: AppThemeNotifier.isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.09), blurRadius: 8, offset: const Offset(0, 2))] : [],
                           ),
                           child: Row(
                             children: [
@@ -387,13 +386,13 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                       TextCapitalization.words,
                                   onChanged: (_) => setState(() {}),
                                   style: GoogleFonts.sora(
-                                      fontSize: 14, color: Colors.white),
+                                      fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
                                   decoration: InputDecoration(
                                     hintText:
                                         'Group name (e.g. Friends, Trip)',
                                     hintStyle: GoogleFonts.sora(
                                         fontSize: 14,
-                                        color: Colors.white30),
+                                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.35) : Colors.white30),
                                     border: InputBorder.none,
                                     contentPadding:
                                         const EdgeInsets.symmetric(
@@ -416,7 +415,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             style: GoogleFonts.sora(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white54,
+                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54,
                             ),
                           ),
                         ),
@@ -440,13 +439,13 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 decoration: BoxDecoration(
                                   color: active
                                       ? const Color(0xFFCC0020)
-                                      : Colors.white.withOpacity(0.07),
+                                      : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.07)),
                                   borderRadius:
                                       BorderRadius.circular(20),
                                   border: Border.all(
                                     color: active
                                         ? Colors.transparent
-                                        : Colors.white.withOpacity(0.12),
+                                        : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.12)),
                                   ),
                                 ),
                                 child: Row(
@@ -456,7 +455,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                         size: 14,
                                         color: active
                                             ? Colors.white
-                                            : Colors.white38),
+                                            : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38)),
                                     const SizedBox(width: 6),
                                     Text(
                                       label,
@@ -467,7 +466,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             : FontWeight.w400,
                                         color: active
                                             ? Colors.white
-                                            : Colors.white54,
+                                            : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54),
                                       ),
                                     ),
                                   ],

@@ -1,0 +1,232 @@
+{
+  "_INSTRUCTIONS": "Jump directly to any file/line. AI: read this instead of scanning source files. Line numbers ±5.",
+
+  "GroupModel": {
+    "file": "lib/models/group_model.dart",
+    "type": "class",
+    "fields": ["id:String(UUID)", "name:String", "imagePath:String?", "categories:List<String>"],
+    "methods": ["toJson()→Map", "fromJson(Map)→GroupModel(factory)", "copyWith(...)→GroupModel"],
+    "storage_key": "groups_v2 (StringList in SharedPreferences)",
+    "note": "id never changes after creation. categories is the group's tag list."
+  },
+
+  "ExpenseModel": {
+    "file": "lib/models/expense_model.dart",
+    "type": "class",
+    "fields": ["id:String(UUID)", "groupId:String", "amount:double", "description:String", "categories:List<String>", "date:DateTime", "imagePath:String?(receipt photo)", "type:String('debit'|'credit')"],
+    "methods": ["toJson()→Map", "fromJson(Map)→ExpenseModel(factory)", "isDebit→bool(getter)", "isCredit→bool(getter)"],
+    "storage_key": "expenses_v2 (StringList in SharedPreferences)",
+    "note": "type defaults to 'debit' for backward compatibility. Old records without 'type' key are treated as debit."
+  },
+
+  "StorageService": {
+    "file": "lib/services/storage_service.dart",
+    "type": "class (all static)",
+    "methods": [
+      "loadGroups()→Future<List<GroupModel>>",
+      "saveGroups(List<GroupModel>)→Future<void>",
+      "loadExpenses()→Future<List<ExpenseModel>>",
+      "saveExpenses(List<ExpenseModel>)→Future<void>",
+      "loadCategoryImages()→Future<Map<String,String>>",
+      "saveCategoryImages(Map<String,String>)→Future<void>"
+    ],
+    "keys": {"groups": "groups_v2", "expenses": "expenses_v2", "categoryImages": "category_images_v1"},
+    "note": "All methods are async static. No instance needed."
+  },
+
+  "AppThemeNotifier": {
+    "file": "lib/utils/app_theme.dart",
+    "type": "class (all static)",
+    "fields": ["instance:ValueNotifier<bool> (static, line ~6)"],
+    "methods": [
+      "initialize()→Future<void> — reads SharedPreferences, sets instance.value",
+      "toggle()→Future<void> — flips instance.value, saves to prefs",
+      "isWhite→bool (getter) — returns instance.value"
+    ],
+    "storage_key": "is_white_theme (bool)",
+    "usage_pattern": "AppThemeNotifier.isWhite ? whiteColor : darkColor"
+  },
+
+  "DateFilter": {
+    "file": "lib/utils/date_filter.dart",
+    "type": "class (all static) + enum DateFilterType",
+    "enum_values": ["currentMonth", "lastMonth", "allTime", "custom"],
+    "fields": ["notifier:ValueNotifier<DateFilterType>", "customMonth:DateTime?"],
+    "methods": [
+      "isInRange(DateTime)→bool — check if date falls in selected range",
+      "setCustomMonth(year,month)→void",
+      "label→String (getter) — human-readable filter label",
+      "current→DateFilterType (getter)"
+    ],
+    "note": "Screens listen with DateFilter.notifier.addListener(). Call DateFilter.isInRange(e.date) to filter expenses."
+  },
+
+  "ThemedBackground": {
+    "file": "lib/widgets/themed_background.dart",
+    "type": "StatelessWidget",
+    "constructor": "ThemedBackground({darkOverlayOpacity:double=0.65})",
+    "behavior": "ValueListenableBuilder on AppThemeNotifier.instance. Shows background_theme_white.png OR background_theme_top_glow.png+dark overlay.",
+    "usage": "Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.72))"
+  },
+
+  "DateFilterPill": {
+    "file": "lib/widgets/date_filter_pill.dart",
+    "type": "StatefulWidget",
+    "behavior": "Horizontal scrollable row of filter pills. Drives DateFilter.notifier. Supports month picker."
+  },
+
+  "EleghartColors": {
+    "file": "lib/theme/eleghart_colors.dart",
+    "type": "class (all static const Color)",
+    "fields": ["bgLight=#E5E7EB", "metalDark=#2A2F38", "metalLight=#3A3F4B", "accentDark=#8E1D1D", "accentMid=#B32626", "accentLight=#C73535", "textPrimary=#0F172A", "textSecondary=#6B7280", "textHint=#9CA3AF", "inputBg=#FFFFFF", "cardBg=#FFFFFF", "divider=#E5E7EB"]
+  },
+
+  "PdfExportService": {
+    "file": "lib/services/pdf_export_service.dart",
+    "type": "class (all static)",
+    "key_method": "generateAndSharePdf(GroupModel, List<ExpenseModel>)→Future<void>",
+    "note": "Large file ~18KB. Only touch for PDF layout changes."
+  },
+
+  "HomeDashboard": {
+    "file": "lib/screens/home_dashboard.dart",
+    "type": "StatefulWidget",
+    "constructor": "HomeDashboard({userName:String})",
+    "key_state": ["_userName:String", "_groups:List<GroupModel>", "_expenses:List<ExpenseModel>", "_currentTab:int(0-3)", "_loading:bool", "_totalDebit", "_totalCredit", "_netBalance"],
+    "key_methods": [
+      "_buildHomeTab(greeting)→Widget (line ~346) — Tab 0 UI",
+      "_buildSummaryCard()→Widget (line ~436) — red gradient summary",
+      "_summaryChip({icon,label})→Widget (line ~589)",
+      "_buildAppBar()→PreferredSizeWidget",
+      "_buildBottomNav()→Widget",
+      "_buildPlaceholder(title,icon)→Widget — placeholder for tabs 2&3"
+    ],
+    "tabs": ["0=Home summary", "1=GroupsScreen widget", "2=Insights placeholder", "3=Profile placeholder"],
+    "theme_listener": true,
+    "overlay_opacity": 0.65
+  },
+
+  "GroupsScreen": {
+    "file": "lib/screens/groups_screen.dart",
+    "type": "StatefulWidget (GlobalKey: GroupsScreenState)",
+    "constructor": "GroupsScreen({userName:String})",
+    "key_state": ["_groups", "_expenses", "_loading", "_selectedFilter:String", "_categoryImages:Map"],
+    "key_methods": [
+      "_buildRichView()→Widget (line ~217) — main view with stats + list",
+      "_buildGroupCard(GroupModel)→Widget (line ~521) — single group card",
+      "_statBlock(icon,label,value,sub,color)→Widget (line ~476)",
+      "_verticalDivider()→Widget (line ~512)",
+      "_buildEmptyState()→Widget (line ~882)",
+      "reload()→Future<void> — called from HomeDashboard after group changes"
+    ],
+    "filters": ["All","Trips","Friends","Family","Work","Others"],
+    "theme_listener": true,
+    "note": "No Scaffold — renders inside HomeDashboard IndexedStack. Background comes from parent."
+  },
+
+  "GroupDetailScreen": {
+    "file": "lib/screens/group_detail_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "GroupDetailScreen({group:GroupModel, allExpenses:List<ExpenseModel>})",
+    "key_state": ["_expenses", "_searchQuery", "_expenseFilter('all'|'debit'|'credit')", "_dataChanged:bool"],
+    "key_methods": [
+      "_buildExpenseList()→Widget (line ~555) — filter+search+empty state",
+      "_buildExpenseCard(ExpenseModel)→Widget — individual expense row"
+    ],
+    "returns": "Navigator.pop(context, _dataChanged) — parent must refresh if true",
+    "theme_listener": false,
+    "overlay_opacity": 0.72,
+    "empty_state_image": "AppThemeNotifier.isWhite ? 'empty_expenses_white.png' : 'empty_expenses.png' (reactive via ValueListenableBuilder at line ~572)"
+  },
+
+  "AddExpenseScreen": {
+    "file": "lib/screens/add_expense_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "AddExpenseScreen({group:GroupModel, allGroups:List<GroupModel>})",
+    "key_fields_saved": ["amount", "description", "categories", "date", "type(debit/credit)", "imagePath(receipt)"],
+    "overlay_opacity": 0.72
+  },
+
+  "CategoriesListScreen": {
+    "file": "lib/screens/categories_list_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "CategoriesListScreen({allGroups:List<GroupModel>, allExpenses:List<ExpenseModel>})",
+    "purpose": "Cross-group category totals. Tap category → CategoryDetailScreen.",
+    "overlay_opacity": 0.72
+  },
+
+  "CategoryDetailScreen": {
+    "file": "lib/screens/category_detail_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "CategoryDetailScreen({category:String, allGroups, allExpenses})",
+    "overlay_opacity": 0.72
+  },
+
+  "ExportPdfScreen": {
+    "file": "lib/screens/export_pdf_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "ExportPdfScreen({group:GroupModel, expenses:List<ExpenseModel>})",
+    "overlay_opacity": 0.72
+  },
+
+  "ProfileSheet": {
+    "file": "lib/screens/profile_sheet.dart",
+    "type": "StatefulWidget (shown as BottomSheet)",
+    "constructor": "ProfileSheet({onUpdated:VoidCallback})",
+    "features": ["Edit name", "Edit avatar (image_picker)", "Change PIN", "White/Dark theme toggle (SwitchListTile ~line 242)"],
+    "theme_toggle_line": 242
+  },
+
+  "PinUnlockScreen": {
+    "file": "lib/screens/pin_unlock_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "PinUnlockScreen({userName:String})",
+    "key_methods": ["_unlock()→void — validates PIN", "_forgotPin()→Future<void> — shows dialog"],
+    "theme_listener": true,
+    "overlay_opacity": 0.25
+  },
+
+  "SetPinScreen": {
+    "file": "lib/screens/set_pin_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "SetPinScreen({userName:String})",
+    "key_methods": ["_buildLabeledPinRow({label,pin,focusNode,isActive,onTap})→Widget"],
+    "theme_listener": true,
+    "overlay_opacity": 0.25
+  },
+
+  "OnboardingScreen": {
+    "file": "lib/screens/onboarding_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "Name entry form. Saves to SharedPreferences key 'user_name'. Navigates to SetPinScreen.",
+    "overlay_opacity": 0.40
+  },
+
+  "WelcomeScreen": {
+    "file": "lib/screens/welcome_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "First screen for new users. Animated logo + Get Started button → OnboardingScreen.",
+    "overlay_opacity": 0.40
+  },
+
+  "PremiumSplashScreen": {
+    "file": "lib/screens/splash_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "3-second animated splash with progress bar. Reads SharedPreferences to decide next route."
+  },
+
+  "PremiumOnboardingScreen": {
+    "file": "lib/screens/premium_onboarding_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "Feature showcase PageView (4 pages). Leads to OnboardingScreen. No background image — custom blur UI.",
+    "note": "Does NOT use ThemedBackground. Has its own glass/blur aesthetic."
+  },
+
+  "CreateGroupScreen": {
+    "file": "lib/screens/create_group_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "CreateGroupScreen({existingGroup:GroupModel?})",
+    "purpose": "Create or edit a group. If existingGroup!=null it's edit mode.",
+    "overlay_opacity": 0.70
+  }
+}

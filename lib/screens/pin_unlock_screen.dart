@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +32,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
   @override
   void initState() {
     super.initState();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
 
     _shakeController = AnimationController(
       vsync: this,
@@ -49,8 +52,11 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
     });
   }
 
+  void _onThemeChanged() => setState(() {});
+
   @override
   void dispose() {
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _shakeController.dispose();
     _pulseController.dispose();
     _pinController.dispose();
@@ -110,20 +116,20 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A0005),
+        backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF1A0005),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           'Reset PIN?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white, fontWeight: FontWeight.w700),
         ),
-        content: const Text(
+        content: Text(
           'If you forgot your PIN, you can set a new one.\n\nThis will replace your old PIN.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: Text('Cancel', style: TextStyle(color: AppThemeNotifier.isWhite ? Colors.black45 : Colors.white54)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -168,19 +174,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
       body: Stack(
         children: [
           // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-
-          // Dark overlay to deepen background
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.25),
-            ),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.25)),
 
           // Subtle light rays from logo
           Positioned.fill(
@@ -230,7 +224,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                       style: GoogleFonts.sora(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white,
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -239,7 +233,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                       'Welcome back!',
                       style: GoogleFonts.sora(
                         fontSize: 14,
-                        color: Colors.white54,
+                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.6) : Colors.white54,
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -328,7 +322,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
       width: double.infinity,
       height: 68,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: AppThemeNotifier.isWhite ? const Color(0xFFFFECEC) : Colors.white.withOpacity(0.06),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: borderColor, width: 1.8),
         boxShadow: [
@@ -347,7 +341,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
               shape: BoxShape.circle,
               color: filled ? const Color(0xFFCC0020) : Colors.transparent,
               border: Border.all(
-                color: filled ? const Color(0xFFCC0020) : Colors.white54,
+                color: filled ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.35) : Colors.white54),
                 width: 2,
               ),
               boxShadow: filled

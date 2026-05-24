@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
+import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
+import '../services/storage_service.dart';
 import '../utils/date_filter.dart';
 import '../widgets/date_filter_pill.dart';
 import 'category_detail_screen.dart';
@@ -22,15 +27,37 @@ class CategoriesListScreen extends StatefulWidget {
 }
 
 class _CategoriesListScreenState extends State<CategoriesListScreen> {
+  late List<GroupModel> _groups;
+  late List<ExpenseModel> _expenses;
+  Map<String, String> _categoryImages = {};
+  bool _dataChanged = false;
+
   @override
   void initState() {
     super.initState();
+    _groups = List.from(widget.allGroups);
+    _expenses = List.from(widget.allExpenses);
+    _loadCategoryImages();
     DateFilter.notifier.addListener(_onFilter);
+    AppThemeNotifier.instance.addListener(_onFilter);
+  }
+
+  Future<void> _loadCategoryImages() async {
+    final imgs = await StorageService.loadCategoryImages();
+    if (mounted) setState(() => _categoryImages = imgs);
+  }
+
+  Future<void> _reloadData() async {
+    final g = await StorageService.loadGroups();
+    final e = await StorageService.loadExpenses();
+    final imgs = await StorageService.loadCategoryImages();
+    if (mounted) setState(() { _groups = g; _expenses = e; _categoryImages = imgs; _dataChanged = true; });
   }
 
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilter);
+    AppThemeNotifier.instance.removeListener(_onFilter);
     super.dispose();
   }
 
@@ -38,11 +65,11 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
 
   // ── All unique category names across all groups ───────────────────────────
   List<String> get _allCategories =>
-      widget.allGroups.expand((g) => g.categories).toSet().toList()..sort();
+      _groups.expand((g) => g.categories).toSet().toList()..sort();
 
   // ── Net amount for a category across all expenses (date-filtered) ─────────
   Map<String, double> _netFor(String category) {
-    final related = widget.allExpenses
+    final related = _expenses
         .where((e) =>
             e.categories.contains(category) && DateFilter.isInRange(e.date))
         .toList();
@@ -64,19 +91,16 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
   Widget build(BuildContext context) {
     final categories = _allCategories;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, _dataChanged);
+        return false;
+      },
+      child: Scaffold(
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.72)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.72)),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +111,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: () => Navigator.pop(context, _dataChanged),
                         child: Container(
                           width: 40,
                           height: 40,
@@ -101,9 +125,9 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                             color:
                                 const Color(0xFFCC0020).withOpacity(0.10),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white,
+                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                             size: 16,
                           ),
                         ),
@@ -118,13 +142,13 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                               style: GoogleFonts.sora(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                               ),
                             ),
                             Text(
                               '${categories.length} member${categories.length != 1 ? 's' : ''} across all groups',
                               style: GoogleFonts.sora(
-                                  fontSize: 11, color: Colors.white38),
+                                  fontSize: 11, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
                             ),
                           ],
                         ),
@@ -143,7 +167,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                           child: Text(
                             'No categories found.',
                             style: GoogleFonts.sora(
-                                fontSize: 14, color: Colors.white38),
+                                fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
                           ),
                         )
                       : ListView.separated(
@@ -163,61 +187,72 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                 : const Color(0xFFFF3355);
 
                             // Count groups this category belongs to
-                            final groupCount = widget.allGroups
+                            final groupCount = _groups
                                 .where((g) => g.categories.contains(cat))
                                 .length;
 
                             return GestureDetector(
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CategoryDetailScreen(
-                                    categoryName: cat,
-                                    allGroups: widget.allGroups,
-                                    allExpenses: widget.allExpenses,
+                              onTap: () async {
+                                final changed = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CategoryDetailScreen(
+                                      categoryName: cat,
+                                      allGroups: _groups,
+                                      allExpenses: _expenses,
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                                if (changed == true) await _reloadData();
+                              },
                               child: Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.04),
+                                  color: AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.04),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: const Color(0xFFCC0020)
-                                        .withOpacity(0.15),
+                                    color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : const Color(0xFFCC0020).withOpacity(0.15),
                                     width: 1,
                                   ),
+                                  boxShadow: AppThemeNotifier.isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.10), blurRadius: 10, offset: const Offset(0, 2))] : [],
                                 ),
                                 child: Row(
                                   children: [
                                     // Avatar
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFFCC0020)
-                                            .withOpacity(0.15),
-                                        border: Border.all(
-                                          color: const Color(0xFFCC0020)
-                                              .withOpacity(0.4),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          cat.isNotEmpty
-                                              ? cat[0].toUpperCase()
-                                              : '?',
-                                          style: GoogleFonts.sora(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
+                                    Builder(builder: (_) {
+                                      final imgPath = _categoryImages[cat];
+                                      final hasImg = imgPath != null && File(imgPath).existsSync();
+                                      return Container(
+                                        key: ValueKey('$cat-${imgPath ?? ''}'),
+                                        width: 46,
+                                        height: 46,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: const Color(0xFFCC0020).withOpacity(0.15),
+                                          border: Border.all(
+                                            color: const Color(0xFFCC0020).withOpacity(0.4),
+                                            width: 1,
                                           ),
+                                          image: hasImg
+                                              ? DecorationImage(
+                                                  image: FileImage(File(imgPath!)),
+                                                  fit: BoxFit.cover)
+                                              : null,
                                         ),
-                                      ),
-                                    ),
+                                        child: hasImg
+                                            ? null
+                                            : Center(
+                                                child: Text(
+                                                  cat.isNotEmpty ? cat[0].toUpperCase() : '?',
+                                                  style: GoogleFonts.sora(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                      );
+                                    }),
                                     const SizedBox(width: 14),
                                     Expanded(
                                       child: Column(
@@ -229,7 +264,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                             style: GoogleFonts.sora(
                                               fontSize: 15,
                                               fontWeight: FontWeight.w700,
-                                              color: Colors.white,
+                                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                                             ),
                                           ),
                                           const SizedBox(height: 3),
@@ -237,7 +272,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                             '$groupCount group${groupCount != 1 ? 's' : ''}  ·  ₹${debit.toStringAsFixed(0)} spent',
                                             style: GoogleFonts.sora(
                                                 fontSize: 11,
-                                                color: Colors.white38),
+                                                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38),
                                           ),
                                         ],
                                       ),
@@ -265,9 +300,9 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                       ],
                                     ),
                                     const SizedBox(width: 6),
-                                    const Icon(
+                                    Icon(
                                       Icons.chevron_right_rounded,
-                                      color: Colors.white24,
+                                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.3) : Colors.white24,
                                       size: 20,
                                     ),
                                   ],
@@ -281,6 +316,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

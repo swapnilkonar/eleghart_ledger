@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
 
 class ProfileSheet extends StatefulWidget {
   final VoidCallback onUpdated;
@@ -235,7 +236,35 @@ class _ProfileSheetState extends State<ProfileSheet> {
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 10),
+
+              // ---- THEME TOGGLE ----
+              ValueListenableBuilder<bool>(
+                valueListenable: AppThemeNotifier.instance,
+                builder: (_, isWhite, __) => SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'White Theme',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: EleghartColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    isWhite ? 'Light background enabled' : 'Dark background enabled',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: EleghartColors.textSecondary,
+                    ),
+                  ),
+                  value: isWhite,
+                  activeColor: EleghartColors.accentDark,
+                  onChanged: (_) => AppThemeNotifier.toggle(),
+                ),
+              ),
+
+              const SizedBox(height: 8),
 
               // ---- NAME FIELD ----
               _sectionTitle('Name'),

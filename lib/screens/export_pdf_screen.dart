@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
@@ -93,7 +95,7 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF120404),
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -219,15 +221,7 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.72)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.72)),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

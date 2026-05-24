@@ -11,6 +11,8 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'create_group_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
@@ -48,6 +50,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _userName = widget.userName;
     _loadProfile();
     _loadDashboardData();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  void _onThemeChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -135,7 +146,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     if (created == true) {
       _loadDashboardData();
       _groupsKey.currentState?.reload();
-      setState(() => _currentTab = 1);
+      setState(() => _currentTab = 2);
     }
   }
 
@@ -196,7 +207,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: Colors.black.withOpacity(0.6),
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white.withOpacity(0.95) : Colors.black.withOpacity(0.6),
       elevation: 0,
       titleSpacing: 20,
       title: RichText(
@@ -207,7 +218,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               style: GoogleFonts.sora(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppThemeNotifier.isWhite ? EleghartColors.textPrimary : Colors.white,
               ),
             ),
             TextSpan(
@@ -223,11 +234,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
+          icon: Icon(Icons.search_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
           onPressed: () {},
         ),
         IconButton(
-          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white70, size: 22),
+          icon: Icon(Icons.notifications_none_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
           onPressed: () {},
         ),
         GestureDetector(
@@ -236,7 +247,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             padding: const EdgeInsets.only(right: 14),
             child: CircleAvatar(
               radius: 18,
-              backgroundColor: const Color(0xFF1A0A0A),
+              backgroundColor: AppThemeNotifier.isWhite ? const Color(0xFFFFD6D6) : const Color(0xFF1A0A0A),
               backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
               child: _avatar == null
                   ? Padding(
@@ -256,18 +267,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildBottomNav() {
     return BottomAppBar(
-      color: const Color(0xFF0D0D0D),
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
+      color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF0D0D0D),
+      elevation: 8,
       child: SizedBox(
         height: 60,
         child: Row(
           children: [
             _navItem(0, Icons.home_rounded, 'Home'),
-            _navItem(1, Icons.groups_rounded, 'Groups'),
-            const Expanded(child: SizedBox()),
-            _navItem(2, Icons.bar_chart_rounded, 'Insights'),
-            _navItem(3, Icons.person_rounded, 'Profile'),
+            _navItem(1, Icons.receipt_long_rounded, 'Expenses'),
+            _navItem(2, Icons.groups_rounded, 'Groups'),
+            _navItem(3, Icons.bar_chart_rounded, 'Insights'),
           ],
         ),
       ),
@@ -285,7 +294,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
           children: [
             Icon(
               icon,
-              color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+              color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
               size: 22,
             ),
             const SizedBox(height: 3),
@@ -293,7 +302,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               label,
               style: GoogleFonts.sora(
                 fontSize: 10,
-                color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+                color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
@@ -308,20 +317,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final greeting = _getGreeting();
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : Colors.black,
       extendBody: true,
       appBar: _buildAppBar(),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.65)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.65)),
           if (_loading)
             const Center(
               child: CircularProgressIndicator(color: Color(0xFFCC0020)),
@@ -331,22 +332,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
               index: _currentTab,
               children: [
                 _buildHomeTab(greeting),
+                _buildExpensesTab(),
                 GroupsScreen(key: _groupsKey, userName: _userName),
                 _buildPlaceholder('Insights', Icons.bar_chart_rounded),
-                _buildPlaceholder('Profile', Icons.person_rounded),
               ],
             ),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openCreateGroup,
-        backgroundColor: const Color(0xFFCC0020),
-        elevation: 6,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
@@ -363,7 +356,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             style: GoogleFonts.sora(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
             ),
           ),
           const SizedBox(height: 4),
@@ -371,7 +364,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             'Your financial spaces',
             style: GoogleFonts.sora(
               fontSize: 13,
-              color: Colors.white54,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.55) : Colors.white54,
               letterSpacing: 0.3,
             ),
           ),
@@ -399,7 +392,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   style: GoogleFonts.sora(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white70,
+                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.7) : Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -407,7 +400,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   'Coming soon',
                   style: GoogleFonts.sora(
                     fontSize: 14,
-                    color: Colors.white30,
+                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.35) : Colors.white30,
                   ),
                 ),
               ],
@@ -419,18 +412,247 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
+  Widget _buildExpensesTab() {
+    final isWhite = AppThemeNotifier.isWhite;
+    final cardColor = isWhite ? Colors.white : const Color(0xFF120404);
+    final borderColor = isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSecondary = isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Add Expense',
+            style: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Upload a receipt or fill in manually',
+            style: GoogleFonts.sora(fontSize: 13, color: textSecondary),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Upload box ──────────────────────────────────
+          CustomPaint(
+            painter: _DashedBorderPainter(color: const Color(0xFFCC0020).withOpacity(0.7)),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              decoration: BoxDecoration(
+                color: const Color(0xFFCC0020).withOpacity(isWhite ? 0.03 : 0.07),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.cloud_upload_rounded, color: const Color(0xFFCC0020), size: 48),
+                  const SizedBox(height: 12),
+                  Text('Upload Receipt or Invoice',
+                      style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+                  const SizedBox(height: 6),
+                  Text('PNG, JPG, PDF up to 10MB',
+                      style: GoogleFonts.sora(fontSize: 12, color: textSecondary)),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── OR divider ──────────────────────────────────
+          Row(
+            children: [
+              Expanded(child: Divider(color: borderColor, thickness: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('OR', style: GoogleFonts.sora(fontSize: 12, color: textSecondary, fontWeight: FontWeight.w600, letterSpacing: 1.5)),
+              ),
+              Expanded(child: Divider(color: borderColor, thickness: 1)),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Take Photo ──────────────────────────────────
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
+            ),
+            child: ListTile(
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFCC0020).withOpacity(0.10),
+                ),
+                child: const Icon(Icons.camera_alt_outlined, color: Color(0xFFCC0020), size: 20),
+              ),
+              title: Text('Take Photo',
+                  style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary)),
+              trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textSecondary),
+            ),
+          ),
+
+          // ── Choose from Gallery ─────────────────────────
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
+            ),
+            child: ListTile(
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFCC0020).withOpacity(0.10),
+                ),
+                child: const Icon(Icons.folder_outlined, color: Color(0xFFCC0020), size: 20),
+              ),
+              title: Text('Choose from Gallery',
+                  style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary)),
+              trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textSecondary),
+            ),
+          ),
+
+          // ── Eleghart AI Agent card ──────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 2))] : [],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 54, height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFCC0020).withOpacity(0.12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset('assets/icons/eleghart_icon.png', fit: BoxFit.contain),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Eleghart AI Agent',
+                          style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: textPrimary)),
+                      const SizedBox(height: 4),
+                      Text('Reading your document...',
+                          style: GoogleFonts.sora(fontSize: 12, color: textSecondary)),
+                      const SizedBox(height: 8),
+                      Stack(
+                        children: [
+                          Container(
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          FractionallySizedBox(
+                            widthFactor: 0.75,
+                            child: Container(
+                              height: 4,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFCC0020), Color(0xFFFF3355)],
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Extracting expenses and details',
+                              style: GoogleFonts.sora(fontSize: 10, color: textSecondary)),
+                          Text('75%',
+                              style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFCC0020))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Supported formats ───────────────────────────
+          Text('Supported formats',
+              style: GoogleFonts.sora(fontSize: 12, color: textSecondary, letterSpacing: 0.4)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _formatChip('PNG', Icons.image_outlined, isWhite),
+              const SizedBox(width: 10),
+              _formatChip('JPG', Icons.photo_outlined, isWhite),
+              const SizedBox(width: 10),
+              _formatChip('PDF', Icons.picture_as_pdf_outlined, isWhite),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _formatChip(String label, IconData icon, bool isWhite) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isWhite ? Colors.white : const Color(0xFF120404),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFCC0020).withOpacity(0.35),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: const Color(0xFFCC0020), size: 22),
+            const SizedBox(height: 6),
+            Text(label, style: GoogleFonts.sora(
+              fontSize: 12, fontWeight: FontWeight.w600,
+              color: isWhite ? EleghartColors.accentDark : Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaceholder(String title, IconData icon) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 48, color: Colors.white24),
+          Icon(icon, size: 48, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.25) : Colors.white24),
           const SizedBox(height: 16),
           Text(
             '$title coming soon',
             style: GoogleFonts.sora(
               fontSize: 16,
-              color: Colors.white38,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38,
             ),
           ),
         ],
@@ -587,21 +809,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.08) : Colors.white.withOpacity(0.18),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: Colors.white),
+        Icon(icon, size: 16, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
             ),
           ),
         ),
@@ -767,4 +989,34 @@ class _HomeDashboardState extends State<HomeDashboard> {
       child: Icon(Icons.group, color: Colors.white),
     );
   }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  const _DashedBorderPainter({required this.color, this.strokeWidth = 1.5, this.radius = 14});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, size.width, size.height), Radius.circular(radius)));
+    const dashWidth = 8.0;
+    const dashSpace = 5.0;
+    for (final metric in path.computeMetrics()) {
+      double d = 0;
+      while (d < metric.length) {
+        canvas.drawPath(metric.extractPath(d, d + dashWidth), paint);
+        d += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter old) => color != old.color;
 }
