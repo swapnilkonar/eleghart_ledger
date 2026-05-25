@@ -1,0 +1,593 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
+import '../models/group_model.dart';
+import '../models/recurring_expense_model.dart';
+import '../services/storage_service.dart';
+import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
+
+class AddRecurringExpenseScreen extends StatefulWidget {
+  final RecurringExpenseModel? existing;
+
+  const AddRecurringExpenseScreen({super.key, this.existing});
+
+  @override
+  State<AddRecurringExpenseScreen> createState() =>
+      _AddRecurringExpenseScreenState();
+}
+
+class _AddRecurringExpenseScreenState
+    extends State<AddRecurringExpenseScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+
+  String _frequency = 'monthly';
+  String _category = 'Bills & Utilities';
+  String _groupId = '';
+  DateTime _startDate = DateTime.now();
+  DateTime? _endDate;
+  bool _hasEndDate = false;
+
+  List<GroupModel> _groups = [];
+  bool _saving = false;
+
+  static const _frequencies = ['weekly', 'monthly', 'quarterly', 'yearly'];
+  static const _categories = [
+    'Food & Dining', 'Travel', 'Shopping', 'Bills & Utilities',
+    'Fuel', 'Entertainment', 'Health', 'Rent', 'EMI', 'Others',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    AppThemeNotifier.instance.addListener(_onTheme);
+    _loadGroups();
+    if (widget.existing != null) {
+      final e = widget.existing!;
+      _nameCtrl.text = e.name;
+      _amountCtrl.text = e.amount.toStringAsFixed(0);
+      _descCtrl.text = e.description;
+      _frequency = e.frequency;
+      _category = e.category;
+      _groupId = e.groupId;
+      _startDate = e.startDate;
+      _endDate = e.endDate;
+      _hasEndDate = e.endDate != null;
+    }
+  }
+
+  void _onTheme() => setState(() {});
+
+  @override
+  void dispose() {
+    AppThemeNotifier.instance.removeListener(_onTheme);
+    _nameCtrl.dispose();
+    _amountCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadGroups() async {
+    final g = await StorageService.loadGroups();
+    if (mounted) {
+      setState(() {
+        _groups = g;
+        if (_groupId.isEmpty && g.isNotEmpty) _groupId = g.first.id;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+
+    final list = await StorageService.loadRecurring();
+    final model = RecurringExpenseModel(
+      id: widget.existing?.id ?? '',
+      name: _nameCtrl.text.trim(),
+      amount: double.parse(_amountCtrl.text.trim()),
+      frequency: _frequency,
+      startDate: _startDate,
+      endDate: _hasEndDate ? _endDate : null,
+      groupId: _groupId,
+      category: _category,
+      description: _descCtrl.text.trim(),
+      isActive: widget.existing?.isActive ?? true,
+      lastGeneratedDate: widget.existing?.lastGeneratedDate,
+    );
+
+    if (widget.existing != null) {
+      final idx = list.indexWhere((r) => r.id == widget.existing!.id);
+      if (idx >= 0) list[idx] = model;
+    } else {
+      list.add(RecurringExpenseModel.create(
+        name: model.name,
+        amount: model.amount,
+        frequency: model.frequency,
+        startDate: model.startDate,
+        endDate: model.endDate,
+        groupId: model.groupId,
+        category: model.category,
+        description: model.description,
+      ));
+    }
+
+    await StorageService.saveRecurring(list);
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isStart ? _startDate : (_endDate ?? now),
+      firstDate: isStart ? DateTime(2020) : _startDate,
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startDate = picked;
+      } else {
+        _endDate = picked;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhite = AppThemeNotifier.isWhite;
+    final bg = isWhite ? const Color(0xFFF5F5F5) : Colors.black;
+    final cardBg = isWhite ? Colors.white : const Color(0xFF120404);
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.5)
+        : Colors.white54;
+    final border =
+        isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: Stack(
+        children: [
+          Positioned.fill(
+              child: ThemedBackground(darkOverlayOpacity: 0.72)),
+          SafeArea(
+            child: Column(
+              children: [
+                _appBar(textPrimary, textSec),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _field(
+                            label: 'Expense Name',
+                            ctrl: _nameCtrl,
+                            hint: 'e.g. Rent, Netflix, Insurance',
+                            textPrimary: textPrimary,
+                            textSec: textSec,
+                            border: border,
+                            cardBg: cardBg,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _field(
+                            label: 'Amount (₹)',
+                            ctrl: _amountCtrl,
+                            hint: '0',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d.]'))
+                            ],
+                            textPrimary: textPrimary,
+                            textSec: textSec,
+                            border: border,
+                            cardBg: cardBg,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Required';
+                              if (double.tryParse(v) == null ||
+                                  double.parse(v) <= 0) {
+                                return 'Enter a valid amount';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _sectionLabel('Frequency', textSec),
+                          const SizedBox(height: 8),
+                          _frequencySelector(textPrimary, textSec, border, cardBg),
+                          const SizedBox(height: 16),
+                          _dropdownField(
+                            label: 'Category',
+                            value: _category,
+                            items: _categories,
+                            onChanged: (v) => setState(() => _category = v!),
+                            textPrimary: textPrimary,
+                            textSec: textSec,
+                            border: border,
+                            cardBg: cardBg,
+                          ),
+                          const SizedBox(height: 16),
+                          if (_groups.isNotEmpty)
+                            _dropdownField(
+                              label: 'Group',
+                              value: _groupId.isEmpty ? _groups.first.id : _groupId,
+                              items: _groups.map((g) => g.id).toList(),
+                              displayNames: _groups.map((g) => g.name).toList(),
+                              onChanged: (v) =>
+                                  setState(() => _groupId = v!),
+                              textPrimary: textPrimary,
+                              textSec: textSec,
+                              border: border,
+                              cardBg: cardBg,
+                            ),
+                          const SizedBox(height: 16),
+                          _dateRow(
+                            label: 'Start Date',
+                            date: _startDate,
+                            onTap: () => _pickDate(isStart: true),
+                            textPrimary: textPrimary,
+                            textSec: textSec,
+                            border: border,
+                            cardBg: cardBg,
+                          ),
+                          const SizedBox(height: 16),
+                          _endDateSection(
+                              textPrimary, textSec, border, cardBg),
+                          const SizedBox(height: 16),
+                          _field(
+                            label: 'Description (optional)',
+                            ctrl: _descCtrl,
+                            hint: 'e.g. House Rent Mumbai',
+                            textPrimary: textPrimary,
+                            textSec: textSec,
+                            border: border,
+                            cardBg: cardBg,
+                          ),
+                          const SizedBox(height: 32),
+                          _saveButton(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── App Bar ───────────────────────────────────────────────────────────────
+
+  Widget _appBar(Color textPrimary, Color textSec) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded,
+                color: textPrimary, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Text(
+            widget.existing == null
+                ? 'Add Recurring'
+                : 'Edit Recurring',
+            style: GoogleFonts.sora(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Frequency Selector ────────────────────────────────────────────────────
+
+  Widget _frequencySelector(Color textPrimary, Color textSec, Color border,
+      Color cardBg) {
+    return Row(
+      children: _frequencies
+          .map((f) => Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _frequency = f),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _frequency == f
+                          ? const Color(0xFFCC0020)
+                          : cardBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: _frequency == f
+                              ? const Color(0xFFCC0020)
+                              : border),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _capitalize(f),
+                        style: GoogleFonts.sora(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _frequency == f
+                              ? Colors.white
+                              : textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  // ─── End Date Section ──────────────────────────────────────────────────────
+
+  Widget _endDateSection(
+      Color textPrimary, Color textSec, Color border, Color cardBg) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('End Date',
+                style: GoogleFonts.sora(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: textSec)),
+            Row(
+              children: [
+                Text('Never',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: textSec)),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _hasEndDate,
+                  onChanged: (v) => setState(() {
+                    _hasEndDate = v;
+                    if (v && _endDate == null) {
+                      _endDate = DateTime.now()
+                          .add(const Duration(days: 365));
+                    }
+                  }),
+                  activeColor: const Color(0xFFCC0020),
+                ),
+                Text('Set Date',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: textSec)),
+              ],
+            ),
+          ],
+        ),
+        if (_hasEndDate && _endDate != null)
+          _dateRow(
+            label: '',
+            date: _endDate!,
+            onTap: () => _pickDate(isStart: false),
+            textPrimary: textPrimary,
+            textSec: textSec,
+            border: border,
+            cardBg: cardBg,
+          ),
+      ],
+    );
+  }
+
+  // ─── Save Button ───────────────────────────────────────────────────────────
+
+  Widget _saveButton() => SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+                colors: [Color(0xFF7A0010), Color(0xFFCC0020)]),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFFCC0020).withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
+            ],
+          ),
+          child: ElevatedButton(
+            onPressed: _saving ? null : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+            child: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2))
+                : Text(
+                    widget.existing == null
+                        ? 'Create Recurring Expense'
+                        : 'Save Changes',
+                    style: GoogleFonts.sora(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
+          ),
+        ),
+      );
+
+  // ─── Reusable widgets ──────────────────────────────────────────────────────
+
+  Widget _sectionLabel(String label, Color color) => Text(label,
+      style: GoogleFonts.sora(
+          fontSize: 13, fontWeight: FontWeight.w600, color: color));
+
+  Widget _field({
+    required String label,
+    required TextEditingController ctrl,
+    required String hint,
+    required Color textPrimary,
+    required Color textSec,
+    required Color border,
+    required Color cardBg,
+    TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty) ...[
+          _sectionLabel(label, textSec),
+          const SizedBox(height: 6),
+        ],
+        TextFormField(
+          controller: ctrl,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          validator: validator,
+          style: GoogleFonts.sora(fontSize: 14, color: textPrimary),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.sora(fontSize: 13, color: textSec),
+            filled: true,
+            fillColor: cardBg,
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: Color(0xFFCC0020), width: 1.5)),
+            errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: Colors.red)),
+            focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: Colors.red, width: 1.5)),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dropdownField({
+    required String label,
+    required String value,
+    required List<String> items,
+    List<String>? displayNames,
+    required ValueChanged<String?> onChanged,
+    required Color textPrimary,
+    required Color textSec,
+    required Color border,
+    required Color cardBg,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel(label, textSec),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : items.first,
+              isExpanded: true,
+              dropdownColor: cardBg,
+              style: GoogleFonts.sora(fontSize: 14, color: textPrimary),
+              items: items.asMap().entries.map((entry) {
+                final display = displayNames != null
+                    ? displayNames[entry.key]
+                    : _capitalize(entry.value);
+                return DropdownMenuItem(
+                  value: entry.value,
+                  child: Text(display,
+                      style: GoogleFonts.sora(
+                          fontSize: 14, color: textPrimary)),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dateRow({
+    required String label,
+    required DateTime date,
+    required VoidCallback onTap,
+    required Color textPrimary,
+    required Color textSec,
+    required Color border,
+    required Color cardBg,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty) ...[
+          _sectionLabel(label, textSec),
+          const SizedBox(height: 6),
+        ],
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined,
+                    color: Color(0xFFCC0020), size: 18),
+                const SizedBox(width: 10),
+                Text(DateFormat('dd MMM yyyy').format(date),
+                    style:
+                        GoogleFonts.sora(fontSize: 14, color: textPrimary)),
+                const Spacer(),
+                Icon(Icons.arrow_forward_ios_rounded,
+                    size: 14, color: textSec),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+}

@@ -14,6 +14,9 @@ import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
 import 'create_group_screen.dart';
+import 'expense_list_screen.dart';
+import 'recurring_expense_list_screen.dart';
+import 'emi_list_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -31,6 +34,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   int _currentTab = 0;
   final _groupsKey = GlobalKey<GroupsScreenState>();
+  final _expenseListKey = GlobalKey<ExpenseListScreenState>();
 
   // -------- LEDGER TOTALS --------
   double _totalDebit = 0;
@@ -147,6 +151,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
       _loadDashboardData();
       _groupsKey.currentState?.reload();
       setState(() => _currentTab = 2);
+    }
+  }
+
+  // _openAddExpenseWithGroupSelection moved to ExpensesScreen
+
+  void _onExpenseAdded() {
+    _loadDashboardData();
+    _groupsKey.currentState?.reload();
+    _expenseListKey.currentState?.reload();
+  }
+
+  void _switchTab(int index) {
+    setState(() => _currentTab = index);
+    if (index == 1) {
+      _expenseListKey.currentState?.reload();
     }
   }
 
@@ -270,7 +289,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final isActive = _currentTab == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentTab = index),
+        onTap: () => _switchTab(index),
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -315,7 +334,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               index: _currentTab,
               children: [
                 _buildHomeTab(greeting),
-                _buildExpensesTab(),
+                ExpenseListScreen(key: _expenseListKey, onExpenseAdded: _onExpenseAdded),
                 GroupsScreen(key: _groupsKey, userName: _userName),
                 _buildPlaceholder('Insights', Icons.bar_chart_rounded),
                 ProfileScreen(
@@ -333,8 +352,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 
   Widget _buildHomeTab(String greeting) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.5)
+        : Colors.white54;
+    final cardBg = isWhite ? Colors.white : const Color(0xFF120404);
+    final border =
+        isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -345,7 +373,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             style: GoogleFonts.sora(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+              color: textPrimary,
             ),
           ),
           const SizedBox(height: 4),
@@ -353,282 +381,206 @@ class _HomeDashboardState extends State<HomeDashboard> {
             'Your financial spaces',
             style: GoogleFonts.sora(
               fontSize: 13,
-              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.55) : Colors.white54,
+              color: textSec,
               letterSpacing: 0.3,
             ),
           ),
-          const Spacer(),
-          Center(
+          const SizedBox(height: 24),
+
+          // ── Summary Card ──────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6))
+              ],
+            ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCC0020).withOpacity(0.10),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.dashboard_rounded,
-                    color: Color(0xFFCC0020),
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                Text('Total Expenses',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: Colors.white70)),
+                const SizedBox(height: 4),
                 Text(
-                  'Dashboard',
+                  '₹${_totalDebit >= 100000 ? (_totalDebit / 100000).toStringAsFixed(1) + 'L' : _totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
                   style: GoogleFonts.sora(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.7) : Colors.white70,
-                  ),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Coming soon',
-                  style: GoogleFonts.sora(
-                    fontSize: 14,
-                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.35) : Colors.white30,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpensesTab() {
-    final isWhite = AppThemeNotifier.isWhite;
-    final cardColor = isWhite ? Colors.white : const Color(0xFF120404);
-    final borderColor = isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
-    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
-    final textSecondary = isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add Expense',
-            style: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Upload a receipt or fill in manually',
-            style: GoogleFonts.sora(fontSize: 13, color: textSecondary),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Upload box ──────────────────────────────────
-          CustomPaint(
-            painter: _DashedBorderPainter(color: const Color(0xFFCC0020).withOpacity(0.7)),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              decoration: BoxDecoration(
-                color: const Color(0xFFCC0020).withOpacity(isWhite ? 0.03 : 0.07),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.cloud_upload_rounded, color: const Color(0xFFCC0020), size: 48),
-                  const SizedBox(height: 12),
-                  Text('Upload Receipt or Invoice',
-                      style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
-                  const SizedBox(height: 6),
-                  Text('PNG, JPG, PDF up to 10MB',
-                      style: GoogleFonts.sora(fontSize: 12, color: textSecondary)),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── OR divider ──────────────────────────────────
-          Row(
-            children: [
-              Expanded(child: Divider(color: borderColor, thickness: 1)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('OR', style: GoogleFonts.sora(fontSize: 12, color: textSecondary, fontWeight: FontWeight.w600, letterSpacing: 1.5)),
-              ),
-              Expanded(child: Divider(color: borderColor, thickness: 1)),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Take Photo ──────────────────────────────────
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1),
-              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
-            ),
-            child: ListTile(
-              leading: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFCC0020).withOpacity(0.10),
-                ),
-                child: const Icon(Icons.camera_alt_outlined, color: Color(0xFFCC0020), size: 20),
-              ),
-              title: Text('Take Photo',
-                  style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary)),
-              trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textSecondary),
-            ),
-          ),
-
-          // ── Choose from Gallery ─────────────────────────
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1),
-              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
-            ),
-            child: ListTile(
-              leading: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFCC0020).withOpacity(0.10),
-                ),
-                child: const Icon(Icons.folder_outlined, color: Color(0xFFCC0020), size: 20),
-              ),
-              title: Text('Choose from Gallery',
-                  style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary)),
-              trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textSecondary),
-            ),
-          ),
-
-          // ── Eleghart AI Agent card ──────────────────────
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1),
-              boxShadow: isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 2))] : [],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 54, height: 54,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFCC0020).withOpacity(0.12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Image.asset('assets/icons/eleghart_icon.png', fit: BoxFit.contain),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Eleghart AI Agent',
-                          style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: textPrimary)),
-                      const SizedBox(height: 4),
-                      Text('Reading your document...',
-                          style: GoogleFonts.sora(fontSize: 12, color: textSecondary)),
-                      const SizedBox(height: 8),
-                      Stack(
-                        children: [
-                          Container(
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: 0.75,
-                            child: Container(
-                              height: 4,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFCC0020), Color(0xFFFF3355)],
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Extracting expenses and details',
-                              style: GoogleFonts.sora(fontSize: 10, color: textSecondary)),
-                          Text('75%',
-                              style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFCC0020))),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _summaryPill('↑ Income',
+                      '₹${_totalCredit >= 1000 ? (_totalCredit / 1000).toStringAsFixed(1) + 'K' : _totalCredit.toStringAsFixed(0)}',
+                      const Color(0xFF22C55E)),
+                  const SizedBox(width: 10),
+                  _summaryPill('↓ Spent',
+                      '₹${_totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
+                      Colors.white70),
+                  const SizedBox(width: 10),
+                  _summaryPill('${_totalExpensesCount} Items', '', Colors.white54),
+                ]),
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // ── Supported formats ───────────────────────────
-          Text('Supported formats',
-              style: GoogleFonts.sora(fontSize: 12, color: textSecondary, letterSpacing: 0.4)),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _formatChip('PNG', Icons.image_outlined, isWhite),
-              const SizedBox(width: 10),
-              _formatChip('JPG', Icons.photo_outlined, isWhite),
-              const SizedBox(width: 10),
-              _formatChip('PDF', Icons.picture_as_pdf_outlined, isWhite),
-            ],
+          // ── Quick Actions ─────────────────────────────────────
+          Text('Quick Actions',
+              style: GoogleFonts.sora(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Add Expense',
+                color: const Color(0xFFCC0020),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () => _switchTab(1),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.repeat_rounded,
+                label: 'Recurring',
+                color: const Color(0xFF6366F1),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            const RecurringExpenseListScreen())),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.credit_card_outlined,
+                label: 'EMI',
+                color: const Color(0xFF0EA5E9),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const EmiListScreen())),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // ── Recent Activity placeholder ────────────────────────
+          Text('Recent Activity',
+              style: GoogleFonts.sora(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary)),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.bar_chart_rounded,
+                    size: 40,
+                    color: textSec.withOpacity(0.4)),
+                const SizedBox(height: 12),
+                Text('Dashboard & Insights',
+                    style: GoogleFonts.sora(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary)),
+                const SizedBox(height: 4),
+                Text('Coming soon',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: textSec)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _formatChip(String label, IconData icon, bool isWhite) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+  Widget _summaryPill(String label, String value, Color color) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isWhite ? Colors.white : const Color(0xFF120404),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFCC0020).withOpacity(0.35),
-            width: 1,
-          ),
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: const Color(0xFFCC0020), size: 22),
-            const SizedBox(height: 6),
-            Text(label, style: GoogleFonts.sora(
-              fontSize: 12, fontWeight: FontWeight.w600,
-              color: isWhite ? EleghartColors.accentDark : Colors.white)),
-          ],
+        child: Text(
+          value.isNotEmpty ? '$label: $value' : label,
+          style: GoogleFonts.sora(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color),
         ),
+      );
+
+  Widget _quickActionCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color cardBg,
+    required Color border,
+    required Color textPrimary,
+    required Color textSec,
+    required VoidCallback onTap,
+  }) {
+    final isWhite = AppThemeNotifier.isWhite;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isWhite ? 0.06 : 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Column(children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 6),
+          Text(label,
+              style: GoogleFonts.sora(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary)),
+        ]),
       ),
     );
   }
+
+  // _buildExpensesTab and _formatChip moved to ExpensesScreen
 
   Widget _buildPlaceholder(String title, IconData icon) {
     return Center(
@@ -980,32 +932,4 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 }
 
-class _DashedBorderPainter extends CustomPainter {
-  final Color color;
-  final double strokeWidth;
-  final double radius;
-  const _DashedBorderPainter({required this.color, this.strokeWidth = 1.5, this.radius = 14});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke;
-    final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, size.width, size.height), Radius.circular(radius)));
-    const dashWidth = 8.0;
-    const dashSpace = 5.0;
-    for (final metric in path.computeMetrics()) {
-      double d = 0;
-      while (d < metric.length) {
-        canvas.drawPath(metric.extractPath(d, d + dashWidth), paint);
-        d += dashWidth + dashSpace;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorderPainter old) => color != old.color;
-}
+// _DashedBorderPainter moved to expenses_screen.dart

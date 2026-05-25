@@ -19,6 +19,25 @@
     "note": "type defaults to 'debit' for backward compatibility. Old records without 'type' key are treated as debit."
   },
 
+  "AIExtractionService": {
+    "file": "lib/services/ai_extraction_service.dart",
+    "type": "class (all static)",
+    "methods": [
+      "extractFromImage({imageFile:File})→Future<List<ExtractedItem>> — on-device ML Kit OCR",
+      "extractFromPdf({pdfFile:File})→Future<List<ExtractedItem>> — throws UnsupportedError (not yet implemented)"
+    ],
+    "companion": "_ReceiptParser (private) — parses raw OCR text into ExtractedItem list",
+    "note": "Fully free, on-device, no API key. Uses google_mlkit_text_recognition package.",
+    "categories": ["Food & Dining","Travel","Shopping","Bills & Utilities","Fuel","Entertainment","Health","Others"]
+  },
+
+  "ExtractedItem": {
+    "file": "lib/screens/extracted_expenses_screen.dart",
+    "type": "class (immutable data)",
+    "fields": ["id:String(UUID)", "description:String", "amount:double", "category:String", "date:DateTime"],
+    "note": "Temporary model used during AI review flow. Converted to ExpenseModel on save."
+  },
+
   "StorageService": {
     "file": "lib/services/storage_service.dart",
     "type": "class (all static)",
@@ -92,18 +111,63 @@
     "file": "lib/screens/home_dashboard.dart",
     "type": "StatefulWidget",
     "constructor": "HomeDashboard({userName:String})",
-    "key_state": ["_userName:String", "_groups:List<GroupModel>", "_expenses:List<ExpenseModel>", "_currentTab:int(0-3)", "_loading:bool", "_totalDebit", "_totalCredit", "_netBalance"],
+    "key_state": ["_userName:String", "_groups:List<GroupModel>", "_expenses:List<ExpenseModel>", "_currentTab:int(0-3)", "_loading:bool", "_totalDebit", "_totalCredit", "_netBalance", "_groupsKey:GlobalKey<GroupsScreenState>", "_expenseListKey:GlobalKey<ExpenseListScreenState>"],
     "key_methods": [
-      "_buildHomeTab(greeting)→Widget (line ~346) — Tab 0 UI",
-      "_buildSummaryCard()→Widget (line ~436) — red gradient summary",
-      "_summaryChip({icon,label})→Widget (line ~589)",
+      "_buildHomeTab(greeting)→Widget — Tab 0 UI",
+      "_buildSummaryCard()→Widget — red gradient summary",
       "_buildAppBar()→PreferredSizeWidget",
       "_buildBottomNav()→Widget",
-      "_buildPlaceholder(title,icon)→Widget — placeholder for tabs 2&3"
+      "_switchTab(index) — use instead of setState; auto-reloads ExpenseListScreen when index==1",
+      "_onExpenseAdded() — reloads dashboard + groupsKey + expenseListKey",
+      "_openCreateGroup() — navigates to CreateGroupScreen"
     ],
-    "tabs": ["0=Home summary", "1=GroupsScreen widget", "2=Insights placeholder", "3=Profile placeholder"],
+    "tabs": ["0=HomeTab summary", "1=ExpenseListScreen (GlobalKey:_expenseListKey)", "2=GroupsScreen (GlobalKey:_groupsKey)", "3=Insights placeholder"],
     "theme_listener": true,
     "overlay_opacity": 0.65
+  },
+
+  "ExpenseListScreen": {
+    "file": "lib/screens/expense_list_screen.dart",
+    "type": "StatefulWidget (GlobalKey: ExpenseListScreenState)",
+    "constructor": "ExpenseListScreen({key, onExpenseAdded:VoidCallback?})",
+    "key_state": ["_expenses", "_groups", "_selected:Set<String>", "_isSelecting:bool", "_filterCat:String?"],
+    "key_methods": [
+      "reload()→Future<void> — public, called via GlobalKey to refresh from StorageService",
+      "_openAddExpense() — pushes ExpensesScreen, then reload()+onExpenseAdded()",
+      "_showBulkSheet() — bottom sheet for bulk delete/move/categorize",
+      "_buildItem(ExpenseModel) — card with receipt thumbnail, category+group chips, date",
+      "_infoChip(label,icon,color) — small badge chip for category/group display"
+    ],
+    "note": "No Scaffold — renders inside HomeDashboard IndexedStack. Theme-sensitive via listener."
+  },
+
+  "ExpensesScreen": {
+    "file": "lib/screens/expenses_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "ExpensesScreen({key})",
+    "key_state": ["_processing:bool", "_progress:double", "_statusText:String", "_pdfToastVisible:bool", "_pdfToastSuccess:bool", "_pdfToastTitle:String", "_pdfToastSubtitle:String", "_toastTimer:Timer?", "_groups:List<GroupModel>"],
+    "key_methods": [
+      "_pickCamera() — image_picker camera → _runAI(isPdf:false)",
+      "_pickGallery() — image_picker gallery → _runAI(isPdf:false)",
+      "_pickPdf() — file_picker PDF → _showPdfPasswordDialog() → _runAI(isPdf:true)",
+      "_runAI(file,fileName,{isPdf}) — calls AIExtractionService, shows ExtractedExpensesScreen",
+      "_showPdfPasswordDialog() → Future<String?> — Dialog with lock icon + eye-toggle field",
+      "_triggerToast({success,title,subtitle,autoDismiss}) — shows _PdfToastCard overlay",
+      "_dismissToast() — cancels Timer, hides toast",
+      "_openAddManually() — group picker BottomSheet → AddExpenseScreen → pops to ExpenseListScreen",
+      "_buildAgentCard() — Eleghart AI Agent status card with animated progress bar",
+      "_buildScaffold() — main scaffold content (build returns Stack with toast overlay)"
+    ],
+    "build_structure": "Stack([_buildScaffold(...), AnimatedPositioned(toast)])",
+    "theme_listener": true
+  },
+
+  "ExtractedExpensesScreen": {
+    "file": "lib/screens/extracted_expenses_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "ExtractedExpensesScreen({items:List<ExtractedItem>, sourceName:String})",
+    "purpose": "AI review screen — user verifies/edits AI-extracted items, assigns group, bulk saves to StorageService",
+    "overlay_opacity": 0.72
   },
 
   "GroupsScreen": {

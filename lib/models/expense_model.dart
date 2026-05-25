@@ -52,16 +52,24 @@ class ExpenseModel {
     );
   }
 
-  ExpenseModel copyWith({List<String>? categories}) {
+  ExpenseModel copyWith({
+    String? groupId,
+    double? amount,
+    String? description,
+    List<String>? categories,
+    DateTime? date,
+    String? imagePath,
+    String? type,
+  }) {
     return ExpenseModel(
       id: id,
-      groupId: groupId,
-      amount: amount,
-      description: description,
+      groupId: groupId ?? this.groupId,
+      amount: amount ?? this.amount,
+      description: description ?? this.description,
       categories: categories ?? this.categories,
-      date: date,
-      imagePath: imagePath,
-      type: type,
+      date: date ?? this.date,
+      imagePath: imagePath ?? this.imagePath,
+      type: type ?? this.type,
     );
   }
 

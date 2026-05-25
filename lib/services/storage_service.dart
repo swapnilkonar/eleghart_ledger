@@ -2,12 +2,16 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
+import '../models/recurring_expense_model.dart';
+import '../models/emi_model.dart';
 
 class StorageService {
   static const _groupsKey = 'groups_v2';
   static const _expensesKey = 'expenses_v2';
   static const _categoryImagesKey = 'category_images_v1';
   static const _globalCategoriesKey = 'global_categories_v1';
+  static const _recurringKey = 'recurring_v1';
+  static const _emiKey = 'emi_v1';
 
   static Future<List<String>> loadGlobalCategories() async {
     final prefs = await SharedPreferences.getInstance();
@@ -53,5 +57,36 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final raw = expenses.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList(_expensesKey, raw);
+  }
+
+  // ─── Recurring Expenses ───────────────────────────────────────────────────
+
+  static Future<List<RecurringExpenseModel>> loadRecurring() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_recurringKey) ?? [];
+    return raw
+        .map((e) => RecurringExpenseModel.fromJson(jsonDecode(e)))
+        .toList();
+  }
+
+  static Future<void> saveRecurring(
+      List<RecurringExpenseModel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = list.map((r) => jsonEncode(r.toJson())).toList();
+    await prefs.setStringList(_recurringKey, raw);
+  }
+
+  // ─── EMI ─────────────────────────────────────────────────────────────────
+
+  static Future<List<EmiModel>> loadEmis() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_emiKey) ?? [];
+    return raw.map((e) => EmiModel.fromJson(jsonDecode(e))).toList();
+  }
+
+  static Future<void> saveEmis(List<EmiModel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = list.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList(_emiKey, raw);
   }
 }

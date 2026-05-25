@@ -7,7 +7,9 @@ Flutter personal finance ledger: users create Groups, log Debit/Credit expenses 
 
 ### Tech Stack (exact)
 - Flutter/Dart · SharedPreferences · google_fonts · fl_chart · pdf+printing · share_plus · image_picker · uuid · smooth_page_indicator · open_filex
-- NO: Firebase, Riverpod, Provider, Bloc, Hive, SQLite
+- `google_mlkit_text_recognition: ^0.13.0` — on-device OCR for receipt/invoice scanning (no API key)
+- `file_picker: ^8.1.2` — PDF file picking from device storage
+- NO: Firebase, Riverpod, Provider, Bloc, Hive, SQLite, external AI APIs
 
 ### State Management Rule
 `ValueNotifier` for cross-widget state, `setState` for local. Add `addListener(_onX)` in `initState`, remove in `dispose`. See `AppThemeNotifier` as the canonical example.
@@ -38,14 +40,22 @@ main() → PremiumSplashScreen (3s animated)
   ├── [new user]     → WelcomeScreen → OnboardingScreen → SetPinScreen → HomeDashboard
   └── [returning]    → PinUnlockScreen → HomeDashboard
                                          └── Tab 0: HomeTab (summary + quick stats)
-                                             Tab 1: GroupsScreen (list + stats card)
-                                             Tab 2: Insights (placeholder)
-                                             Tab 3: Profile (placeholder)
+                                             Tab 1: ExpenseListScreen (all expenses, bulk actions)
+                                             Tab 2: GroupsScreen (list + stats card)
+                                             Tab 3: Insights (placeholder)
+ExpenseListScreen FAB → ExpensesScreen (AI upload hub)
+  ├── Take Photo / Gallery → AIExtractionService.extractFromImage() → ExtractedExpensesScreen
+  ├── Upload PDF → PDF password dialog → AIExtractionService.extractFromPdf() → ExtractedExpensesScreen
+  └── Add Manually → group picker BottomSheet → AddExpenseScreen → pops → ExpenseListScreen
 GroupsScreen → GroupDetailScreen → AddExpenseScreen
                                  → ExportPdfScreen
                                  → CategoriesListScreen → CategoryDetailScreen
 HomeDashboard appbar avatar icon → ProfileSheet (BottomSheet)
 ```
+
+### Tab Switching
+`HomeDashboard._switchTab(index)` — replaces direct `setState`. When index==1 (ExpenseListScreen),
+calls `_expenseListKey.currentState?.reload()` automatically to ensure fresh data.
 
 ### Data Keys in SharedPreferences
 | Key | Type | Value |
@@ -59,6 +69,12 @@ HomeDashboard appbar avatar icon → ProfileSheet (BottomSheet)
 | `pin_set` | bool | whether PIN has been configured |
 | `user_pin` | String | 4-digit PIN (plaintext) |
 | `has_seen_onboarding` | bool | skip onboarding flag |
+
+### GlobalKeys in HomeDashboard
+| Key | Type | Purpose |
+|-----|------|---------|
+| `_groupsKey` | `GlobalKey<GroupsScreenState>` | Call `reload()` after group changes |
+| `_expenseListKey` | `GlobalKey<ExpenseListScreenState>` | Call `reload()` after any expense change |
 
 ### Asset Paths
 ```
