@@ -444,13 +444,15 @@ class _ExpensesScreenState extends State<ExpensesScreen>
       return;
     }
 
-    await Navigator.push(
+    final added = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) =>
             ExtractedExpensesScreen(items: items, sourceName: fileName),
       ),
     );
+
+    if (added == true && mounted) Navigator.pop(context);
   }
 
   // ─── build ────────────────────────────────────────────────────────────────

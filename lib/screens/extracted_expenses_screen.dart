@@ -103,18 +103,29 @@ class _ExtractedExpensesScreenState extends State<ExtractedExpensesScreen> {
     final group = await _pickGroup();
     if (group == null || !mounted) return;
 
+    final details = await _promptGroupDetails(group);
+    if (details == null || !mounted) return;
+
     setState(() => _saving = true);
     final existing = await StorageService.loadExpenses();
+
+    final date = details['date'] as DateTime;
+    final List<String> groupCats = details['categories'] as List<String>;
+
     final newItems = sel
-        .map((item) => ExpenseModel(
+        .map((item) {
+          final cats = [item.category];
+          if (groupCats.isNotEmpty) cats.addAll(groupCats);
+          return ExpenseModel(
               id: const Uuid().v4(),
               groupId: group.id,
               amount: item.amount,
               description: item.description,
-              categories: [item.category],
-              date: item.date,
+              categories: cats,
+              date: date,
               type: 'debit',
-            ))
+            );
+        })
         .toList();
     await StorageService.saveExpenses([...existing, ...newItems]);
 
@@ -133,6 +144,134 @@ class _ExtractedExpensesScreenState extends State<ExtractedExpensesScreen> {
         backgroundColor: Colors.transparent,
         builder: (_) => _GroupPickerSheet(groups: _groups),
       );
+
+  Future<Map<String, dynamic>?> _promptGroupDetails(GroupModel group) async {
+    final isWhite = AppThemeNotifier.isWhite;
+    final bg = isWhite ? Colors.white : const Color(0xFF120404);
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+
+    DateTime selectedDate = DateTime.now();
+    Set<String> selectedMembers = {};
+
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => Container(
+          decoration: BoxDecoration(
+              color: bg,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24))),
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Text('Details for ${group.name}',
+                  style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: textPrimary)),
+              const SizedBox(height: 20),
+              Text('Select Members/Categories',
+                  style: GoogleFonts.sora(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: group.categories.map((c) {
+                  final sel = selectedMembers.contains(c);
+                  return GestureDetector(
+                    onTap: () => setSt(() {
+                      sel ? selectedMembers.remove(c) : selectedMembers.add(c);
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                          color: sel ? const Color(0xFFCC0020).withOpacity(0.12) : Colors.transparent,
+                          border: Border.all(
+                              color: sel ? const Color(0xFFCC0020) : Colors.grey.withOpacity(0.5)),
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Text(c, style: GoogleFonts.sora(color: textPrimary, fontSize: 13)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              if (group.categories.isEmpty)
+                Text('No members in this group.',
+                    style: GoogleFonts.sora(color: Colors.grey, fontSize: 13)),
+              const SizedBox(height: 20),
+              Text('Date',
+                  style: GoogleFonts.sora(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary)),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setSt(() => selectedDate = picked);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isWhite ? const Color(0xFFF8F8F8) : const Color(0xFF1C0606),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, size: 18, color: Color(0xFFCC0020)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('${selectedDate.toLocal()}'.split(' ')[0],
+                            style: GoogleFonts.sora(fontSize: 14, color: textPrimary)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _actionButton('Confirm & Add', () {
+                if (selectedMembers.isEmpty && group.categories.isNotEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please select at least one member/category')));
+                  return;
+                }
+                Navigator.pop(ctx, {
+                  'date': selectedDate,
+                  'categories': selectedMembers.toList(),
+                });
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   // ─── Edit item ────────────────────────────────────────────────────────────
 

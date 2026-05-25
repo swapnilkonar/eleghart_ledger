@@ -14,6 +14,12 @@
 -dontwarn com.google.mlkit.vision.text.japanese.**
 -dontwarn com.google.mlkit.vision.text.korean.**
 
+# ── pdfx / PDFium ────────────────────────────────────────────────────────────
+-keep class com.pdfx.** { *; }
+-keep class io.scer.pdf_renderer.** { *; }
+-dontwarn com.pdfx.**
+-dontwarn io.scer.pdf_renderer.**
+
 # ── Flutter ───────────────────────────────────────────────────────────────────
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }

@@ -17,6 +17,7 @@ import 'create_group_screen.dart';
 import 'expense_list_screen.dart';
 import 'recurring_expense_list_screen.dart';
 import 'emi_list_screen.dart';
+import 'insights_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -336,7 +337,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 _buildHomeTab(greeting),
                 ExpenseListScreen(key: _expenseListKey, onExpenseAdded: _onExpenseAdded),
                 GroupsScreen(key: _groupsKey, userName: _userName),
-                _buildPlaceholder('Insights', Icons.bar_chart_rounded),
+                const InsightsScreen(),
                 ProfileScreen(
                   userName: _userName,
                   onNameChanged: (newName) {
