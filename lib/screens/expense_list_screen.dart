@@ -484,11 +484,15 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
         child: Row(
           children: [
-            Text(
-              '${filtered.length} expense${filtered.length == 1 ? '' : 's'}  •  ₹${_fmt(_filteredTotal.abs())}',
-              style: GoogleFonts.sora(fontSize: 12, color: textSecondary),
+            Expanded(
+              child: Text(
+                '${filtered.length} expense${filtered.length == 1 ? '' : 's'}  •  ₹${_fmt(_filteredTotal.abs())}',
+                style: GoogleFonts.sora(fontSize: 12, color: textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 10),
             GestureDetector(
               onTap: _showMonthPicker,
               child: Row(children: [
@@ -637,32 +641,41 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
                         style: GoogleFonts.sora(
                             fontSize: 11, color: textSecondary),
                       ),
-                      _badgesRow(e, textSecondary),
-                      if (hasReceipt) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF22C55E)
-                                .withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.receipt_rounded,
-                                  size: 10, color: Color(0xFF22C55E)),
-                              const SizedBox(width: 3),
-                              Text('Receipt',
-                                  style: GoogleFonts.sora(
-                                      fontSize: 9,
-                                      color: const Color(0xFF22C55E),
-                                      fontWeight: FontWeight.w600)),
+                              _badgesRow(e, textSecondary),
+                              if (hasReceipt) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E)
+                                        .withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.receipt_rounded,
+                                          size: 10, color: Color(0xFF22C55E)),
+                                      const SizedBox(width: 3),
+                                      Text('Receipt',
+                                          style: GoogleFonts.sora(
+                                              fontSize: 9,
+                                              color: const Color(0xFF22C55E),
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ],
@@ -1034,9 +1047,13 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
                                   size: 18,
                                   color: const Color(0xFFCC0020)),
                               const SizedBox(width: 10),
-                              Text(c,
-                                  style: GoogleFonts.sora(
-                                      fontSize: 14, color: textPrimary)),
+                              Expanded(
+                                child: Text(c,
+                                    style: GoogleFonts.sora(
+                                        fontSize: 14, color: textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
                             ]),
                           ))
                       .toList(),
@@ -1069,6 +1086,8 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
                             color: _selectedGroup != null
                                 ? textPrimary
                                 : textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       )),
                       if (_selectedGroup != null)
                         GestureDetector(
