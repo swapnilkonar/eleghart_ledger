@@ -1395,6 +1395,3 @@ class _MonthPickerSheetState extends State<_MonthPickerSheet> {
     );
   }
 }
-;
-  }
-}
