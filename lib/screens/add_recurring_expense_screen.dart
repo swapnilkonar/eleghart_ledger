@@ -73,12 +73,25 @@ class _AddRecurringExpenseScreenState
     super.dispose();
   }
 
+  List<String> get _currentCategories {
+    if (_groups.isEmpty) return _categories;
+    final group = _groups.firstWhere((g) => g.id == _groupId,
+        orElse: () => _groups.first);
+    return group.categories.isNotEmpty ? group.categories : _categories;
+  }
+
   Future<void> _loadGroups() async {
     final g = await StorageService.loadGroups();
     if (mounted) {
       setState(() {
         _groups = g;
         if (_groupId.isEmpty && g.isNotEmpty) _groupId = g.first.id;
+        if (g.isNotEmpty) {
+          final validCategories = _currentCategories;
+          if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
+            _category = validCategories.first;
+          }
+        }
       });
     }
   }
@@ -209,30 +222,38 @@ class _AddRecurringExpenseScreenState
                           const SizedBox(height: 8),
                           _frequencySelector(textPrimary, textSec, border, cardBg),
                           const SizedBox(height: 16),
+                          if (_groups.isNotEmpty) ...[
+                            _dropdownField(
+                              label: 'Group',
+                              value: _groupId.isEmpty ? _groups.first.id : _groupId,
+                              items: _groups.map((g) => g.id).toList(),
+                              displayNames: _groups.map((g) => g.name).toList(),
+                              onChanged: (v) {
+                                setState(() {
+                                  _groupId = v!;
+                                  final validCategories = _currentCategories;
+                                  if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
+                                    _category = validCategories.first;
+                                  }
+                                });
+                              },
+                              textPrimary: textPrimary,
+                              textSec: textSec,
+                              border: border,
+                              cardBg: cardBg,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           _dropdownField(
                             label: 'Category',
                             value: _category,
-                            items: _categories,
+                            items: _currentCategories,
                             onChanged: (v) => setState(() => _category = v!),
                             textPrimary: textPrimary,
                             textSec: textSec,
                             border: border,
                             cardBg: cardBg,
                           ),
-                          const SizedBox(height: 16),
-                          if (_groups.isNotEmpty)
-                            _dropdownField(
-                              label: 'Group',
-                              value: _groupId.isEmpty ? _groups.first.id : _groupId,
-                              items: _groups.map((g) => g.id).toList(),
-                              displayNames: _groups.map((g) => g.name).toList(),
-                              onChanged: (v) =>
-                                  setState(() => _groupId = v!),
-                              textPrimary: textPrimary,
-                              textSec: textSec,
-                              border: border,
-                              cardBg: cardBg,
-                            ),
                           const SizedBox(height: 16),
                           _dateRow(
                             label: 'Start Date',

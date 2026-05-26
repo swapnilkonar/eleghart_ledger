@@ -64,12 +64,25 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     super.dispose();
   }
 
+  List<String> get _currentCategories {
+    if (_groups.isEmpty) return _categories;
+    final group = _groups.firstWhere((g) => g.id == _groupId,
+        orElse: () => _groups.first);
+    return group.categories.isNotEmpty ? group.categories : _categories;
+  }
+
   Future<void> _loadGroups() async {
     final g = await StorageService.loadGroups();
     if (mounted) {
       setState(() {
         _groups = g;
         if (_groupId.isEmpty && g.isNotEmpty) _groupId = g.first.id;
+        if (g.isNotEmpty) {
+          final validCategories = _currentCategories;
+          if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
+            _category = validCategories.first;
+          }
+        }
       });
     }
   }
@@ -188,13 +201,6 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                           const SizedBox(height: 6),
                           _datePicker(textPrimary, textSec, border, cardBg),
                           const SizedBox(height: 16),
-                          _label('Category', textSec),
-                          const SizedBox(height: 6),
-                          _dropdown(
-                              _category, _categories, null,
-                              (v) => setState(() => _category = v!),
-                              textPrimary, textSec, border, cardBg),
-                          const SizedBox(height: 16),
                           if (_groups.isNotEmpty) ...[
                             _label('Group (optional)', textSec),
                             const SizedBox(height: 6),
@@ -204,10 +210,25 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                                     : _groupId,
                                 _groups.map((g) => g.id).toList(),
                                 _groups.map((g) => g.name).toList(),
-                                (v) => setState(() => _groupId = v!),
+                                (v) {
+                                  setState(() {
+                                    _groupId = v!;
+                                    final validCategories = _currentCategories;
+                                    if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
+                                      _category = validCategories.first;
+                                    }
+                                  });
+                                },
                                 textPrimary, textSec, border, cardBg),
                             const SizedBox(height: 16),
                           ],
+                          _label('Category', textSec),
+                          const SizedBox(height: 6),
+                          _dropdown(
+                              _category, _currentCategories, null,
+                              (v) => setState(() => _category = v!),
+                              textPrimary, textSec, border, cardBg),
+                          const SizedBox(height: 16),
                           _field('Description (optional)', _descCtrl,
                               'e.g. iPhone Purchase',
                               textPrimary, textSec, border, cardBg),
