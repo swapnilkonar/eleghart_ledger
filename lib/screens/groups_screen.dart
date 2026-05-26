@@ -1038,8 +1038,8 @@ class GroupsScreenState extends State<GroupsScreen>
   Widget _buildMemberAvatars(GroupModel group) {
     final cats = group.categories;
     if (cats.isEmpty) return const SizedBox(height: 24);
-    final display = cats.take(5).toList();
-    final overflow = cats.length > 5 ? cats.length - 5 : 0;
+    final display = cats.take(3).toList();
+    final overflow = cats.length > 3 ? cats.length - 3 : 0;
 
     return SizedBox(
       height: 24,

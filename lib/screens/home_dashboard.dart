@@ -467,11 +467,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 border: border,
                 textPrimary: textPrimary,
                 textSec: textSec,
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const RecurringExpenseListScreen())),
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              const RecurringExpenseListScreen()));
+                  _loadDashboardData();
+                  _groupsKey.currentState?.reload();
+                  _expenseListKey.currentState?.reload();
+                },
               ),
             ),
             const SizedBox(width: 10),

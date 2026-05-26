@@ -274,12 +274,14 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
               'Weekly, Monthly or Yearly auto-expense',
               textPrimary, textSec, sheetBg,
               accent: const Color(0xFF6366F1),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(context,
+                await Navigator.push(context,
                     MaterialPageRoute(
                         builder: (_) =>
                             const RecurringExpenseListScreen()));
+                reload();
+                widget.onExpenseAdded?.call();
               },
             ),
             const SizedBox(height: 10),

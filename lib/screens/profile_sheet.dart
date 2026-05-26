@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/responsive.dart';
 
 class ProfileSheet extends StatefulWidget {
   final VoidCallback onUpdated;
@@ -172,167 +173,184 @@ class _ProfileSheetState extends State<ProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: MediaQuery.of(context).viewInsets,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ---- HEADER ----
-              Row(
-                children: [
-                  const Text(
-                    'Profile',
-                    style:
-                        TextStyle(fontSize: 18.5, fontWeight: FontWeight.w800),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // ---- AVATAR ----
-              Center(
-                child: GestureDetector(
-                  onTap: _showAvatarPicker, // 🔹 only changed line
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 46,
-                        backgroundColor: EleghartColors.accentDark,
-                        backgroundImage:
-                            _avatar != null ? FileImage(_avatar!) : null,
-                        child: _avatar == null
-                            ? const Icon(Icons.person,
-                                color: Colors.white, size: 38)
-                            : null,
+    return SafeArea(
+      child: Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            Responsive.width(context, 0.06),
+            Responsive.height(context, 0.02),
+            Responsive.width(context, 0.06),
+            Responsive.height(context, 0.025)
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ---- HEADER ----
+                Row(
+                  children: [
+                    Text(
+                      'Profile',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: Responsive.text(context, 18.5),
+                        fontWeight: FontWeight.w800
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(
-                            color: EleghartColors.accentDark,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.camera_alt,
-                              size: 14, color: Colors.white),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, size: Responsive.icon(context, 24)),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: Responsive.height(context, 0.012)),
+
+                // ---- AVATAR ----
+                Center(
+                  child: GestureDetector(
+                    onTap: _showAvatarPicker, // 🔹 only changed line
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: Responsive.width(context, 0.12),
+                          backgroundColor: EleghartColors.accentDark,
+                          backgroundImage:
+                              _avatar != null ? FileImage(_avatar!) : null,
+                          child: _avatar == null
+                              ? Icon(Icons.person,
+                                  color: Colors.white, size: Responsive.icon(context, 38))
+                              : null,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ---- THEME TOGGLE ----
-              ValueListenableBuilder<bool>(
-                valueListenable: AppThemeNotifier.instance,
-                builder: (_, isWhite, __) => SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'White Theme',
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: EleghartColors.textPrimary,
-                    ),
-                  ),
-                  subtitle: Text(
-                    isWhite ? 'Light background enabled' : 'Dark background enabled',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: EleghartColors.textSecondary,
-                    ),
-                  ),
-                  value: isWhite,
-                  activeColor: EleghartColors.accentDark,
-                  onChanged: (_) => AppThemeNotifier.toggle(),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // ---- NAME FIELD ----
-              _sectionTitle('Name'),
-              _outlinedField(
-                controller: _nameController,
-                hint: 'Enter your name',
-                error: _nameError,
-              ),
-
-              const SizedBox(height: 18),
-
-              // ---- CHANGE PIN ----
-              _sectionTitle('Change PIN'),
-
-              _pinField(
-                label: 'Old PIN',
-                controller: _oldPinController,
-                error: _oldPinError,
-              ),
-              const SizedBox(height: 12),
-
-              _pinField(
-                label: 'New PIN',
-                controller: _newPinController,
-                error: _newPinError,
-              ),
-              const SizedBox(height: 12),
-
-              _pinField(
-                label: 'Confirm PIN',
-                controller: _confirmPinController,
-                error: _confirmPinError,
-              ),
-
-              const SizedBox(height: 26),
-
-              // ---- SAVE BUTTON ----
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _saving ? null : _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EleghartColors.accentDark,
-                    elevation: 10,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.4),
-                        )
-                      : const Text(
-                          'Save Changes',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                            color: Colors.white,
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: EdgeInsets.all(Responsive.width(context, 0.015)),
+                            decoration: const BoxDecoration(
+                              color: EleghartColors.accentDark,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.camera_alt,
+                                size: Responsive.icon(context, 14), color: Colors.white),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+
+                SizedBox(height: Responsive.height(context, 0.012)),
+
+                // ---- THEME TOGGLE ----
+                ValueListenableBuilder<bool>(
+                  valueListenable: AppThemeNotifier.instance,
+                  builder: (_, isWhite, __) => SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'White Theme',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: Responsive.text(context, 14.5),
+                        fontWeight: FontWeight.w700,
+                        color: EleghartColors.textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      isWhite ? 'Light background enabled' : 'Dark background enabled',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: Responsive.text(context, 12.5),
+                        color: EleghartColors.textSecondary,
+                      ),
+                    ),
+                    value: isWhite,
+                    activeColor: EleghartColors.accentDark,
+                    onChanged: (_) => AppThemeNotifier.toggle(),
+                  ),
+                ),
+
+                SizedBox(height: Responsive.height(context, 0.01)),
+
+                // ---- NAME FIELD ----
+                _sectionTitle('Name'),
+                _outlinedField(
+                  controller: _nameController,
+                  hint: 'Enter your name',
+                  error: _nameError,
+                ),
+
+                SizedBox(height: Responsive.height(context, 0.022)),
+
+                // ---- CHANGE PIN ----
+                _sectionTitle('Change PIN'),
+
+                _pinField(
+                  label: 'Old PIN',
+                  controller: _oldPinController,
+                  error: _oldPinError,
+                ),
+                SizedBox(height: Responsive.height(context, 0.015)),
+
+                _pinField(
+                  label: 'New PIN',
+                  controller: _newPinController,
+                  error: _newPinError,
+                ),
+                SizedBox(height: Responsive.height(context, 0.015)),
+
+                _pinField(
+                  label: 'Confirm PIN',
+                  controller: _confirmPinController,
+                  error: _confirmPinError,
+                ),
+
+                SizedBox(height: Responsive.height(context, 0.03)),
+
+                // ---- SAVE BUTTON ----
+                SizedBox(
+                  width: double.infinity,
+                  height: Responsive.height(context, 0.066),
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _saveProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: EleghartColors.accentDark,
+                      elevation: 10,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            width: Responsive.icon(context, 22),
+                            height: Responsive.icon(context, 22),
+                            child: const CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.4),
+                          )
+                        : Text(
+                            'Save Changes',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: Responsive.text(context, 16.5),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -343,11 +361,13 @@ class _ProfileSheetState extends State<ProfileSheet> {
 
   Widget _sectionTitle(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: Responsive.height(context, 0.012)),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 14.5,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: Responsive.text(context, 14.5),
           fontWeight: FontWeight.w800,
           color: EleghartColors.textPrimary,
         ),
@@ -365,16 +385,19 @@ class _ProfileSheetState extends State<ProfileSheet> {
       children: [
         TextField(
           controller: controller,
-          style: const TextStyle(
+          maxLines: 1,
+          style: TextStyle(
             color: EleghartColors.textPrimary,
-            fontSize: 15.5,
+            fontSize: Responsive.text(context, 15.5),
           ),
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
             fillColor: Colors.white,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: Responsive.width(context, 0.048),
+              vertical: Responsive.height(context, 0.018),
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
@@ -393,11 +416,13 @@ class _ProfileSheetState extends State<ProfileSheet> {
           ),
         ),
         if (error != null) ...[
-          const SizedBox(height: 6),
+          SizedBox(height: Responsive.height(context, 0.007)),
           Text(
             error,
-            style: const TextStyle(
-              fontSize: 12.5,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: Responsive.text(context, 12.5),
               color: Colors.redAccent,
               fontWeight: FontWeight.w600,
             ),
@@ -417,22 +442,25 @@ class _ProfileSheetState extends State<ProfileSheet> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 13.5,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: Responsive.text(context, 13.5),
             fontWeight: FontWeight.w700,
             color: EleghartColors.textSecondary,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: Responsive.height(context, 0.007)),
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
           obscureText: true,
           maxLength: 4,
+          maxLines: 1,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 20,
-            letterSpacing: 12,
+          style: TextStyle(
+            fontSize: Responsive.text(context, 20),
+            letterSpacing: Responsive.width(context, 0.03),
             fontWeight: FontWeight.w800,
           ),
           decoration: InputDecoration(
@@ -440,12 +468,14 @@ class _ProfileSheetState extends State<ProfileSheet> {
             filled: true,
             fillColor: Colors.white,
             hintText: '• • • •',
-            hintStyle: const TextStyle(
-              letterSpacing: 12,
+            hintStyle: TextStyle(
+              letterSpacing: Responsive.width(context, 0.03),
               color: EleghartColors.textHint,
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            contentPadding: EdgeInsets.symmetric(
+              vertical: Responsive.height(context, 0.017),
+              horizontal: Responsive.width(context, 0.04),
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
               borderSide: BorderSide(
@@ -467,11 +497,13 @@ class _ProfileSheetState extends State<ProfileSheet> {
           ),
         ),
         if (error != null) ...[
-          const SizedBox(height: 6),
+          SizedBox(height: Responsive.height(context, 0.007)),
           Text(
             error,
-            style: const TextStyle(
-              fontSize: 12.5,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: Responsive.text(context, 12.5),
               color: Colors.redAccent,
               fontWeight: FontWeight.w600,
             ),
