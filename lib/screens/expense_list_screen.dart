@@ -375,30 +375,32 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: isSelecting ? null : _buildFab(),
-      body: Column(
-        children: [
-          _buildCategoryChips(cardColor, borderColor, textSecondary),
-          _buildSummaryRow(filtered, textSecondary),
-          Expanded(
-            child: filtered.isEmpty
-                ? _buildEmpty(textSecondary)
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _buildItem(
-                        filtered[i],
-                        isSelecting,
-                        cardColor,
-                        borderColor,
-                        textPrimary,
-                        textSecondary,
-                        isWhite),
-                  ),
-          ),
-          if (isSelecting)
-            _buildBulkBar(isWhite, textPrimary, textSecondary),
-        ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildCategoryChips(cardColor, borderColor, textSecondary),
+            _buildSummaryRow(filtered, textSecondary),
+            Expanded(
+              child: filtered.isEmpty
+                  ? _buildEmpty(textSecondary)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _buildItem(
+                          filtered[i],
+                          isSelecting,
+                          cardColor,
+                          borderColor,
+                          textPrimary,
+                          textSecondary,
+                          isWhite),
+                    ),
+            ),
+            if (isSelecting)
+              _buildBulkBar(isWhite, textPrimary, textSecondary),
+          ],
+        ),
       ),
     );
   }
@@ -590,6 +592,8 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
                       const SizedBox(width: 8),
                       Text(
                         '${e.isDebit ? '-' : '+'}₹${_fmt(e.amount)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.sora(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -604,15 +608,19 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
                   // Chips row: category + group
                   Row(
                     children: [
-                      _infoChip(cat, Icons.label_outline_rounded,
-                          const Color(0xFFCC0020), isWhite),
+                      Flexible(
+                        child: _infoChip(cat, Icons.label_outline_rounded,
+                            const Color(0xFFCC0020), isWhite),
+                      ),
                       if (grp.isNotEmpty) ...[
                         const SizedBox(width: 6),
-                        _infoChip(grp, Icons.group_outlined,
-                            isWhite
-                                ? EleghartColors.accentDark
-                                : Colors.white70,
-                            isWhite),
+                        Flexible(
+                          child: _infoChip(grp, Icons.group_outlined,
+                              isWhite
+                                  ? EleghartColors.accentDark
+                                  : Colors.white70,
+                              isWhite),
+                        ),
                       ],
                     ],
                   ),
@@ -727,11 +735,15 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
           children: [
             Icon(icon, size: 9, color: color),
             const SizedBox(width: 3),
-            Text(label,
-                style: GoogleFonts.sora(
-                    fontSize: 9,
-                    color: color,
-                    fontWeight: FontWeight.w600)),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.sora(
+                      fontSize: 9,
+                      color: color,
+                      fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       );
@@ -748,13 +760,15 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
           children: [
             Icon(icon, size: 10, color: color),
             const SizedBox(width: 3),
-            Text(label,
-                style: GoogleFonts.sora(
-                    fontSize: 10,
-                    color: color,
-                    fontWeight: FontWeight.w600),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Flexible(
+              child: Text(label,
+                  style: GoogleFonts.sora(
+                      fontSize: 10,
+                      color: color,
+                      fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       );
