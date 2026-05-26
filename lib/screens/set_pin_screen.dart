@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +10,8 @@ import 'home_dashboard.dart';
 
 class SetPinScreen extends StatefulWidget {
   final String userName;
-  const SetPinScreen({super.key, required this.userName});
+  final bool isReset;
+  const SetPinScreen({super.key, required this.userName, this.isReset = false});
 
   @override
   State<SetPinScreen> createState() => _SetPinScreenState();
@@ -29,6 +32,7 @@ class _SetPinScreenState extends State<SetPinScreen>
   @override
   void initState() {
     super.initState();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
 
     _pulseController = AnimationController(
       vsync: this,
@@ -43,8 +47,11 @@ class _SetPinScreenState extends State<SetPinScreen>
     });
   }
 
+  void _onThemeChanged() => setState(() {});
+
   @override
   void dispose() {
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _pulseController.dispose();
     _pinController.dispose();
     _confirmController.dispose();
@@ -91,6 +98,11 @@ class _SetPinScreenState extends State<SetPinScreen>
 
     if (!mounted) return;
 
+    if (widget.isReset) {
+      Navigator.pop(context);
+      return;
+    }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -120,19 +132,7 @@ class _SetPinScreenState extends State<SetPinScreen>
       body: Stack(
         children: [
           // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-
-          // Dark overlay to deepen background
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.25),
-            ),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.25)),
 
           // Subtle light rays from logo
           Positioned.fill(
@@ -148,7 +148,24 @@ class _SetPinScreenState extends State<SetPinScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Column(
                   children: [
-                    SizedBox(height: size.height * 0.04),
+                    if (widget.isReset)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          alignment: Alignment.centerLeft,
+                          icon: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: AppThemeNotifier.isWhite
+                                ? const Color(0xFF8E1D1D)
+                                : Colors.white,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+
+                    SizedBox(
+                        height: widget.isReset ? size.height * 0.01 : size.height * 0.04),
 
                     // Logo with pulsing red glow
                     AnimatedBuilder(
@@ -178,21 +195,23 @@ class _SetPinScreenState extends State<SetPinScreen>
 
                     // Title
                     Text(
-                      'Set your PIN',
+                      widget.isReset ? 'Reset your PIN' : 'Set your PIN',
                       style: GoogleFonts.sora(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white,
                         letterSpacing: 0.3,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a 4-digit PIN to secure your app',
+                      widget.isReset
+                          ? 'Choose a new 4-digit PIN to secure your app'
+                          : 'Choose a 4-digit PIN to secure your app',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.sora(
                         fontSize: 13,
-                        color: Colors.white54,
+                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.6) : Colors.white54,
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -308,7 +327,9 @@ class _SetPinScreenState extends State<SetPinScreen>
             style: GoogleFonts.sora(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: isActive ? Colors.white70 : Colors.white38,
+              color: isActive
+                  ? (AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white70)
+                  : (AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.5) : Colors.white38),
               letterSpacing: 0.3,
             ),
           ),
@@ -319,7 +340,7 @@ class _SetPinScreenState extends State<SetPinScreen>
             width: double.infinity,
             height: 68,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
+              color: AppThemeNotifier.isWhite ? const Color(0xFFFFECEC) : Colors.white.withOpacity(0.06),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: borderColor, width: 1.8),
               boxShadow: [
@@ -338,7 +359,7 @@ class _SetPinScreenState extends State<SetPinScreen>
                     shape: BoxShape.circle,
                     color: filled ? const Color(0xFFCC0020) : Colors.transparent,
                     border: Border.all(
-                      color: filled ? const Color(0xFFCC0020) : Colors.white38,
+                      color: filled ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.35) : Colors.white38),
                       width: 2,
                     ),
                     boxShadow: filled

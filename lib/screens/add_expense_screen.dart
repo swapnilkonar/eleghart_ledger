@@ -1,6 +1,8 @@
 // Fully Updated AddExpenseScreen with Transaction Type (Debit/Credit)
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -44,6 +46,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   void initState() {
     super.initState();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
 
     if (isEditMode) {
       final e = widget.existingExpense!;
@@ -59,8 +62,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
+  void _onThemeChanged() => setState(() {});
+
   @override
   void dispose() {
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _amountController.dispose();
     _descController.dispose();
     super.dispose();
@@ -110,7 +116,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       context: context,
       initialDate: _date,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime(2100),
     );
 
     if (picked != null) {
@@ -200,7 +206,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Future<void> _showMemberPicker() async {
     await showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF120404),
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -213,7 +219,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Container(
                 width: 36, height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.25) : Colors.white24,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -222,7 +228,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   style: GoogleFonts.sora(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white)),
+                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
               const SizedBox(height: 16),
               ...widget.categories.map((c) {
                 final sel = _selected.contains(c);
@@ -239,13 +245,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       color: sel
-                          ? const Color(0xFFCC0020).withOpacity(0.15)
-                          : Colors.white.withOpacity(0.05),
+                          ? const Color(0xFFCC0020).withOpacity(0.12)
+                          : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: sel
                             ? const Color(0xFFCC0020).withOpacity(0.5)
-                            : Colors.white.withOpacity(0.10),
+                            : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
                       ),
                     ),
                     child: Row(
@@ -254,13 +260,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             size: 18,
                             color: sel
                                 ? const Color(0xFFCC0020)
-                                : Colors.white38),
+                                : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(c,
                               style: GoogleFonts.sora(
                                   fontSize: 14,
-                                  color: Colors.white,
+                                  color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                                   fontWeight: sel
                                       ? FontWeight.w600
                                       : FontWeight.w400)),
@@ -290,19 +296,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         : _selected.join(', ');
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : Colors.black,
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.72)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.72)),
           SafeArea(
             child: Column(
               children: [
@@ -323,9 +321,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                             color: const Color(0xFFCC0020).withOpacity(0.10),
                           ),
-                          child: const Icon(
+                          child: Icon(
                               Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white, size: 16),
+                              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white, size: 16),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -334,7 +332,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         style: GoogleFonts.sora(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                         ),
                       ),
                     ],
@@ -473,7 +471,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                     style: GoogleFonts.sora(
                                       fontSize: 14,
                                       color: _image == null
-                                          ? Colors.white38
+                                          ? (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38)
                                           : const Color(0xFF00CC66),
                                     ),
                                   ),
@@ -603,14 +601,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         style: GoogleFonts.sora(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Colors.white),
+            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
       );
 
-  BoxDecoration _darkBox() => BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
-      );
+  BoxDecoration _darkBox() => AppThemeNotifier.isWhite
+      ? BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFEEEEEE), width: 1),
+          boxShadow: [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.10), blurRadius: 10, offset: const Offset(0, 2))],
+        )
+      : BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
+        );
 
   Widget _darkField({
     required TextEditingController controller,
@@ -631,11 +636,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               keyboardType: keyboardType,
               inputFormatters: inputFormatters,
               onChanged: onChanged,
-              style: GoogleFonts.sora(fontSize: 14, color: Colors.white),
+              style: GoogleFonts.sora(fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: GoogleFonts.sora(
-                    fontSize: 14, color: Colors.white30),
+                    fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.35) : Colors.white30),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: prefixIcon == null ? 16 : 0,
@@ -669,12 +674,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.sora(fontSize: 14, color: textColor),
+              style: GoogleFonts.sora(fontSize: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : textColor),
             ),
           ),
           if (showChevron)
-            const Icon(Icons.chevron_right_rounded,
-                color: Colors.white24, size: 20),
+            Icon(Icons.chevron_right_rounded,
+                color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.3) : Colors.white24, size: 20),
         ],
       ),
     );
@@ -689,15 +694,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : Colors.white.withOpacity(0.05),
+          color: selected ? color.withOpacity(0.12) : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? color.withOpacity(0.8) : Colors.white.withOpacity(0.12),
+            color: selected ? color.withOpacity(0.8) : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.12)),
             width: selected ? 1.5 : 1,
           ),
           boxShadow: selected
               ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 12)]
-              : [],
+              : (AppThemeNotifier.isWhite ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))] : []),
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -712,7 +717,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   style: GoogleFonts.sora(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : Colors.white54,
+                    color: selected ? Colors.white : (AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white54),
                   ),
                 ),
               ],

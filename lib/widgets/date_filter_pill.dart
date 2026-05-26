@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import '../utils/date_filter.dart';
 
 class DateFilterPill extends StatefulWidget {
@@ -14,11 +16,13 @@ class _DateFilterPillState extends State<DateFilterPill> {
   void initState() {
     super.initState();
     DateFilter.notifier.addListener(_onFilterChanged);
+    AppThemeNotifier.instance.addListener(_onFilterChanged);
   }
 
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
+    AppThemeNotifier.instance.removeListener(_onFilterChanged);
     super.dispose();
   }
 
@@ -27,7 +31,7 @@ class _DateFilterPillState extends State<DateFilterPill> {
   void _openPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF120404),
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -59,11 +63,11 @@ class _DateFilterPillState extends State<DateFilterPill> {
               style: GoogleFonts.sora(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white),
+                  color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded,
-                size: 14, color: Colors.white54),
+            Icon(Icons.keyboard_arrow_down_rounded,
+                size: 14, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white54),
           ],
         ),
       ),
@@ -103,7 +107,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           return DateFilter.monthName(
               DateFilter.customMonth!.month, DateFilter.customMonth!.year);
         }
-        return 'Custom Month';
+        return 'Picked Month';
     }
   }
 
@@ -132,7 +136,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           Container(
             width: 36, height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.25) : Colors.white24,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -156,7 +160,7 @@ class _FilterSheetState extends State<_FilterSheet> {
       children: [
         Text('Filter by Period',
             style: GoogleFonts.sora(
-                fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                fontSize: 16, fontWeight: FontWeight.w700, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
         const SizedBox(height: 20),
         ...quickTypes.map((type) {
           final isSelected = DateFilter.current == type;
@@ -171,15 +175,16 @@ class _FilterSheetState extends State<_FilterSheet> {
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFFCC0020).withOpacity(0.15)
-                    : Colors.white.withOpacity(0.05),
+                    ? const Color(0xFFCC0020).withOpacity(0.10)
+                    : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isSelected
                       ? const Color(0xFFCC0020).withOpacity(0.6)
-                      : Colors.white.withOpacity(0.10),
+                      : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
                   width: isSelected ? 1.5 : 1,
                 ),
+                boxShadow: (!isSelected && AppThemeNotifier.isWhite) ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 1))] : [],
               ),
               child: Row(
                 children: [
@@ -187,7 +192,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       size: 18,
                       color: isSelected
                           ? const Color(0xFFCC0020)
-                          : Colors.white38),
+                          : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(_labelFor(type),
@@ -196,7 +201,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                           fontWeight: isSelected
                               ? FontWeight.w700
                               : FontWeight.w400,
-                          color: Colors.white,
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
                         )),
                   ),
                   if (isSelected)
@@ -215,15 +220,16 @@ class _FilterSheetState extends State<_FilterSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               color: DateFilter.current == DateFilterType.custom
-                  ? const Color(0xFFCC0020).withOpacity(0.15)
-                  : Colors.white.withOpacity(0.05),
+                  ? const Color(0xFFCC0020).withOpacity(0.10)
+                  : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: DateFilter.current == DateFilterType.custom
                     ? const Color(0xFFCC0020).withOpacity(0.6)
-                    : Colors.white.withOpacity(0.10),
+                    : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
                 width: DateFilter.current == DateFilterType.custom ? 1.5 : 1,
               ),
+              boxShadow: (DateFilter.current != DateFilterType.custom && AppThemeNotifier.isWhite) ? [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 1))] : [],
             ),
             child: Row(
               children: [
@@ -231,27 +237,27 @@ class _FilterSheetState extends State<_FilterSheet> {
                     size: 18,
                     color: DateFilter.current == DateFilterType.custom
                         ? const Color(0xFFCC0020)
-                        : Colors.white38),
+                        : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     DateFilter.current == DateFilterType.custom
                         ? _labelFor(DateFilterType.custom)
-                        : 'Choose Month...',
+                        : 'Pick a Month...',
                     style: GoogleFonts.sora(
                         fontSize: 14,
                         fontWeight: DateFilter.current == DateFilterType.custom
                             ? FontWeight.w700
                             : FontWeight.w400,
-                        color: Colors.white),
+                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
                   ),
                 ),
                 if (DateFilter.current == DateFilterType.custom)
                   const Icon(Icons.check_rounded,
                       color: Color(0xFFCC0020), size: 18)
                 else
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Colors.white24, size: 20),
+                  Icon(Icons.chevron_right_rounded,
+                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.3) : Colors.white24, size: 20),
               ],
             ),
           ),
@@ -261,8 +267,8 @@ class _FilterSheetState extends State<_FilterSheet> {
   }
 
   Widget _buildMonthGrid() {
-    // Year tabs: from 3 years ago up to now
-    final years = List.generate(4, (i) => _nowYear - 3 + i);
+    // Year tabs: from 3 years ago up to 2 years ahead
+    final years = List.generate(6, (i) => _nowYear - 3 + i);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -276,18 +282,18 @@ class _FilterSheetState extends State<_FilterSheet> {
                 width: 34, height: 34,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.07),
+                  color: AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.07),
                 ),
-                child: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white54, size: 14),
+                child: Icon(Icons.arrow_back_ios_new_rounded,
+                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white54, size: 14),
               ),
             ),
             const SizedBox(width: 12),
-            Text('Choose Month',
+            Text('Pick a Month',
                 style: GoogleFonts.sora(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white)),
+                    color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
           ],
         ),
         const SizedBox(height: 16),
@@ -308,12 +314,12 @@ class _FilterSheetState extends State<_FilterSheet> {
                   decoration: BoxDecoration(
                     color: active
                         ? const Color(0xFFCC0020).withOpacity(0.18)
-                        : Colors.white.withOpacity(0.06),
+                        : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.06)),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: active
                           ? const Color(0xFFCC0020)
-                          : Colors.white.withOpacity(0.15),
+                          : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.15)),
                       width: active ? 1.5 : 1,
                     ),
                   ),
@@ -322,7 +328,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     style: GoogleFonts.sora(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: active ? Colors.white : Colors.white54),
+                        color: active ? Colors.white : (AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white54)),
                   ),
                 ),
               );
@@ -344,7 +350,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           ),
           itemBuilder: (_, i) {
             final month = i + 1;
-            final isFuture = _pickerYear == _nowYear && month > _nowMonth;
+            final isFuture = false; // allow all months including future
             final isCustomSelected = DateFilter.current ==
                     DateFilterType.custom &&
                 DateFilter.customMonth?.year == _pickerYear &&
@@ -361,15 +367,15 @@ class _FilterSheetState extends State<_FilterSheet> {
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
                   color: isCustomSelected
-                      ? const Color(0xFFCC0020).withOpacity(0.2)
+                      ? const Color(0xFFCC0020).withOpacity(0.12)
                       : isFuture
-                          ? Colors.white.withOpacity(0.02)
-                          : Colors.white.withOpacity(0.06),
+                          ? (AppThemeNotifier.isWhite ? Colors.grey.withOpacity(0.06) : Colors.white.withOpacity(0.02))
+                          : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.06)),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isCustomSelected
                         ? const Color(0xFFCC0020)
-                        : Colors.white.withOpacity(0.10),
+                        : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
                     width: isCustomSelected ? 1.5 : 1,
                   ),
                 ),
@@ -382,10 +388,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                           ? FontWeight.w700
                           : FontWeight.w500,
                       color: isFuture
-                          ? Colors.white12
+                          ? (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.2) : Colors.white12)
                           : isCustomSelected
                               ? Colors.white
-                              : Colors.white70,
+                              : (AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70),
                     ),
                   ),
                 ),

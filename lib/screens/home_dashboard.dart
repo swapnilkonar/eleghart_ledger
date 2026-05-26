@@ -6,12 +6,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'group_detail_screen.dart';
 import 'groups_screen.dart';
-import 'profile_sheet.dart';
+import 'profile_screen.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'create_group_screen.dart';
+import 'expense_list_screen.dart';
+import 'recurring_expense_list_screen.dart';
+import 'emi_list_screen.dart';
+import 'insights_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -29,6 +35,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   int _currentTab = 0;
   final _groupsKey = GlobalKey<GroupsScreenState>();
+  final _expenseListKey = GlobalKey<ExpenseListScreenState>();
 
   // -------- LEDGER TOTALS --------
   double _totalDebit = 0;
@@ -48,6 +55,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _userName = widget.userName;
     _loadProfile();
     _loadDashboardData();
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  void _onThemeChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -135,23 +151,23 @@ class _HomeDashboardState extends State<HomeDashboard> {
     if (created == true) {
       _loadDashboardData();
       _groupsKey.currentState?.reload();
-      setState(() => _currentTab = 1);
+      setState(() => _currentTab = 2);
     }
   }
 
-  Future<void> _openProfileSheet() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => ProfileSheet(
-        onUpdated: () async {
-          await _loadProfile();
-        },
-      ),
-    );
+  // _openAddExpenseWithGroupSelection moved to ExpensesScreen
+
+  void _onExpenseAdded() {
+    _loadDashboardData();
+    _groupsKey.currentState?.reload();
+    _expenseListKey.currentState?.reload();
+  }
+
+  void _switchTab(int index) {
+    setState(() => _currentTab = index);
+    if (index == 1) {
+      _expenseListKey.currentState?.reload();
+    }
   }
 
   Future<void> _deleteGroup(GroupModel group) async {
@@ -196,7 +212,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: Colors.black.withOpacity(0.6),
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white.withOpacity(0.95) : Colors.black.withOpacity(0.6),
       elevation: 0,
       titleSpacing: 20,
       title: RichText(
@@ -207,7 +223,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               style: GoogleFonts.sora(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppThemeNotifier.isWhite ? EleghartColors.textPrimary : Colors.white,
               ),
             ),
             TextSpan(
@@ -223,31 +239,28 @@ class _HomeDashboardState extends State<HomeDashboard> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
+          icon: Icon(Icons.search_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
           onPressed: () {},
         ),
         IconButton(
-          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white70, size: 22),
+          icon: Icon(Icons.notifications_none_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
           onPressed: () {},
         ),
-        GestureDetector(
-          onTap: _openProfileSheet,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFF1A0A0A),
-              backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-              child: _avatar == null
-                  ? Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Image.asset(
-                        'assets/icons/eleghart_icon.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : null,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppThemeNotifier.isWhite ? const Color(0xFFFFD6D6) : const Color(0xFF1A0A0A),
+            backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
+            child: _avatar == null
+                ? Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Image.asset(
+                      'assets/icons/eleghart_icon.png',
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : null,
           ),
         ),
       ],
@@ -256,18 +269,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildBottomNav() {
     return BottomAppBar(
-      color: const Color(0xFF0D0D0D),
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
+      color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF0D0D0D),
+      elevation: 8,
       child: SizedBox(
         height: 60,
         child: Row(
           children: [
             _navItem(0, Icons.home_rounded, 'Home'),
-            _navItem(1, Icons.groups_rounded, 'Groups'),
-            const Expanded(child: SizedBox()),
-            _navItem(2, Icons.bar_chart_rounded, 'Insights'),
-            _navItem(3, Icons.person_rounded, 'Profile'),
+            _navItem(1, Icons.receipt_long_rounded, 'Expenses'),
+            _navItem(2, Icons.groups_rounded, 'Groups'),
+            _navItem(3, Icons.bar_chart_rounded, 'Insights'),
+            _navItem(4, Icons.person_rounded, 'Profile'),
           ],
         ),
       ),
@@ -278,14 +290,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final isActive = _currentTab == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentTab = index),
+        onTap: () => _switchTab(index),
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
-              color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+              color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
               size: 22,
             ),
             const SizedBox(height: 3),
@@ -293,7 +305,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               label,
               style: GoogleFonts.sora(
                 fontSize: 10,
-                color: isActive ? const Color(0xFFCC0020) : Colors.white38,
+                color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
@@ -308,20 +320,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final greeting = _getGreeting();
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : Colors.black,
       extendBody: true,
       appBar: _buildAppBar(),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.65)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.65)),
           if (_loading)
             const Center(
               child: CircularProgressIndicator(color: Color(0xFFCC0020)),
@@ -331,28 +335,35 @@ class _HomeDashboardState extends State<HomeDashboard> {
               index: _currentTab,
               children: [
                 _buildHomeTab(greeting),
+                ExpenseListScreen(key: _expenseListKey, onExpenseAdded: _onExpenseAdded),
                 GroupsScreen(key: _groupsKey, userName: _userName),
-                _buildPlaceholder('Insights', Icons.bar_chart_rounded),
-                _buildPlaceholder('Profile', Icons.person_rounded),
+                const InsightsScreen(),
+                ProfileScreen(
+                  userName: _userName,
+                  onNameChanged: (newName) {
+                    setState(() => _userName = newName);
+                  },
+                ),
               ],
             ),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openCreateGroup,
-        backgroundColor: const Color(0xFFCC0020),
-        elevation: 6,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
   Widget _buildHomeTab(String greeting) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.5)
+        : Colors.white54;
+    final cardBg = isWhite ? Colors.white : const Color(0xFF120404);
+    final border =
+        isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -363,7 +374,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             style: GoogleFonts.sora(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: textPrimary,
             ),
           ),
           const SizedBox(height: 4),
@@ -371,66 +382,224 @@ class _HomeDashboardState extends State<HomeDashboard> {
             'Your financial spaces',
             style: GoogleFonts.sora(
               fontSize: 13,
-              color: Colors.white54,
+              color: textSec,
               letterSpacing: 0.3,
             ),
           ),
-          const Spacer(),
-          Center(
+          const SizedBox(height: 24),
+
+          // ── Summary Card ──────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6))
+              ],
+            ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCC0020).withOpacity(0.10),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.dashboard_rounded,
-                    color: Color(0xFFCC0020),
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                Text('Total Expenses',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: Colors.white70)),
+                const SizedBox(height: 4),
                 Text(
-                  'Dashboard',
+                  '₹${_totalDebit >= 100000 ? (_totalDebit / 100000).toStringAsFixed(1) + 'L' : _totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
                   style: GoogleFonts.sora(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white70,
-                  ),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Coming soon',
-                  style: GoogleFonts.sora(
-                    fontSize: 14,
-                    color: Colors.white30,
-                  ),
-                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _summaryPill('↑ Income',
+                      '₹${_totalCredit >= 1000 ? (_totalCredit / 1000).toStringAsFixed(1) + 'K' : _totalCredit.toStringAsFixed(0)}',
+                      const Color(0xFF22C55E)),
+                  const SizedBox(width: 10),
+                  _summaryPill('↓ Spent',
+                      '₹${_totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
+                      Colors.white70),
+                  const SizedBox(width: 10),
+                  _summaryPill('${_totalExpensesCount} Items', '', Colors.white54),
+                ]),
               ],
             ),
           ),
-          const Spacer(),
+
+          const SizedBox(height: 24),
+
+          // ── Quick Actions ─────────────────────────────────────
+          Text('Quick Actions',
+              style: GoogleFonts.sora(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Add Expense',
+                color: const Color(0xFFCC0020),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () => _switchTab(1),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.repeat_rounded,
+                label: 'Recurring',
+                color: const Color(0xFF6366F1),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              const RecurringExpenseListScreen()));
+                  _loadDashboardData();
+                  _groupsKey.currentState?.reload();
+                  _expenseListKey.currentState?.reload();
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.credit_card_outlined,
+                label: 'EMI',
+                color: const Color(0xFF0EA5E9),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const EmiListScreen())),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // ── Recent Activity placeholder ────────────────────────
+          Text('Recent Activity',
+              style: GoogleFonts.sora(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary)),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.bar_chart_rounded,
+                    size: 40,
+                    color: textSec.withOpacity(0.4)),
+                const SizedBox(height: 12),
+                Text('Dashboard & Insights',
+                    style: GoogleFonts.sora(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary)),
+                const SizedBox(height: 4),
+                Text('Coming soon',
+                    style: GoogleFonts.sora(
+                        fontSize: 12, color: textSec)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+
+  Widget _summaryPill(String label, String value, Color color) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          value.isNotEmpty ? '$label: $value' : label,
+          style: GoogleFonts.sora(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color),
+        ),
+      );
+
+  Widget _quickActionCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color cardBg,
+    required Color border,
+    required Color textPrimary,
+    required Color textSec,
+    required VoidCallback onTap,
+  }) {
+    final isWhite = AppThemeNotifier.isWhite;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isWhite ? 0.06 : 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Column(children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 6),
+          Text(label,
+              style: GoogleFonts.sora(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary)),
+        ]),
+      ),
+    );
+  }
+
+  // _buildExpensesTab and _formatChip moved to ExpensesScreen
 
   Widget _buildPlaceholder(String title, IconData icon) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 48, color: Colors.white24),
+          Icon(icon, size: 48, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.25) : Colors.white24),
           const SizedBox(height: 16),
           Text(
             '$title coming soon',
             style: GoogleFonts.sora(
               fontSize: 16,
-              color: Colors.white38,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38,
             ),
           ),
         ],
@@ -587,21 +756,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.08) : Colors.white.withOpacity(0.18),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: Colors.white),
+        Icon(icon, size: 16, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
             ),
           ),
         ),
@@ -768,3 +937,5 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 }
+
+// _DashedBorderPainter moved to expenses_screen.dart

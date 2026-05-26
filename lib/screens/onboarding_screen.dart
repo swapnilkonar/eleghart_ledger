@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,16 +61,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       body: Stack(
         children: [
           // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/background_theme_top_glow.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.40)),
-          ),
+          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.40)),
 
           // Content
           SafeArea(

@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/group_model.dart';
@@ -26,11 +28,19 @@ class GroupsScreenState extends State<GroupsScreen>
   List<GroupModel> _groups = [];
   List<ExpenseModel> _expenses = [];
   Map<String, String> _categoryImages = {};
+  int _globalCategoriesCount = 0;
   bool _loading = true;
   String _selectedFilter = 'All';
   late AnimationController _glowController;
 
-  final List<String> _filters = ['All', 'Trips', 'Friends', 'Family', 'Work', 'Others'];
+  final List<String> _filters = [
+    'All',
+    'Trips',
+    'Friends',
+    'Family',
+    'Work',
+    'Others',
+  ];
   final List<Color> _avatarColors = [
     const Color(0xFFCC0020),
     const Color(0xFF0066CC),
@@ -48,13 +58,17 @@ class GroupsScreenState extends State<GroupsScreen>
     )..repeat(reverse: true);
     _loadData();
     DateFilter.notifier.addListener(_onFilterChanged);
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
   }
+
+  void _onThemeChanged() => setState(() {});
 
   void _onFilterChanged() => setState(() {});
 
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _glowController.dispose();
     super.dispose();
   }
@@ -65,11 +79,28 @@ class GroupsScreenState extends State<GroupsScreen>
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
     final catImages = await StorageService.loadCategoryImages();
+    final gc = await StorageService.loadGlobalCategories();
+
+    // Migrate legacy categories that might not be in global list yet
+    final allFromGroups = groups.expand((group) => group.categories).toSet();
+    bool migrated = false;
+    for (final cat in allFromGroups) {
+      if (!gc.contains(cat)) {
+        gc.add(cat);
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      gc.sort();
+      await StorageService.saveGlobalCategories(gc);
+    }
+
     if (mounted) {
       setState(() {
         _groups = groups;
         _expenses = expenses;
         _categoryImages = catImages;
+        _globalCategoriesCount = gc.length;
         _loading = false;
       });
     }
@@ -79,28 +110,48 @@ class GroupsScreenState extends State<GroupsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF120404),
+        backgroundColor: AppThemeNotifier.isWhite
+            ? Colors.white
+            : const Color(0xFF120404),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete "${group.name}"?',
-            style: GoogleFonts.sora(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700)),
+        title: Text(
+          'Delete "${group.name}"?',
+          style: GoogleFonts.sora(
+            color: AppThemeNotifier.isWhite
+                ? EleghartColors.accentDark
+                : Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
-            'All expenses in this group will be deleted. This cannot be undone.',
-            style: GoogleFonts.sora(color: Colors.white54, fontSize: 13)),
+          'All expenses in this group will be deleted. This cannot be undone.',
+          style: GoogleFonts.sora(
+            color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white54,
+            fontSize: 13,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel',
-                style: GoogleFonts.sora(color: Colors.white54)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.sora(
+                color: AppThemeNotifier.isWhite
+                    ? Colors.black54
+                    : Colors.white54,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete',
-                style: GoogleFonts.sora(
-                    color: const Color(0xFFFF3355),
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.sora(
+                color: const Color(0xFFFF3355),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -122,7 +173,8 @@ class GroupsScreenState extends State<GroupsScreen>
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-          builder: (_) => CreateGroupScreen(existingGroup: existing)),
+        builder: (_) => CreateGroupScreen(existingGroup: existing),
+      ),
     );
     if (result == true) _loadData();
   }
@@ -135,24 +187,30 @@ class GroupsScreenState extends State<GroupsScreen>
     if (changed == true) _loadData();
   }
 
-  List<ExpenseModel> _expensesFor(GroupModel g) =>
-      _expenses.where((e) => e.groupId == g.id && DateFilter.isInRange(e.date)).toList();
+  List<ExpenseModel> _expensesFor(GroupModel g) => _expenses
+      .where((e) => e.groupId == g.id && DateFilter.isInRange(e.date))
+      .toList();
 
-  double _spentFor(GroupModel g) => _expensesFor(g)
-      .where((e) => e.isDebit)
-      .fold(0.0, (s, e) => s + e.amount);
+  double _spentFor(GroupModel g) =>
+      _expensesFor(g).where((e) => e.isDebit).fold(0.0, (s, e) => s + e.amount);
 
   double _balanceFor(GroupModel g) {
     final ex = _expensesFor(g);
-    final credit = ex.where((e) => e.isCredit).fold(0.0, (s, e) => s + e.amount);
+    final credit = ex
+        .where((e) => e.isCredit)
+        .fold(0.0, (s, e) => s + e.amount);
     final debit = ex.where((e) => e.isDebit).fold(0.0, (s, e) => s + e.amount);
     return credit - debit;
   }
 
   double _totalBalance() {
     final filtered = _expenses.where((e) => DateFilter.isInRange(e.date));
-    final credit = filtered.where((e) => e.isCredit).fold(0.0, (s, e) => s + e.amount);
-    final debit = filtered.where((e) => e.isDebit).fold(0.0, (s, e) => s + e.amount);
+    final credit = filtered
+        .where((e) => e.isCredit)
+        .fold(0.0, (s, e) => s + e.amount);
+    final debit = filtered
+        .where((e) => e.isDebit)
+        .fold(0.0, (s, e) => s + e.amount);
     return credit - debit;
   }
 
@@ -177,10 +235,14 @@ class GroupsScreenState extends State<GroupsScreen>
     if (_selectedFilter == 'All') return _groups;
     final filter = _selectedFilter.toLowerCase();
     return _groups
-        .where((g) => g.categories
-            .any((c) => c.toLowerCase() == filter ||
-                        filter.startsWith(c.toLowerCase()) ||
-                        c.toLowerCase().startsWith(filter.replaceAll('s', ''))))
+        .where(
+          (g) => g.categories.any(
+            (c) =>
+                c.toLowerCase() == filter ||
+                filter.startsWith(c.toLowerCase()) ||
+                c.toLowerCase().startsWith(filter.replaceAll('s', '')),
+          ),
+        )
         .toList();
   }
 
@@ -188,8 +250,7 @@ class GroupsScreenState extends State<GroupsScreen>
     final bal = _balanceFor(g);
     final ex = _expensesFor(g);
     final recentCount = ex
-        .where((e) =>
-            DateTime.now().difference(e.date).inDays < 3)
+        .where((e) => DateTime.now().difference(e.date).inDays < 3)
         .length;
     if (recentCount >= 3) {
       return _StatusInfo('Most Active', const Color(0xFF8833CC));
@@ -207,9 +268,61 @@ class GroupsScreenState extends State<GroupsScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return const Center(
-          child: CircularProgressIndicator(color: Color(0xFFCC0020)));
+        child: CircularProgressIndicator(color: Color(0xFFCC0020)),
+      );
     }
-    return _groups.isEmpty ? _buildEmptyState() : _buildRichView();
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _groups.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 104.0, right: 8.0),
+              child: SizedBox(
+                height: 56,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(0.4),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton.icon(
+                    onPressed: _openCreateGroup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    label: Text(
+                      'Create Group',
+                      style: GoogleFonts.sora(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+      body: _groups.isEmpty ? _buildEmptyState() : _buildRichView(),
+    );
   }
 
   // ── RICH VIEW ─────────────────────────────────────────────────────────────
@@ -232,8 +345,11 @@ class GroupsScreenState extends State<GroupsScreen>
                 Text(
                   '$greeting, ${widget.userName} 👋',
                   style: GoogleFonts.sora(
-                      fontSize: 13,
-                      color: Colors.white54),
+                    fontSize: 13,
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark.withOpacity(0.55)
+                        : Colors.white54,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -241,7 +357,9 @@ class GroupsScreenState extends State<GroupsScreen>
                   style: GoogleFonts.sora(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark
+                        : Colors.white,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -251,7 +369,11 @@ class GroupsScreenState extends State<GroupsScreen>
                     Text(
                       'Your financial spaces',
                       style: GoogleFonts.sora(
-                          fontSize: 13, color: Colors.white38),
+                        fontSize: 13,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.45)
+                            : Colors.white38,
+                      ),
                     ),
                     const DateFilterPill(),
                   ],
@@ -262,18 +384,31 @@ class GroupsScreenState extends State<GroupsScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF120505),
+                    color: AppThemeNotifier.isWhite
+                        ? Colors.white
+                        : const Color(0xFF120505),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: const Color(0xFFCC0020).withOpacity(0.2),
-                        width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFCC0020).withOpacity(0.15),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                    ],
+                      color: AppThemeNotifier.isWhite
+                          ? const Color(0xFFEEEEEE)
+                          : const Color(0xFFCC0020).withOpacity(0.2),
+                      width: 1,
+                    ),
+                    boxShadow: AppThemeNotifier.isWhite
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFFCC0020).withOpacity(0.10),
+                              blurRadius: 12,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : [
+                            BoxShadow(
+                              color: const Color(0xFFCC0020).withOpacity(0.15),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
                   ),
                   child: Column(
                     children: [
@@ -283,8 +418,12 @@ class GroupsScreenState extends State<GroupsScreen>
                             Icons.groups_rounded,
                             'Total Groups',
                             '${DateFilter.current == DateFilterType.allTime ? _groups.length : _groups.where((g) => _expensesFor(g).isNotEmpty).length}',
-                            DateFilter.current == DateFilterType.allTime ? 'Active' : 'With activity',
-                            Colors.white70,
+                            DateFilter.current == DateFilterType.allTime
+                                ? 'Active'
+                                : 'With activity',
+                            AppThemeNotifier.isWhite
+                                ? Colors.black54
+                                : Colors.white70,
                           ),
                           _verticalDivider(),
                           _statBlock(
@@ -302,49 +441,65 @@ class GroupsScreenState extends State<GroupsScreen>
                             'This Month Spent',
                             '₹${monthSpent.toStringAsFixed(0)}',
                             '',
-                            Colors.white70,
+                            AppThemeNotifier.isWhite
+                                ? Colors.black54
+                                : Colors.white70,
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Container(
-                          height: 1,
-                          color: Colors.white.withOpacity(0.07)),
+                        height: 1,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.08)
+                            : Colors.white.withOpacity(0.07),
+                      ),
                       const SizedBox(height: 12),
                       GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CategoriesListScreen(
-                              allGroups: _groups,
-                              allExpenses: _expenses,
+                        onTap: () async {
+                          final changed = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CategoriesListScreen(
+                                allGroups: _groups,
+                                allExpenses: _expenses,
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                          if (changed == true) _loadData();
+                        },
                         child: Row(
                           children: [
                             Container(
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFCC0020).withOpacity(0.15),
+                                color: const Color(
+                                  0xFFCC0020,
+                                ).withOpacity(0.15),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.person_rounded,
-                                  color: Color(0xFFCC0020), size: 14),
+                              child: const Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFFCC0020),
+                                size: 14,
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 () {
-                                  final total = _groups
-                                      .expand((g) => g.categories)
-                                      .toSet()
-                                      .length;
-                                  return '$total categor${total != 1 ? 'ies' : 'y'} across all groups';
+                                  return '$_globalCategoriesCount categor${_globalCategoriesCount != 1 ? 'ies' : 'y'} total';
                                 }(),
                                 style: GoogleFonts.sora(
-                                    fontSize: 12, color: Colors.white60),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppThemeNotifier.isWhite
+                                      ? EleghartColors.accentDark.withOpacity(
+                                          0.7,
+                                        )
+                                      : Colors.white60,
+                                ),
                               ),
                             ),
                             Text(
@@ -376,15 +531,21 @@ class GroupsScreenState extends State<GroupsScreen>
                           duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: active
                                 ? const Color(0xFFCC0020)
+                                : AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withOpacity(0.06)
                                 : Colors.white.withOpacity(0.06),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: active
                                   ? Colors.transparent
+                                  : AppThemeNotifier.isWhite
+                                  ? EleghartColors.accentDark.withOpacity(0.12)
                                   : Colors.white.withOpacity(0.1),
                             ),
                           ),
@@ -392,8 +553,11 @@ class GroupsScreenState extends State<GroupsScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (active) ...[
-                                const Icon(Icons.grid_view_rounded,
-                                    color: Colors.white, size: 14),
+                                const Icon(
+                                  Icons.grid_view_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 6),
                               ],
                               Text(
@@ -405,6 +569,10 @@ class GroupsScreenState extends State<GroupsScreen>
                                       : FontWeight.w400,
                                   color: active
                                       ? Colors.white
+                                      : AppThemeNotifier.isWhite
+                                      ? EleghartColors.accentDark.withOpacity(
+                                          0.6,
+                                        )
                                       : Colors.white54,
                                 ),
                               ),
@@ -427,7 +595,9 @@ class GroupsScreenState extends State<GroupsScreen>
                       style: GoogleFonts.sora(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark
+                            : Colors.white,
                       ),
                     ),
                     Row(
@@ -435,10 +605,19 @@ class GroupsScreenState extends State<GroupsScreen>
                         Text(
                           'Sort by: Recent',
                           style: GoogleFonts.sora(
-                              fontSize: 12, color: Colors.white38),
+                            fontSize: 12,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withOpacity(0.45)
+                                : Colors.white38,
+                          ),
                         ),
-                        const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: Colors.white38, size: 18),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark.withOpacity(0.45)
+                              : Colors.white38,
+                          size: 18,
+                        ),
                       ],
                     ),
                   ],
@@ -482,9 +661,14 @@ class GroupsScreenState extends State<GroupsScreen>
             Icon(icon, color: const Color(0xFFCC0020), size: 22),
             const SizedBox(height: 4),
           ],
-          Text(label,
-              style: GoogleFonts.sora(
-                  fontSize: 11, color: Colors.white38)),
+          Text(
+            label,
+            style: GoogleFonts.sora(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white38,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             value,
@@ -495,20 +679,29 @@ class GroupsScreenState extends State<GroupsScreen>
             ),
           ),
           if (sub.isNotEmpty)
-            Text(sub,
-                style: GoogleFonts.sora(
-                    fontSize: 11, color: Colors.white38)),
+            Text(
+              sub,
+              style: GoogleFonts.sora(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppThemeNotifier.isWhite
+                    ? Colors.black54
+                    : Colors.white38,
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _verticalDivider() => Container(
-        width: 1,
-        height: 56,
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-        color: Colors.white.withOpacity(0.07),
-      );
+    width: 1,
+    height: 56,
+    margin: const EdgeInsets.symmetric(horizontal: 10),
+    color: AppThemeNotifier.isWhite
+        ? EleghartColors.accentDark.withOpacity(0.08)
+        : Colors.white.withOpacity(0.07),
+  );
 
   // ── GROUP CARD ────────────────────────────────────────────────────────────
 
@@ -525,23 +718,37 @@ class GroupsScreenState extends State<GroupsScreen>
       onTap: () => _openGroup(group),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF0E0505),
+          color: AppThemeNotifier.isWhite
+              ? Colors.white
+              : const Color(0xFF0E0505),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: const Color(0xFFCC0020).withOpacity(0.18), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFCC0020).withOpacity(0.18),
-              blurRadius: 18,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+            color: AppThemeNotifier.isWhite
+                ? const Color(0xFFEEEEEE)
+                : const Color(0xFFCC0020).withOpacity(0.18),
+            width: 1,
+          ),
+          boxShadow: AppThemeNotifier.isWhite
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.10),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.18),
+                    blurRadius: 18,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -557,17 +764,23 @@ class GroupsScreenState extends State<GroupsScreen>
                   children: [
                     SizedBox(
                       width: 88,
-                      child: group.imagePath != null &&
+                      child:
+                          group.imagePath != null &&
                               File(group.imagePath!).existsSync()
-                          ? Image.file(File(group.imagePath!),
-                              fit: BoxFit.cover)
+                          ? Image.file(
+                              File(group.imagePath!),
+                              fit: BoxFit.cover,
+                            )
                           : Container(
-                              color: const Color(0xFF1A0505),
+                              color: AppThemeNotifier.isWhite
+                                  ? const Color(0xFFFFBEBE)
+                                  : const Color(0xFF1A0505),
                               child: Center(
                                 child: Icon(
                                   _categoryIcon(group.categories),
-                                  color: const Color(0xFFCC0020)
-                                      .withOpacity(0.5),
+                                  color: const Color(
+                                    0xFFCC0020,
+                                  ).withOpacity(0.5),
                                   size: 36,
                                 ),
                               ),
@@ -609,7 +822,9 @@ class GroupsScreenState extends State<GroupsScreen>
                         style: GoogleFonts.sora(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark
+                              : Colors.white,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -618,9 +833,12 @@ class GroupsScreenState extends State<GroupsScreen>
                       Text(
                         '₹${spent.toStringAsFixed(0)} spent',
                         style: GoogleFonts.sora(
-                            fontSize: 13,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          color: AppThemeNotifier.isWhite
+                              ? Colors.black54
+                              : Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -643,106 +861,145 @@ class GroupsScreenState extends State<GroupsScreen>
                 child: SizedBox(
                   width: 124,
                   child: Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Status badge + 3-dots
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: _buildStatusBadge(status),
+                    padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // Status badge + 3-dots
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: _buildStatusBadge(status),
+                              ),
                             ),
-                          ),
-                          SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: PopupMenuButton<String>(
-                            padding: EdgeInsets.zero,
-                            iconSize: 16,
-                            icon: const Icon(Icons.more_vert_rounded,
-                                color: Colors.white38, size: 16),
-                            color: const Color(0xFF1A0505),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            onSelected: (v) {
-                              if (v == 'edit')
-                                _openCreateGroup(existing: group);
-                              if (v == 'delete') _deleteGroup(group);
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(children: [
-                                  const Icon(Icons.edit_rounded,
-                                      size: 15, color: Colors.white70),
-                                  const SizedBox(width: 8),
-                                  Text('Edit Group',
-                                      style: GoogleFonts.sora(
-                                          fontSize: 13,
-                                          color: Colors.white70)),
-                                ]),
+                            SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                iconSize: 16,
+                                icon: Icon(
+                                  Icons.more_vert_rounded,
+                                  color: AppThemeNotifier.isWhite
+                                      ? Colors.black38
+                                      : Colors.white38,
+                                  size: 16,
+                                ),
+                                color: AppThemeNotifier.isWhite
+                                    ? Colors.white
+                                    : const Color(0xFF1A0505),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                onSelected: (v) {
+                                  if (v == 'edit')
+                                    _openCreateGroup(existing: group);
+                                  if (v == 'delete') _deleteGroup(group);
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.edit_rounded,
+                                          size: 15,
+                                          color: AppThemeNotifier.isWhite
+                                              ? Colors.black54
+                                              : Colors.white70,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Edit Group',
+                                          style: GoogleFonts.sora(
+                                            fontSize: 13,
+                                            color: AppThemeNotifier.isWhite
+                                                ? Colors.black54
+                                                : Colors.white70,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.delete_rounded,
+                                          size: 15,
+                                          color: Color(0xFFFF3355),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Delete Group',
+                                          style: GoogleFonts.sora(
+                                            fontSize: 13,
+                                            color: const Color(0xFFFF3355),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(children: [
-                                  const Icon(Icons.delete_rounded,
-                                      size: 15,
-                                      color: Color(0xFFFF3355)),
-                                  const SizedBox(width: 8),
-                                  Text('Delete Group',
-                                      style: GoogleFonts.sora(
-                                          fontSize: 13,
-                                          color:
-                                              const Color(0xFFFF3355))),
-                                ]),
-                              ),
-                            ],
+                            ), // SizedBox
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        // Expense count
+                        Text(
+                          '${expenses.length} expense${expenses.length != 1 ? 's' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.sora(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppThemeNotifier.isWhite
+                                ? Colors.black54
+                                : Colors.white54,
                           ),
-                          ),  // SizedBox
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      // Expense count
-                      Text(
-                        '${expenses.length} expense${expenses.length != 1 ? 's' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.sora(
-                            fontSize: 11, color: Colors.white54),
-                      ),
-                      const SizedBox(height: 1),
-                      // Last expense label + time
-                      Text(
-                        'Last expense',
-                        style: GoogleFonts.sora(
-                            fontSize: 9, color: Colors.white24),
-                      ),
-                      Text(
-                        lastLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: GoogleFonts.sora(
+                        ),
+                        const SizedBox(height: 1),
+                        // Last expense label + time
+                        Text(
+                          'Last expense',
+                          style: GoogleFonts.sora(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            color: AppThemeNotifier.isWhite
+                                ? Colors.black38
+                                : Colors.white24,
+                          ),
+                        ),
+                        Text(
+                          lastLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: GoogleFonts.sora(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white54),
-                      ),
-                      const Spacer(),
-                      // Sparkline
-                      SizedBox(
-                        height: 44,
-                        width: double.infinity,
-                        child: _buildSparkLine(expenses, sparkColor),
-                      ),
-                    ],
+                            color: AppThemeNotifier.isWhite
+                                ? Colors.black54
+                                : Colors.white54,
+                          ),
+                        ),
+                        const Spacer(),
+                        // Sparkline
+                        SizedBox(
+                          height: 44,
+                          width: double.infinity,
+                          child: _buildSparkLine(expenses, sparkColor),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 ),
               ),
             ],
@@ -758,8 +1015,7 @@ class GroupsScreenState extends State<GroupsScreen>
       decoration: BoxDecoration(
         color: info.color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(8),
-        border:
-            Border.all(color: info.color.withOpacity(0.3), width: 1),
+        border: Border.all(color: info.color.withOpacity(0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -769,9 +1025,10 @@ class GroupsScreenState extends State<GroupsScreen>
           Text(
             info.label,
             style: GoogleFonts.sora(
-                fontSize: 9,
-                color: info.color,
-                fontWeight: FontWeight.w700),
+              fontSize: 9,
+              color: info.color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -781,8 +1038,8 @@ class GroupsScreenState extends State<GroupsScreen>
   Widget _buildMemberAvatars(GroupModel group) {
     final cats = group.categories;
     if (cats.isEmpty) return const SizedBox(height: 24);
-    final display = cats.take(5).toList();
-    final overflow = cats.length > 5 ? cats.length - 5 : 0;
+    final display = cats.take(3).toList();
+    final overflow = cats.length > 3 ? cats.length - 3 : 0;
 
     return SizedBox(
       height: 24,
@@ -804,11 +1061,14 @@ class GroupsScreenState extends State<GroupsScreen>
                   color: color.withOpacity(0.85),
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: const Color(0xFF0E0505), width: 1.5),
+                    color: const Color(0xFF0E0505),
+                    width: 1.5,
+                  ),
                   image: hasImg
                       ? DecorationImage(
                           image: FileImage(File(imgPath!)),
-                          fit: BoxFit.cover)
+                          fit: BoxFit.cover,
+                        )
                       : null,
                 ),
                 child: hasImg
@@ -817,9 +1077,10 @@ class GroupsScreenState extends State<GroupsScreen>
                         child: Text(
                           cat.isNotEmpty ? cat[0].toUpperCase() : '?',
                           style: const TextStyle(
-                              fontSize: 9,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700),
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
               ),
@@ -835,15 +1096,18 @@ class GroupsScreenState extends State<GroupsScreen>
                   color: Colors.white.withOpacity(0.1),
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: const Color(0xFF0E0505), width: 1.5),
+                    color: const Color(0xFF0E0505),
+                    width: 1.5,
+                  ),
                 ),
                 child: Center(
                   child: Text(
                     '+$overflow',
                     style: const TextStyle(
-                        fontSize: 8,
-                        color: Colors.white54,
-                        fontWeight: FontWeight.w700),
+                      fontSize: 8,
+                      color: Colors.white54,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -854,9 +1118,7 @@ class GroupsScreenState extends State<GroupsScreen>
   }
 
   IconData _categoryIcon(List<String> categories) {
-    final cat = categories.isNotEmpty
-        ? categories.first.toLowerCase()
-        : '';
+    final cat = categories.isNotEmpty ? categories.first.toLowerCase() : '';
     if (cat.contains('trip') || cat.contains('travel')) {
       return Icons.airplanemode_active_rounded;
     }
@@ -895,8 +1157,9 @@ class GroupsScreenState extends State<GroupsScreen>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFCC0020).withOpacity(
-                          0.12 + _glowController.value * 0.12),
+                      color: const Color(
+                        0xFFCC0020,
+                      ).withOpacity(0.12 + _glowController.value * 0.12),
                       blurRadius: 60 + _glowController.value * 30,
                       spreadRadius: 8,
                     ),
@@ -914,19 +1177,25 @@ class GroupsScreenState extends State<GroupsScreen>
                       shape: BoxShape.circle,
                       color: const Color(0xFFCC0020).withOpacity(0.04),
                       border: Border.all(
-                          color: const Color(0xFFCC0020).withOpacity(0.12),
-                          width: 1),
+                        color: const Color(0xFFCC0020).withOpacity(0.12),
+                        width: 1,
+                      ),
                     ),
                   ),
                   Container(
                     width: 130,
                     height: 110,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A0A0A),
+                      color: AppThemeNotifier.isWhite
+                          ? const Color(0xFFFFF0F0)
+                          : const Color(0xFF1A0A0A),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                          color: const Color(0xFFCC0020).withOpacity(0.3),
-                          width: 1.2),
+                        color: AppThemeNotifier.isWhite
+                            ? const Color(0xFFCC0020).withOpacity(0.15)
+                            : const Color(0xFFCC0020).withOpacity(0.3),
+                        width: 1.2,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(0xFFCC0020).withOpacity(0.25),
@@ -935,8 +1204,11 @@ class GroupsScreenState extends State<GroupsScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.folder_special_rounded,
-                        color: Color(0xFFCC0020), size: 56),
+                    child: const Icon(
+                      Icons.folder_special_rounded,
+                      color: Color(0xFFCC0020),
+                      size: 56,
+                    ),
                   ),
                   Positioned(
                     top: 14,
@@ -960,20 +1232,28 @@ class GroupsScreenState extends State<GroupsScreen>
           const SizedBox(height: 28),
           Center(
             child: RichText(
-              text: TextSpan(children: [
-                TextSpan(
+              text: TextSpan(
+                children: [
+                  TextSpan(
                     text: 'No groups ',
                     style: GoogleFonts.sora(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-                TextSpan(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: AppThemeNotifier.isWhite
+                          ? EleghartColors.accentDark
+                          : Colors.white,
+                    ),
+                  ),
+                  TextSpan(
                     text: 'yet',
                     style: GoogleFonts.sora(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFCC0020))),
-              ]),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFCC0020),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -982,7 +1262,12 @@ class GroupsScreenState extends State<GroupsScreen>
               'Create a group to start tracking\nshared expenses effortlessly.',
               textAlign: TextAlign.center,
               style: GoogleFonts.sora(
-                  fontSize: 14, color: Colors.white54, height: 1.6),
+                fontSize: 14,
+                color: AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark.withOpacity(0.55)
+                    : Colors.white54,
+                height: 1.6,
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -994,14 +1279,16 @@ class GroupsScreenState extends State<GroupsScreen>
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFF7A0010), Color(0xFFCC0020)]),
+                    colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+                  ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.red.withOpacity(0.4),
-                        blurRadius: 20,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 6))
+                      color: Colors.red.withOpacity(0.4),
+                      blurRadius: 20,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 6),
+                    ),
                   ],
                 ),
                 child: ElevatedButton.icon(
@@ -1010,15 +1297,22 @@ class GroupsScreenState extends State<GroupsScreen>
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
-                  icon: const Icon(Icons.group_add_rounded,
-                      color: Colors.white, size: 22),
-                  label: Text('Create your first group',
-                      style: GoogleFonts.sora(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
+                  icon: const Icon(
+                    Icons.group_add_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  label: Text(
+                    'Create your first group',
+                    style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1026,11 +1320,16 @@ class GroupsScreenState extends State<GroupsScreen>
           const SizedBox(height: 32),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text('Not sure where to start?',
-                style: GoogleFonts.sora(
-                    fontSize: 13,
-                    color: Colors.white38,
-                    letterSpacing: 0.3)),
+            child: Text(
+              'Not sure where to start?',
+              style: GoogleFonts.sora(
+                fontSize: 13,
+                color: AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark.withOpacity(0.45)
+                    : Colors.white38,
+                letterSpacing: 0.3,
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           Padding(
@@ -1038,13 +1337,22 @@ class GroupsScreenState extends State<GroupsScreen>
             child: Row(
               children: [
                 _buildTemplateCard(
-                    Icons.airplanemode_active_rounded, 'Trip', 'Plan a trip\ntogether'),
+                  Icons.airplanemode_active_rounded,
+                  'Trip',
+                  'Plan a trip\ntogether',
+                ),
                 const SizedBox(width: 10),
                 _buildTemplateCard(
-                    Icons.groups_rounded, 'Friends', 'Track hangouts\n& outings'),
+                  Icons.groups_rounded,
+                  'Friends',
+                  'Track hangouts\n& outings',
+                ),
                 const SizedBox(width: 10),
                 _buildTemplateCard(
-                    Icons.home_rounded, 'Family', 'Manage home\nexpenses'),
+                  Icons.home_rounded,
+                  'Family',
+                  'Manage home\nexpenses',
+                ),
               ],
             ),
           ),
@@ -1059,14 +1367,19 @@ class GroupsScreenState extends State<GroupsScreen>
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A0A0A),
+        color: AppThemeNotifier.isWhite
+            ? Colors.white
+            : const Color(0xFF1A0A0A),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: const Color(0xFFCC0020).withOpacity(0.25), width: 1),
+          color: const Color(0xFFCC0020).withOpacity(0.25),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFFCC0020).withOpacity(0.2),
-              blurRadius: 10)
+            color: const Color(0xFFCC0020).withOpacity(0.2),
+            blurRadius: 10,
+          ),
         ],
       ),
       child: Icon(icon, color: const Color(0xFFCC0020), size: 18),
@@ -1080,10 +1393,21 @@ class GroupsScreenState extends State<GroupsScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.04),
+            color: AppThemeNotifier.isWhite
+                ? Colors.white
+                : Colors.white.withOpacity(0.04),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-                color: Colors.white.withOpacity(0.08), width: 1),
+              color: AppThemeNotifier.isWhite
+                  ? const Color(0xFFEEEEEE)
+                  : Colors.white.withOpacity(0.08),
+              width: 1,
+            ),
+            boxShadow: AppThemeNotifier.isWhite
+                ? [
+                    BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.10), blurRadius: 10, offset: const Offset(0, 2))
+                  ]
+                : [],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1095,21 +1419,30 @@ class GroupsScreenState extends State<GroupsScreen>
                   color: const Color(0xFFCC0020).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child:
-                    Icon(icon, color: const Color(0xFFCC0020), size: 18),
+                child: Icon(icon, color: const Color(0xFFCC0020), size: 18),
               ),
               const SizedBox(height: 10),
-              Text(title,
-                  style: GoogleFonts.sora(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
+              Text(
+                title,
+                style: GoogleFonts.sora(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(subtitle,
-                  style: GoogleFonts.sora(
-                      fontSize: 10,
-                      color: Colors.white38,
-                      height: 1.4)),
+              Text(
+                subtitle,
+                style: GoogleFonts.sora(
+                  fontSize: 10,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark.withOpacity(0.45)
+                      : Colors.white38,
+                  height: 1.4,
+                ),
+              ),
             ],
           ),
         ),
@@ -1129,16 +1462,17 @@ class _StatusInfo {
 // ── Sparkline builder ─────────────────────────────────────────────────────────
 
 Widget _buildSparkLine(List<ExpenseModel> expenses, Color color) {
-  final debits = expenses
-      .where((e) => e.isDebit)
-      .toList()
+  final debits = expenses.where((e) => e.isDebit).toList()
     ..sort((a, b) => a.date.compareTo(b.date));
 
   // Flat line for insufficient data
   if (debits.length < 3) {
     return LineChart(
       LineChartData(
-        minX: 0, maxX: 6, minY: 0, maxY: 6,
+        minX: 0,
+        maxX: 6,
+        minY: 0,
+        maxY: 6,
         gridData: const FlGridData(show: false),
         titlesData: const FlTitlesData(show: false),
         borderData: FlBorderData(show: false),
@@ -1186,19 +1520,16 @@ Widget _buildSparkLine(List<ExpenseModel> expenses, Color color) {
           gradient: LinearGradient(
             colors: [color.withOpacity(0.7), color, color.withOpacity(0.85)],
           ),
-          shadow: Shadow(
-            color: color.withOpacity(0.35),
-            blurRadius: 6,
-          ),
+          shadow: Shadow(color: color.withOpacity(0.35), blurRadius: 6),
           dotData: FlDotData(
             show: true,
             getDotPainter: (spot, percent, barData, index) =>
                 FlDotCirclePainter(
-              radius: 2.5,
-              color: color,
-              strokeWidth: 1.5,
-              strokeColor: const Color(0xFF0E0505),
-            ),
+                  radius: 2.5,
+                  color: color,
+                  strokeWidth: 1.5,
+                  strokeColor: const Color(0xFF0E0505),
+                ),
           ),
           belowBarData: BarAreaData(show: false),
         ),

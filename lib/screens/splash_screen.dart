@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -69,59 +70,65 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
+    final isWhite = AppThemeNotifier.isWhite;
+
     return Scaffold(
+      backgroundColor: isWhite ? Colors.white : Colors.black,
       body: Stack(
         children: [
 
-          /// 1. DARK BACKGROUND (fills below the image)
+          /// 1. BACKGROUND
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF3B0008),
-                  Color(0xFF0E0002),
-                  Color(0xFF000000),
-                ],
-                stops: [0.0, 0.5, 1.0],
+                colors: isWhite
+                    ? [Colors.white, const Color(0xFFFFF0F0), Colors.white]
+                    : const [
+                        Color(0xFF3B0008),
+                        Color(0xFF0E0002),
+                        Color(0xFF000000),
+                      ],
+                stops: const [0.0, 0.5, 1.0],
               ),
             ),
           ),
 
-          /// 2. SPLASH IMAGE — fitWidth keeps full image visible, no zoom
+          /// 2. SPLASH IMAGE
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: Image.asset(
-              'assets/images/splash_screen.png',
+              isWhite ? 'assets/images/splash_screen_white.png' : 'assets/images/splash_screen.png',
               width: double.infinity,
               fit: BoxFit.fitWidth,
             ),
           ),
 
-          /// 3. BOTTOM FADE — blends image bottom into dark loader area
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: size.height * 0.20,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Color(0xCC000000),
-                    Color(0xFF000000),
-                  ],
-                  stops: [0.0, 0.5, 1.0],
+          /// 3. BOTTOM FADE — only for dark theme
+          if (!isWhite)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: size.height * 0.20,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Color(0xCC000000),
+                      Color(0xFF000000),
+                    ],
+                    stops: [0.0, 0.5, 1.0],
+                  ),
                 ),
               ),
             ),
-          ),
 
           /// 4. ANIMATED PULSING RING over the logo
           Positioned(
@@ -155,9 +162,9 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
             ),
           ),
 
-          /// 5. LIVE ANIMATED LOADER (replaces static one in image)
+          /// 5. LOADER — positioned just below the image content area
           Positioned(
-            bottom: size.height * 0.028,
+            top: size.height * 0.76,
             left: 36,
             right: 36,
             child: Column(
@@ -166,7 +173,7 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
                 Text(
                   'Loading your financial world...',
                   style: GoogleFonts.sora(
-                    color: Colors.white54,
+                    color: isWhite ? const Color(0xFF8E1D1D).withOpacity(0.6) : Colors.white54,
                     fontSize: 13,
                     letterSpacing: 0.5,
                   ),

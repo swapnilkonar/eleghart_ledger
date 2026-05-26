@@ -20,6 +20,8 @@ class GroupCard extends StatelessWidget {
       child: ListTile(
         title: Text(
           name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             color: EleghartColors.textPrimary,
@@ -27,12 +29,16 @@ class GroupCard extends StatelessWidget {
         ),
         subtitle: Text(
           lastExpense,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: EleghartColors.textSecondary,
           ),
         ),
         trailing: Text(
           amount,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,

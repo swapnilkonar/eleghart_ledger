@@ -2,6 +2,8 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import '../widgets/themed_background.dart';
+import '../utils/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/pdf_export_service.dart';
 import '../screens/export_pdf_screen.dart';
@@ -32,6 +34,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   final Map<String, Map<String, dynamic>> _memberStats = {};
   bool _dataChanged = false;
+  late String _groupName;
+  String? _groupImagePath;
 
   // -------- NEW: FILTER + SEARCH STATE --------
   String _expenseFilter = 'all'; // all | debit | credit
@@ -41,9 +45,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   void initState() {
     super.initState();
     _categories = [...widget.group.categories];
+    _groupName = widget.group.name;
+    _groupImagePath = widget.group.imagePath;
     _loadExpenses();
     DateFilter.notifier.addListener(_onFilterChanged);
+    AppThemeNotifier.instance.addListener(_onThemeChanged);
   }
+
+  void _onThemeChanged() => setState(() {});
 
   void _onFilterChanged() {
     _buildMemberStats(_expenses);
@@ -53,6 +62,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
+    AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _categoryController.dispose();
     super.dispose();
   }
@@ -71,8 +81,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     if (mounted) setState(() => _categoryImages = catImages);
     final all = await StorageService.loadExpenses();
 
-    final groupExpenses =
-        all.where((e) => e.groupId == widget.group.id).toList();
+    final groupExpenses = all
+        .where((e) => e.groupId == widget.group.id)
+        .toList();
 
     groupExpenses.sort((a, b) => b.date.compareTo(a.date));
 
@@ -90,7 +101,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     _memberStats.clear();
 
     for (final c in _categories) {
-      final related = expenses.where((e) => e.categories.contains(c) && DateFilter.isInRange(e.date)).toList();
+      final related = expenses
+          .where(
+            (e) => e.categories.contains(c) && DateFilter.isInRange(e.date),
+          )
+          .toList();
 
       final total = related.fold<double>(0, (s, e) {
         final share = e.amount / e.categories.length;
@@ -116,10 +131,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddExpenseScreen(
-          group: widget.group,
-          categories: _categories,
-        ),
+        builder: (_) =>
+            AddExpenseScreen(group: widget.group, categories: _categories),
       ),
     );
     if (result == true) {
@@ -140,15 +153,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         resizeToAvoidBottomInset: true,
         body: Stack(
           children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/background_theme_top_glow.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-            Positioned.fill(
-              child: Container(color: Colors.black.withOpacity(0.72)),
-            ),
+            Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.72)),
             SafeArea(
               child: Column(
                 children: [
@@ -160,7 +165,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         GestureDetector(
                           onTap: () => Navigator.pop(context, _dataChanged),
                           child: Container(
-                            width: 40, height: 40,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
@@ -169,20 +175,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               ),
                               color: const Color(0xFFCC0020).withOpacity(0.10),
                             ),
-                            child: const Icon(Icons.arrow_back_ios_new_rounded,
-                                color: Colors.white, size: 16),
+                            child: const Icon(
+                              Icons.arrow_back_ios_new_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
-                            widget.group.name,
+                            _groupName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.sora(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppThemeNotifier.isWhite
+                                  ? EleghartColors.accentDark
+                                  : Colors.white,
                             ),
                           ),
                         ),
@@ -197,7 +208,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             ),
                           ),
                           child: Container(
-                            width: 40, height: 40,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
@@ -206,8 +218,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               ),
                               color: const Color(0xFFCC0020).withOpacity(0.08),
                             ),
-                            child: const Icon(Icons.picture_as_pdf_rounded,
-                                color: Color(0xFFCC0020), size: 18),
+                            child: const Icon(
+                              Icons.picture_as_pdf_rounded,
+                              color: Color(0xFFCC0020),
+                              size: 18,
+                            ),
                           ),
                         ),
                       ],
@@ -249,40 +264,76 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           // Search
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
+                              color: AppThemeNotifier.isWhite
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.06),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                  color: Colors.white.withOpacity(0.10)),
+                                color: AppThemeNotifier.isWhite
+                                    ? const Color(0xFFEEEEEE)
+                                    : Colors.white.withOpacity(0.10),
+                              ),
+                              boxShadow: AppThemeNotifier.isWhite
+                                  ? [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFFCC0020,
+                                        ).withOpacity(0.08),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : [],
                             ),
                             child: Row(
                               children: [
                                 const SizedBox(width: 14),
-                                const Icon(Icons.search_rounded,
-                                    color: Colors.white38, size: 20),
+                                Icon(
+                                  Icons.search_rounded,
+                                  color: AppThemeNotifier.isWhite
+                                      ? EleghartColors.accentDark.withOpacity(
+                                          0.4,
+                                        )
+                                      : Colors.white38,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: TextField(
                                     style: GoogleFonts.sora(
-                                        fontSize: 13, color: Colors.white),
+                                      fontSize: 13,
+                                      color: AppThemeNotifier.isWhite
+                                          ? EleghartColors.accentDark
+                                          : Colors.white,
+                                    ),
                                     decoration: InputDecoration(
                                       hintText:
                                           'Search by name, amount, description...',
                                       hintStyle: GoogleFonts.sora(
-                                          fontSize: 13, color: Colors.white30),
+                                        fontSize: 13,
+                                        color: AppThemeNotifier.isWhite
+                                            ? EleghartColors.accentDark
+                                                  .withOpacity(0.35)
+                                            : Colors.white30,
+                                      ),
                                       border: InputBorder.none,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                              vertical: 14),
+                                            vertical: 14,
+                                          ),
                                     ),
                                     onChanged: (v) =>
                                         setState(() => _searchQuery = v.trim()),
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(Icons.tune_rounded,
-                                    color: const Color(0xFFCC0020)
-                                        .withOpacity(0.7),
-                                    size: 18),
+                                Icon(
+                                  Icons.tune_rounded,
+                                  color: const Color(
+                                    0xFFCC0020,
+                                  ).withOpacity(0.7),
+                                  size: 18,
+                                ),
                                 const SizedBox(width: 14),
                               ],
                             ),
@@ -291,7 +342,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           if (_loadingExpenses)
                             const Center(
                               child: CircularProgressIndicator(
-                                  color: Color(0xFFCC0020)),
+                                color: Color(0xFFCC0020),
+                              ),
                             )
                           else
                             _buildExpenseList(),
@@ -303,8 +355,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
                   // ── Add Expense button ─────────────────────────────────
                   Padding(
-                    padding:
-                        EdgeInsets.fromLTRB(20, 8, 20, safeBottom + 16),
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, safeBottom + 16),
                     child: GestureDetector(
                       onTap: _addExpense,
                       child: Container(
@@ -315,29 +366,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           gradient: const RadialGradient(
                             center: Alignment.center,
                             radius: 0.9,
-                            colors: [
-                              Color(0xFFCC0020),
-                              Color(0xFF6B0010),
-                            ],
+                            colors: [Color(0xFFCC0020), Color(0xFF6B0010)],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color:
-                                  const Color(0xFFCC0020).withOpacity(0.5),
+                              color: const Color(0xFFCC0020).withOpacity(0.5),
                               blurRadius: 22,
                               spreadRadius: 1,
                               offset: const Offset(0, 4),
                             ),
                             BoxShadow(
-                              color:
-                                  const Color(0xFFCC0020).withOpacity(0.2),
+                              color: const Color(0xFFCC0020).withOpacity(0.2),
                               blurRadius: 40,
                               spreadRadius: 4,
                             ),
                           ],
                           border: Border.all(
-                            color:
-                                const Color(0xFFFF2040).withOpacity(0.4),
+                            color: const Color(0xFFFF2040).withOpacity(0.4),
                             width: 1,
                           ),
                         ),
@@ -365,8 +410,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.add_rounded,
-                                    color: Colors.white, size: 22),
+                                const Icon(
+                                  Icons.add_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                                 const SizedBox(width: 10),
                                 Text(
                                   'Add Expense',
@@ -396,65 +444,117 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- SUMMARY HEADER ----------------
 
   Widget _buildHeader() {
-    final filtered = _expenses.where((e) => DateFilter.isInRange(e.date)).toList();
+    final filtered = _expenses
+        .where((e) => DateFilter.isInRange(e.date))
+        .toList();
     double totalDebit = 0;
     double totalCredit = 0;
     for (final e in filtered) {
-      if (e.type == 'credit') totalCredit += e.amount;
-      else totalDebit += e.amount;
+      if (e.type == 'credit')
+        totalCredit += e.amount;
+      else
+        totalDebit += e.amount;
     }
     final netBalance = totalCredit - totalDebit;
     final isPositive = netBalance >= 0;
-    final netColor = isPositive ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
+    final netColor = isPositive
+        ? const Color(0xFF00CC66)
+        : const Color(0xFFFF3355);
     final lastDate = filtered.isEmpty
         ? '-'
-        : filtered.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b).toString().split(' ')[0];
+        : filtered
+              .map((e) => e.date)
+              .reduce((a, b) => a.isAfter(b) ? a : b)
+              .toString()
+              .split(' ')[0];
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF120404),
+        color: AppThemeNotifier.isWhite
+            ? Colors.white
+            : const Color(0xFF120404),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-            color: const Color(0xFFCC0020).withOpacity(0.45), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFCC0020).withOpacity(0.2),
-            blurRadius: 24,
-            spreadRadius: 2,
-          ),
-        ],
+          color: AppThemeNotifier.isWhite
+              ? const Color(0xFFEEEEEE)
+              : const Color(0xFFCC0020).withOpacity(0.45),
+          width: AppThemeNotifier.isWhite ? 1 : 1.2,
+        ),
+        boxShadow: AppThemeNotifier.isWhite
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFCC0020).withOpacity(0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFFCC0020).withOpacity(0.2),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(19),
         child: Stack(
           children: [
             // Mountain silhouette background
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Opacity(
-                opacity: 0.18,
-                child: Image.asset(
-                  'assets/images/background_theme_top_glow.png',
-                  height: 90,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.bottomCenter,
+            if (!AppThemeNotifier.isWhite)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Opacity(
+                  opacity: 0.18,
+                  child: Image.asset(
+                    'assets/images/background_theme_top_glow.png',
+                    height: 90,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.bottomCenter,
+                  ),
                 ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.group.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.sora(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _groupName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.sora(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark
+                                : Colors.white,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _editGroupName,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFCC0020).withOpacity(0.12),
+                          ),
+                          child: Icon(
+                            Icons.edit_rounded,
+                            size: 14,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark
+                                : Colors.white54,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -490,13 +590,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                const Icon(Icons.calendar_today_rounded,
-                                    size: 13, color: Colors.white38),
+                                Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 13,
+                                  color: AppThemeNotifier.isWhite
+                                      ? EleghartColors.accentDark.withOpacity(
+                                          0.4,
+                                        )
+                                      : Colors.white38,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Last expense: $lastDate',
                                   style: GoogleFonts.sora(
-                                      fontSize: 12, color: Colors.white38),
+                                    fontSize: 12,
+                                    color: AppThemeNotifier.isWhite
+                                        ? EleghartColors.accentDark.withOpacity(
+                                            0.5,
+                                          )
+                                        : Colors.white38,
+                                  ),
                                 ),
                               ],
                             ),
@@ -514,8 +627,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
-  Widget _statRow(IconData icon, Color iconColor, String value, String label,
-      {Color? valueColor}) {
+  Widget _statRow(
+    IconData icon,
+    Color iconColor,
+    String value,
+    String label, {
+    Color? valueColor,
+  }) {
     return Row(
       children: [
         Icon(icon, size: 16, color: iconColor),
@@ -525,38 +643,259 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           style: GoogleFonts.sora(
             fontSize: 15,
             fontWeight: FontWeight.w800,
-            color: valueColor ?? Colors.white,
+            color:
+                valueColor ??
+                (AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark
+                    : Colors.white),
           ),
         ),
         const SizedBox(width: 8),
         Text(
           label,
-          style: GoogleFonts.sora(fontSize: 12, color: Colors.white54),
+          style: GoogleFonts.sora(
+            fontSize: 12,
+            color: AppThemeNotifier.isWhite
+                ? EleghartColors.accentDark.withOpacity(0.5)
+                : Colors.white54,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildGroupAvatar() {
-    if (widget.group.imagePath != null &&
-        File(widget.group.imagePath!).existsSync()) {
-      return CircleAvatar(
-        radius: 36,
-        backgroundImage: FileImage(File(widget.group.imagePath!)),
-      );
-    }
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFF1A0505),
-        border: Border.all(
-            color: const Color(0xFFCC0020).withOpacity(0.2), width: 1),
+    final hasImg =
+        _groupImagePath != null && File(_groupImagePath!).existsSync();
+    Widget avatar = hasImg
+        ? CircleAvatar(
+            key: ValueKey(_groupImagePath),
+            radius: 36,
+            backgroundImage: FileImage(File(_groupImagePath!)),
+          )
+        : Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppThemeNotifier.isWhite
+                  ? const Color(0xFFFFF0F0)
+                  : const Color(0xFF1A0505),
+              border: Border.all(
+                color: const Color(
+                  0xFFCC0020,
+                ).withOpacity(AppThemeNotifier.isWhite ? 0.3 : 0.2),
+                width: 1,
+              ),
+            ),
+            child: const Icon(
+              Icons.groups_rounded,
+              color: Color(0xFFCC0020),
+              size: 32,
+            ),
+          );
+    return GestureDetector(
+      onTap: _pickGroupImage,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          avatar,
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFCC0020),
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                size: 13,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
       ),
-      child: const Icon(Icons.groups_rounded,
-          color: Color(0xFFCC0020), size: 32),
     );
+  }
+
+  Future<void> _editGroupName() async {
+    final ctrl = TextEditingController(text: _groupName);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppThemeNotifier.isWhite
+            ? Colors.white
+            : const Color(0xFF120404),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Edit Group Name',
+          style: GoogleFonts.sora(
+            color: AppThemeNotifier.isWhite
+                ? EleghartColors.accentDark
+                : Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: GoogleFonts.sora(
+            color: AppThemeNotifier.isWhite
+                ? EleghartColors.accentDark
+                : Colors.white,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Group name',
+            hintStyle: GoogleFonts.sora(
+              color: AppThemeNotifier.isWhite
+                  ? EleghartColors.accentDark.withOpacity(0.35)
+                  : Colors.white38,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.sora(
+                color: AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark.withOpacity(0.5)
+                    : Colors.white54,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Text(
+              'Save',
+              style: GoogleFonts.sora(
+                color: const Color(0xFFCC0020),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty || result == _groupName) return;
+    await _saveGroupEdits(newName: result);
+  }
+
+  Future<void> _pickGroupImage() async {
+    final picker = ImagePicker();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppThemeNotifier.isWhite
+          ? Colors.white
+          : const Color(0xFF120404),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppThemeNotifier.isWhite
+                    ? Colors.black12
+                    : Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(
+                Icons.camera_alt_rounded,
+                color: Color(0xFFCC0020),
+              ),
+              title: Text(
+                'Take photo',
+                style: GoogleFonts.sora(
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white,
+                ),
+              ),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: Color(0xFFCC0020),
+              ),
+              title: Text(
+                'Choose from gallery',
+                style: GoogleFonts.sora(
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white,
+                ),
+              ),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            if (_groupImagePath != null)
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_rounded,
+                  color: Color(0xFFFF3355),
+                ),
+                title: Text(
+                  'Remove photo',
+                  style: GoogleFonts.sora(color: const Color(0xFFFF3355)),
+                ),
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == 'remove') {
+      await _saveGroupEdits(removeImage: true);
+      return;
+    }
+    if (action == null) return;
+    final source = action == 'camera'
+        ? ImageSource.camera
+        : ImageSource.gallery;
+    final picked = await picker.pickImage(source: source, imageQuality: 75);
+    if (picked == null) return;
+    await _saveGroupEdits(newImagePath: picked.path);
+  }
+
+  Future<void> _saveGroupEdits({
+    String? newName,
+    String? newImagePath,
+    bool removeImage = false,
+  }) async {
+    final allGroups = await StorageService.loadGroups();
+    final idx = allGroups.indexWhere((g) => g.id == widget.group.id);
+    if (idx == -1) return;
+    allGroups[idx] = GroupModel(
+      id: widget.group.id,
+      name: newName ?? _groupName,
+      imagePath: removeImage ? null : (newImagePath ?? _groupImagePath),
+      categories: allGroups[idx].categories,
+    );
+    await StorageService.saveGroups(allGroups);
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    setState(() {
+      if (newName != null) _groupName = newName;
+      if (newImagePath != null) _groupImagePath = newImagePath;
+      if (removeImage) _groupImagePath = null;
+    });
+    _markChanged();
   }
 
   // ---------------- EXPENSE LIST ----------------
@@ -569,37 +908,47 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         final q = _searchQuery.toLowerCase();
         if (!e.description.toLowerCase().contains(q) &&
             !e.categories.join(',').toLowerCase().contains(q) &&
-            !e.amount.toString().contains(q)) return false;
+            !e.amount.toString().contains(q))
+          return false;
       }
       return true;
     }).toList();
 
     if (visibleExpenses.isEmpty) {
-      return Column(
-        children: [
-          const SizedBox(height: 28),
-          Center(
-            child: Image.asset(
-              'assets/images/empty_expenses.png',
-              height: 150,
-              fit: BoxFit.contain,
+      return ValueListenableBuilder<bool>(
+        valueListenable: AppThemeNotifier.instance,
+        builder: (_, isWhite, __) => Column(
+          children: [
+            const SizedBox(height: 28),
+            Center(
+              child: Image.asset(
+                isWhite
+                    ? 'assets/images/empty_expenses_white.png'
+                    : 'assets/images/empty_expenses.png',
+                height: 150,
+                fit: BoxFit.contain,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No matching expenses.',
-            style: GoogleFonts.sora(fontSize: 14, color: Colors.white38),
-          ),
-          const SizedBox(height: 28),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              'No matching expenses.',
+              style: GoogleFonts.sora(
+                fontSize: 14,
+                color: isWhite ? Colors.black45 : Colors.white38,
+              ),
+            ),
+            const SizedBox(height: 28),
+          ],
+        ),
       );
     }
 
     return Column(
       children: visibleExpenses.map((e) {
         final isCredit = e.type == 'credit';
-        final typeColor =
-            isCredit ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
+        final typeColor = isCredit
+            ? const Color(0xFF00CC66)
+            : const Color(0xFFFF3355);
         final typeLabel = isCredit ? 'CREDIT' : 'DEBIT';
 
         return GestureDetector(
@@ -608,10 +957,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF0E0505),
+              color: AppThemeNotifier.isWhite
+                  ? Colors.white
+                  : const Color(0xFF0E0505),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.07), width: 1),
+                color: AppThemeNotifier.isWhite
+                    ? const Color(0xFFEEEEEE)
+                    : Colors.white.withOpacity(0.07),
+                width: 1,
+              ),
+              boxShadow: AppThemeNotifier.isWhite
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFCC0020).withOpacity(0.10),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : [],
             ),
             child: Row(
               children: [
@@ -624,9 +988,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isCredit
-                        ? Icons.add_rounded
-                        : Icons.remove_rounded,
+                    isCredit ? Icons.add_rounded : Icons.remove_rounded,
                     color: typeColor,
                     size: 18,
                   ),
@@ -644,7 +1006,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         style: GoogleFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark
+                              : Colors.white,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -653,19 +1017,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.sora(
-                            fontSize: 11, color: Colors.white38),
+                          fontSize: 11,
+                          color: AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark.withOpacity(0.45)
+                              : Colors.white38,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 // Receipt thumbnail
-                if (e.imagePath != null &&
-                    File(e.imagePath!).existsSync()) ...[
+                if (e.imagePath != null && File(e.imagePath!).existsSync()) ...[
                   const SizedBox(width: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(File(e.imagePath!),
-                        width: 36, height: 36, fit: BoxFit.cover),
+                    child: Image.file(
+                      File(e.imagePath!),
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ],
                 const SizedBox(width: 8),
@@ -684,7 +1055,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     const SizedBox(height: 3),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: typeColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -692,9 +1065,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       child: Text(
                         typeLabel,
                         style: GoogleFonts.sora(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: typeColor),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: typeColor,
+                        ),
                       ),
                     ),
                   ],
@@ -720,14 +1094,22 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           _markChanged();
                         }
                       },
-                      child: const Icon(Icons.edit_rounded,
-                          size: 16, color: Colors.white30),
+                      child: Icon(
+                        Icons.edit_rounded,
+                        size: 16,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.3)
+                            : Colors.white30,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     GestureDetector(
                       onTap: () => _deleteExpense(e),
-                      child: const Icon(Icons.delete_rounded,
-                          size: 16, color: Color(0xFFFF3355)),
+                      child: const Icon(
+                        Icons.delete_rounded,
+                        size: 16,
+                        color: Color(0xFFFF3355),
+                      ),
                     ),
                   ],
                 ),
@@ -743,11 +1125,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   void _openExpenseDetails(ExpenseModel e) {
     final isCredit = e.type == 'credit';
-    final typeColor =
-        isCredit ? const Color(0xFF00CC66) : const Color(0xFFFF3355);
+    final typeColor = isCredit
+        ? const Color(0xFF00CC66)
+        : const Color(0xFFFF3355);
     final typeLabel = isCredit ? 'CREDIT' : 'DEBIT';
-    final hasReceipt =
-        e.imagePath != null && File(e.imagePath!).existsSync();
+    final hasReceipt = e.imagePath != null && File(e.imagePath!).existsSync();
 
     showDialog(
       context: context,
@@ -757,10 +1139,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         insetPadding: const EdgeInsets.all(18),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF120404),
+            color: AppThemeNotifier.isWhite
+                ? Colors.white
+                : const Color(0xFF120404),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: const Color(0xFFCC0020).withOpacity(0.25), width: 1),
+              color: AppThemeNotifier.isWhite
+                  ? const Color(0xFFEEEEEE)
+                  : const Color(0xFFCC0020).withOpacity(0.25),
+              width: 1,
+            ),
+            boxShadow: AppThemeNotifier.isWhite
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.07),
+                      blurRadius: 12,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -773,21 +1170,31 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: typeColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(typeLabel,
-                          style: GoogleFonts.sora(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: typeColor)),
+                      child: Text(
+                        typeLabel,
+                        style: GoogleFonts.sora(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: typeColor,
+                        ),
+                      ),
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: Colors.white38, size: 20),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.4)
+                            : Colors.white38,
+                        size: 20,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -801,32 +1208,50 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     Text(
                       '₹${e.amount.toStringAsFixed(0)}',
                       style: GoogleFonts.sora(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: typeColor),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: typeColor,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     if (e.description.isNotEmpty) ...[
                       _detailLabel('Description'),
                       const SizedBox(height: 4),
-                      Text(e.description,
-                          style: GoogleFonts.sora(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white)),
+                      Text(
+                        e.description,
+                        style: GoogleFonts.sora(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark
+                              : Colors.white,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                     ],
                     _detailLabel('Members / Category'),
                     const SizedBox(height: 4),
-                    Text(e.categories.join(', '),
-                        style: GoogleFonts.sora(
-                            fontSize: 14, color: Colors.white70)),
+                    Text(
+                      e.categories.join(', '),
+                      style: GoogleFonts.sora(
+                        fontSize: 14,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.75)
+                            : Colors.white70,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _detailLabel('Date'),
                     const SizedBox(height: 4),
-                    Text(e.date.toString().split(' ')[0],
-                        style: GoogleFonts.sora(
-                            fontSize: 14, color: Colors.white70)),
+                    Text(
+                      e.date.toString().split(' ')[0],
+                      style: GoogleFonts.sora(
+                        fontSize: 14,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.75)
+                            : Colors.white70,
+                      ),
+                    ),
                     if (hasReceipt) ...[
                       const SizedBox(height: 14),
                       _detailLabel('Receipt'),
@@ -851,7 +1276,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         child: Text(
                           'Tap image to expand',
                           style: GoogleFonts.sora(
-                              fontSize: 11, color: Colors.white30),
+                            fontSize: 11,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withOpacity(0.35)
+                                : Colors.white30,
+                          ),
                         ),
                       ),
                     ],
@@ -866,13 +1295,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Widget _detailLabel(String text) => Text(
-        text,
-        style: GoogleFonts.sora(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Colors.white38,
-            letterSpacing: 0.8),
-      );
+    text,
+    style: GoogleFonts.sora(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: AppThemeNotifier.isWhite
+          ? EleghartColors.accentDark.withOpacity(0.4)
+          : Colors.white38,
+      letterSpacing: 0.8,
+    ),
+  );
 
   // ---------------- HELPERS ----------------
 
@@ -886,12 +1318,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         decoration: BoxDecoration(
           color: selected
               ? const Color(0xFFCC0020).withOpacity(0.18)
-              : Colors.white.withOpacity(0.06),
+              : (AppThemeNotifier.isWhite
+                    ? Colors.white
+                    : Colors.white.withOpacity(0.06)),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected
                 ? const Color(0xFFCC0020)
-                : Colors.white.withOpacity(0.18),
+                : (AppThemeNotifier.isWhite
+                      ? const Color(0xFFEEEEEE)
+                      : Colors.white.withOpacity(0.18)),
             width: selected ? 1.5 : 1,
           ),
           boxShadow: selected
@@ -900,16 +1336,27 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     color: const Color(0xFFCC0020).withOpacity(0.3),
                     blurRadius: 10,
                     spreadRadius: 1,
-                  )
+                  ),
                 ]
-              : [],
+              : (AppThemeNotifier.isWhite
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFFCC0020).withOpacity(0.07),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : []),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (selected) ...[  
-              const Icon(Icons.check_rounded,
-                  color: Color(0xFFCC0020), size: 13),
+            if (selected) ...[
+              const Icon(
+                Icons.check_rounded,
+                color: Color(0xFFCC0020),
+                size: 13,
+              ),
               const SizedBox(width: 5),
             ],
             Text(
@@ -917,7 +1364,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               style: GoogleFonts.sora(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: selected ? Colors.white : Colors.white60,
+                color: selected
+                    ? (AppThemeNotifier.isWhite
+                          ? const Color(0xFFCC0020)
+                          : Colors.white)
+                    : (AppThemeNotifier.isWhite
+                          ? EleghartColors.accentDark.withOpacity(0.7)
+                          : Colors.white60),
               ),
             ),
           ],
@@ -927,17 +1380,31 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Widget _buildAddMemberField() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: AppThemeNotifier.isWhite
+            ? Colors.white
+            : Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: Colors.white.withOpacity(0.10), width: 1),
+        border: Border.all(
+          color: AppThemeNotifier.isWhite
+              ? const Color(0xFFEEEEEE)
+              : Colors.white.withOpacity(0.10),
+          width: 1,
+        ),
+        boxShadow: AppThemeNotifier.isWhite
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFCC0020).withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [],
       ),
       child: Row(
         children: [
@@ -949,9 +1416,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               size: const Size(32, 32),
               painter: _DashedCirclePainter(),
               child: const SizedBox(
-                width: 32, height: 32,
-                child: Icon(Icons.add_rounded,
-                    color: Color(0xFFCC0020), size: 16),
+                width: 32,
+                height: 32,
+                child: Icon(
+                  Icons.add_rounded,
+                  color: Color(0xFFCC0020),
+                  size: 16,
+                ),
               ),
             ),
           ),
@@ -960,14 +1431,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             child: TextField(
               controller: _categoryController,
               style: GoogleFonts.sora(
-                  fontSize: 13, color: Colors.white),
+                fontSize: 13,
+                color: AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark
+                    : Colors.white,
+              ),
               decoration: InputDecoration(
                 hintText: 'Add member / category',
                 hintStyle: GoogleFonts.sora(
-                    fontSize: 13, color: Colors.white38),
+                  fontSize: 13,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark.withOpacity(0.35)
+                      : Colors.white38,
+                ),
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onSubmitted: (_) => _addCategory(),
             ),
@@ -976,8 +1454,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             onTap: _pickExistingCategories,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              child: const Icon(Icons.people_alt_rounded,
-                  color: Color(0xFFCC0020), size: 18),
+              child: const Icon(
+                Icons.people_alt_rounded,
+                color: Color(0xFFCC0020),
+                size: 18,
+              ),
             ),
           ),
         ],
@@ -991,20 +1472,43 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
+          color: AppThemeNotifier.isWhite
+              ? Colors.white
+              : Colors.white.withOpacity(0.04),
           borderRadius: BorderRadius.circular(14),
-          border:
-              Border.all(color: Colors.white.withOpacity(0.07), width: 1),
+          border: Border.all(
+            color: AppThemeNotifier.isWhite
+                ? const Color(0xFFEEEEEE)
+                : Colors.white.withOpacity(0.07),
+            width: 1,
+          ),
+          boxShadow: AppThemeNotifier.isWhite
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFCC0020).withOpacity(0.07),
+                    blurRadius: 6,
+                  ),
+                ]
+              : [],
         ),
         child: Column(
           children: [
-            Icon(Icons.group_off_rounded,
-                size: 28, color: Colors.white.withOpacity(0.2)),
+            Icon(
+              Icons.group_off_rounded,
+              size: 28,
+              color: AppThemeNotifier.isWhite
+                  ? EleghartColors.accentDark.withOpacity(0.2)
+                  : Colors.white.withOpacity(0.2),
+            ),
             const SizedBox(height: 8),
             Text(
               'No members / category yet.',
               style: GoogleFonts.sora(
-                  fontSize: 13, color: Colors.white30),
+                fontSize: 13,
+                color: AppThemeNotifier.isWhite
+                    ? EleghartColors.accentDark.withOpacity(0.4)
+                    : Colors.white30,
+              ),
             ),
           ],
         ),
@@ -1022,54 +1526,82 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF0E0505),
+            color: AppThemeNotifier.isWhite
+                ? Colors.white
+                : const Color(0xFF0E0505),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-                color: Colors.white.withOpacity(0.07), width: 1),
-          ),
-          child: Row(children: [
-            GestureDetector(
-              onTap: () => _pickCategoryImage(c),
-              child: _categoryAvatar(c, size: 36),
+              color: AppThemeNotifier.isWhite
+                  ? const Color(0xFFEEEEEE)
+                  : Colors.white.withOpacity(0.07),
+              width: 1,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(c,
+            boxShadow: AppThemeNotifier.isWhite
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFCC0020).withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => _pickCategoryImage(c),
+                child: _categoryAvatar(c, size: 36),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.sora(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white)),
-                  const SizedBox(height: 3),
-                  Text(
-                    '₹${total.abs().toStringAsFixed(0)} · Last: ${stats['lastDate']}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.sora(
-                        fontSize: 11, color: color),
-                  ),
-                ],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppThemeNotifier.isWhite
+                            ? EleghartColors.accentDark
+                            : Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '₹${total.abs().toStringAsFixed(0)} · Last: ${stats['lastDate']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.sora(fontSize: 11, color: color),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            GestureDetector(
-              onTap: () => _editCategory(c),
-              child: const Icon(Icons.edit_rounded,
-                  size: 16, color: Colors.white30),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _deleteCategory(c),
-              child: const Icon(Icons.delete_rounded,
-                  size: 16, color: Color(0xFFFF3355)),
-            ),
-          ]),
+              GestureDetector(
+                onTap: () => _editCategory(c),
+                child: Icon(
+                  Icons.edit_rounded,
+                  size: 16,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark.withOpacity(0.3)
+                      : Colors.white30,
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => _deleteCategory(c),
+                child: const Icon(
+                  Icons.delete_rounded,
+                  size: 16,
+                  color: Color(0xFFFF3355),
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
     );
@@ -1077,8 +1609,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   // ── Category avatar (image or initial with consistent colour) ─────────────
   static const _avatarPalette = [
-    Color(0xFFCC0020), Color(0xFF0066CC), Color(0xFF00AA55),
-    Color(0xFFCC6600), Color(0xFF8833CC), Color(0xFF0099AA),
+    Color(0xFFCC0020),
+    Color(0xFF0066CC),
+    Color(0xFF00AA55),
+    Color(0xFFCC6600),
+    Color(0xFF8833CC),
+    Color(0xFF0099AA),
   ];
 
   Widget _categoryAvatar(String cat, {double size = 36}) {
@@ -1089,6 +1625,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return Stack(
       children: [
         Container(
+          key: ValueKey('$cat-${_categoryImages[cat] ?? ''}'),
           width: size,
           height: size,
           decoration: BoxDecoration(
@@ -1097,7 +1634,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             border: Border.all(color: color.withOpacity(0.5), width: 1.2),
             image: hasImg
                 ? DecorationImage(
-                    image: FileImage(File(imgPath!)), fit: BoxFit.cover)
+                    image: FileImage(File(imgPath!)),
+                    fit: BoxFit.cover,
+                  )
                 : null,
           ),
           child: hasImg
@@ -1106,9 +1645,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   child: Text(
                     cat.isNotEmpty ? cat[0].toUpperCase() : '?',
                     style: TextStyle(
-                        fontSize: size * 0.38,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white),
+                      fontSize: size * 0.38,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
         ),
@@ -1119,12 +1659,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             width: size * 0.32,
             height: size * 0.32,
             decoration: BoxDecoration(
-              color: const Color(0xFF1A0505),
+              color: AppThemeNotifier.isWhite
+                  ? Colors.white
+                  : const Color(0xFF1A0505),
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.4), width: 0.8),
+              border: Border.all(color: color.withOpacity(0.5), width: 0.8),
             ),
-            child: Icon(Icons.camera_alt_rounded,
-                size: size * 0.18, color: color),
+            child: Icon(
+              Icons.camera_alt_rounded,
+              size: size * 0.18,
+              color: color,
+            ),
           ),
         ),
       ],
@@ -1137,41 +1682,68 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     // 'camera' | 'gallery' | 'remove' | null (dismissed)
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: const Color(0xFF120404),
+      backgroundColor: AppThemeNotifier.isWhite
+          ? Colors.white
+          : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2))),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppThemeNotifier.isWhite
+                    ? Colors.black12
+                    : Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             const SizedBox(height: 12),
             ListTile(
-              leading: const Icon(Icons.camera_alt_rounded,
-                  color: Color(0xFFCC0020)),
-              title: Text('Take photo',
-                  style: GoogleFonts.sora(color: Colors.white)),
+              leading: const Icon(
+                Icons.camera_alt_rounded,
+                color: Color(0xFFCC0020),
+              ),
+              title: Text(
+                'Take photo',
+                style: GoogleFonts.sora(
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white,
+                ),
+              ),
               onTap: () => Navigator.pop(context, 'camera'),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_rounded,
-                  color: Color(0xFFCC0020)),
-              title: Text('Choose from gallery',
-                  style: GoogleFonts.sora(color: Colors.white)),
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: Color(0xFFCC0020),
+              ),
+              title: Text(
+                'Choose from gallery',
+                style: GoogleFonts.sora(
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white,
+                ),
+              ),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
             if (_categoryImages.containsKey(categoryName))
               ListTile(
-                leading: const Icon(Icons.delete_rounded,
-                    color: Color(0xFFFF3355)),
-                title: Text('Remove photo',
-                    style: GoogleFonts.sora(color: const Color(0xFFFF3355))),
+                leading: const Icon(
+                  Icons.delete_rounded,
+                  color: Color(0xFFFF3355),
+                ),
+                title: Text(
+                  'Remove photo',
+                  style: GoogleFonts.sora(color: const Color(0xFFFF3355)),
+                ),
                 onTap: () => Navigator.pop(context, 'remove'),
               ),
             const SizedBox(height: 8),
@@ -1183,20 +1755,24 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     if (action == 'remove') {
       _categoryImages.remove(categoryName);
       await StorageService.saveCategoryImages(_categoryImages);
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
       setState(() {});
       return;
     }
 
     if (action == null) return;
 
-    final source =
-        action == 'camera' ? ImageSource.camera : ImageSource.gallery;
-    final picked =
-        await picker.pickImage(source: source, imageQuality: 75);
+    final source = action == 'camera'
+        ? ImageSource.camera
+        : ImageSource.gallery;
+    final picked = await picker.pickImage(source: source, imageQuality: 75);
     if (picked == null) return;
 
     _categoryImages[categoryName] = picked.path;
     await StorageService.saveCategoryImages(_categoryImages);
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
     setState(() {});
   }
 
@@ -1208,7 +1784,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         style: GoogleFonts.sora(
           fontSize: 15,
           fontWeight: FontWeight.w700,
-          color: Colors.white,
+          color: AppThemeNotifier.isWhite
+              ? EleghartColors.accentDark
+              : Colors.white,
         ),
       ),
     );
@@ -1216,36 +1794,52 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: const Color(0xFF0E0505),
+      color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF0E0505),
       borderRadius: BorderRadius.circular(16),
-      border:
-          Border.all(color: Colors.white.withOpacity(0.07), width: 1),
+      border: Border.all(
+        color: AppThemeNotifier.isWhite
+            ? const Color(0xFFEEEEEE)
+            : Colors.white.withOpacity(0.07),
+        width: 1,
+      ),
+      boxShadow: AppThemeNotifier.isWhite
+          ? [
+              BoxShadow(
+                color: const Color(0xFFCC0020).withOpacity(0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ]
+          : [],
     );
   }
 
   // ---------------- PICK FROM EXISTING ----------------
 
   Future<void> _pickExistingCategories() async {
-    final allGroups = await StorageService.loadGroups();
+    final globalCategories = await StorageService.loadGlobalCategories();
 
-    // Gather all categories from OTHER groups, excluding already added ones
-    final existing = allGroups
-        .where((g) => g.id != widget.group.id)
-        .expand((g) => g.categories)
-        .toSet()
-        .where((c) => !_categories.any(
-            (existing) => existing.toLowerCase() == c.toLowerCase()))
-        .toList()
+    // Gather all categories from global list, excluding already added ones
+    final existing =
+        globalCategories
+            .where(
+              (c) => !_categories.any(
+                (existing) => existing.toLowerCase() == c.toLowerCase(),
+              ),
+            )
+            .toList()
           ..sort();
 
     if (existing.isEmpty) {
-      _toast('No new categories from other groups');
+      _toast('No new categories found');
       return;
     }
 
     final picked = await showModalBottomSheet<List<String>>(
       context: context,
-      backgroundColor: const Color(0xFF120404),
+      backgroundColor: AppThemeNotifier.isWhite
+          ? Colors.white
+          : const Color(0xFF120404),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1283,6 +1877,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     });
 
     await _persistCategories();
+
+    final globalCategories = await StorageService.loadGlobalCategories();
+    if (!globalCategories.contains(name)) {
+      globalCategories.add(name);
+      globalCategories.sort();
+      await StorageService.saveGlobalCategories(globalCategories);
+    }
+
     _markChanged();
   }
 
@@ -1300,12 +1902,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-              onPressed: () =>
-                  Navigator.pop(context, controller.text.trim()),
-              child: const Text('Save')),
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -1318,8 +1921,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
 
     setState(() {
-      _categories =
-          _categories.map((c) => c == oldName ? newName : c).toList();
+      _categories = _categories.map((c) => c == oldName ? newName : c).toList();
     });
 
     final allExpenses = await StorageService.loadExpenses();
@@ -1346,6 +1948,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
     await StorageService.saveExpenses(updatedExpenses);
     await _persistCategories();
+
+    final globalCategories = await StorageService.loadGlobalCategories();
+    if (!globalCategories.contains(newName)) {
+      globalCategories.add(newName);
+      globalCategories.sort();
+      await StorageService.saveGlobalCategories(globalCategories);
+    }
+
     await _loadExpenses();
     _markChanged();
   }
@@ -1355,16 +1965,19 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete member / category?'),
-        content:
-            Text('All expenses linked to "$category" will also be deleted.'),
+        content: Text(
+          'All expenses linked to "$category" will also be deleted.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -1411,12 +2024,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         content: const Text('This expense will be permanently deleted.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -1446,15 +2061,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               title: const Text('Receipt'),
               actions: [
                 IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context)),
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
-            Expanded(
-              child: InteractiveViewer(
-                child: Image.file(File(path)),
-              ),
-            ),
+            Expanded(child: InteractiveViewer(child: Image.file(File(path)))),
           ],
         ),
       ),
@@ -1505,9 +2117,10 @@ class _EmptyBoxPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
     canvas.drawOval(
       Rect.fromCenter(
-          center: Offset(cx, size.height * 0.82),
-          width: size.width * 0.7,
-          height: 18),
+        center: Offset(cx, size.height * 0.82),
+        width: size.width * 0.7,
+        height: 18,
+      ),
       glowPaint,
     );
 
@@ -1541,7 +2154,10 @@ class _EmptyBoxPainter extends CustomPainter {
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-        Offset(cx - 14, cy + 44), Offset(cx + 14, cy + 44), handlePaint);
+      Offset(cx - 14, cy + 44),
+      Offset(cx + 14, cy + 44),
+      handlePaint,
+    );
 
     // Papers sticking out
     final paperPaint = Paint()..color = const Color(0xFF2A0A0A);
@@ -1573,9 +2189,21 @@ class _EmptyBoxPainter extends CustomPainter {
     final linePaint = Paint()
       ..color = const Color(0xFFCC0020).withOpacity(0.3)
       ..strokeWidth = 1.2;
-    canvas.drawLine(Offset(cx - 8, cy - 40), Offset(cx + 8, cy - 40), linePaint);
-    canvas.drawLine(Offset(cx - 8, cy - 32), Offset(cx + 8, cy - 32), linePaint);
-    canvas.drawLine(Offset(cx - 8, cy - 24), Offset(cx + 8, cy - 24), linePaint);
+    canvas.drawLine(
+      Offset(cx - 8, cy - 40),
+      Offset(cx + 8, cy - 40),
+      linePaint,
+    );
+    canvas.drawLine(
+      Offset(cx - 8, cy - 32),
+      Offset(cx + 8, cy - 32),
+      linePaint,
+    );
+    canvas.drawLine(
+      Offset(cx - 8, cy - 24),
+      Offset(cx + 8, cy - 24),
+      linePaint,
+    );
 
     // Paper 3 (right, tilted)
     final paper3 = Path()
@@ -1620,39 +2248,51 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
+        20,
+        16,
+        20,
+        MediaQuery.of(context).padding.bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 36, height: 4,
+            width: 36,
+            height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: AppThemeNotifier.isWhite ? Colors.black12 : Colors.white24,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              const Icon(Icons.people_alt_rounded,
-                  color: Color(0xFFCC0020), size: 18),
+              const Icon(
+                Icons.people_alt_rounded,
+                color: Color(0xFFCC0020),
+                size: 18,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Add from existing members',
                   style: GoogleFonts.sora(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark
+                        : Colors.white,
+                  ),
                 ),
               ),
               if (_selected.isNotEmpty)
                 Text(
                   '${_selected.length} selected',
                   style: GoogleFonts.sora(
-                      fontSize: 12,
-                      color: const Color(0xFFCC0020),
-                      fontWeight: FontWeight.w600),
+                    fontSize: 12,
+                    color: const Color(0xFFCC0020),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
             ],
           ),
@@ -1675,23 +2315,30 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFFCC0020).withOpacity(0.12)
-                          : Colors.white.withOpacity(0.05),
+                          : (AppThemeNotifier.isWhite
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.05)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected
                             ? const Color(0xFFCC0020).withOpacity(0.6)
-                            : Colors.white.withOpacity(0.10),
+                            : (AppThemeNotifier.isWhite
+                                  ? const Color(0xFFEEEEEE)
+                                  : Colors.white.withOpacity(0.10)),
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
                     child: Row(
                       children: [
                         Container(
-                          width: 36, height: 36,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: const Color(0xFFCC0020).withOpacity(0.15),
@@ -1700,9 +2347,10 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
                             child: Text(
                               cat.isNotEmpty ? cat[0].toUpperCase() : '?',
                               style: GoogleFonts.sora(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -1715,16 +2363,26 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
                               fontWeight: isSelected
                                   ? FontWeight.w700
                                   : FontWeight.w400,
-                              color: Colors.white,
+                              color: AppThemeNotifier.isWhite
+                                  ? EleghartColors.accentDark
+                                  : Colors.white,
                             ),
                           ),
                         ),
                         if (isSelected)
-                          const Icon(Icons.check_circle_rounded,
-                              color: Color(0xFFCC0020), size: 20)
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFFCC0020),
+                            size: 20,
+                          )
                         else
-                          const Icon(Icons.radio_button_unchecked_rounded,
-                              color: Colors.white24, size: 20),
+                          Icon(
+                            Icons.radio_button_unchecked_rounded,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withOpacity(0.25)
+                                : Colors.white24,
+                            size: 20,
+                          ),
                       ],
                     ),
                   ),
@@ -1751,11 +2409,15 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
                         colors: [Color(0xFFCC0020), Color(0xFF6B0010)],
                       ),
                 color: _selected.isEmpty
-                    ? Colors.white.withOpacity(0.05)
+                    ? (AppThemeNotifier.isWhite
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.05))
                     : null,
                 border: Border.all(
                   color: _selected.isEmpty
-                      ? Colors.white12
+                      ? (AppThemeNotifier.isWhite
+                            ? const Color(0xFFEEEEEE)
+                            : Colors.white12)
                       : const Color(0xFFFF2040).withOpacity(0.4),
                   width: 1,
                 ),
@@ -1768,7 +2430,11 @@ class _ExistingCategoryPickerState extends State<_ExistingCategoryPicker> {
                   style: GoogleFonts.sora(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: _selected.isEmpty ? Colors.white30 : Colors.white,
+                    color: _selected.isEmpty
+                        ? (AppThemeNotifier.isWhite
+                              ? EleghartColors.accentDark.withOpacity(0.4)
+                              : Colors.white30)
+                        : Colors.white,
                   ),
                 ),
               ),

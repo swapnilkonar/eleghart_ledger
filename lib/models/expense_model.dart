@@ -52,6 +52,27 @@ class ExpenseModel {
     );
   }
 
+  ExpenseModel copyWith({
+    String? groupId,
+    double? amount,
+    String? description,
+    List<String>? categories,
+    DateTime? date,
+    String? imagePath,
+    String? type,
+  }) {
+    return ExpenseModel(
+      id: id,
+      groupId: groupId ?? this.groupId,
+      amount: amount ?? this.amount,
+      description: description ?? this.description,
+      categories: categories ?? this.categories,
+      date: date ?? this.date,
+      imagePath: imagePath ?? this.imagePath,
+      type: type ?? this.type,
+    );
+  }
+
   /// Optional helper getters (useful for UI + PDF later)
   bool get isDebit => type == 'debit';
   bool get isCredit => type == 'credit';
