@@ -291,11 +291,13 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
               'Track monthly instalments & progress',
               textPrimary, textSec, sheetBg,
               accent: const Color(0xFF0EA5E9),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(context,
+                await Navigator.push(context,
                     MaterialPageRoute(
                         builder: (_) => const EmiListScreen()));
+                reload();
+                widget.onExpenseAdded?.call();
               },
             ),
           ],

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/emi_model.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -118,6 +119,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     }
 
     await StorageService.saveEmis(list);
+    await RecurringEngine.run();
     if (mounted) Navigator.pop(context, true);
   }
 

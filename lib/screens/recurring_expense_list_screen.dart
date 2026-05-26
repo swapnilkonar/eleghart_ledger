@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/group_model.dart';
 import '../models/recurring_expense_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -79,6 +80,7 @@ class _RecurringExpenseListScreenState
     final idx = list.indexWhere((x) => x.id == r.id);
     if (idx >= 0) list[idx] = updated;
     await StorageService.saveRecurring(list);
+    await RecurringEngine.run();
     _load();
   }
 
@@ -122,6 +124,7 @@ class _RecurringExpenseListScreenState
       description: r.description,
     ));
     await StorageService.saveRecurring(list);
+    await RecurringEngine.run();
     _load();
   }
 

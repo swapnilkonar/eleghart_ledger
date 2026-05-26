@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/group_model.dart';
 import '../models/recurring_expense_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -132,6 +133,7 @@ class _AddRecurringExpenseScreenState
     }
 
     await StorageService.saveRecurring(list);
+    await RecurringEngine.run();
     if (mounted) Navigator.pop(context, true);
   }
 

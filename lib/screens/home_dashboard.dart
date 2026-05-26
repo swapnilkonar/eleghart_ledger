@@ -489,10 +489,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 border: border,
                 textPrimary: textPrimary,
                 textSec: textSec,
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const EmiListScreen())),
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const EmiListScreen()));
+                  _loadDashboardData();
+                  _groupsKey.currentState?.reload();
+                  _expenseListKey.currentState?.reload();
+                },
               ),
             ),
           ]),
