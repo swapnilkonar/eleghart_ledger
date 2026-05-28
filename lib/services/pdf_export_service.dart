@@ -49,8 +49,8 @@ class PdfExportService {
     final Map<String, double> memberTotals = {};
 
     for (final e in filtered) {
-      final share = e.amount / e.categories.length;
-      for (final m in e.categories) {
+      final share = e.categoryShare;
+      for (final m in e.validCategories) {
         final signedShare = e.type == 'credit' ? share : -share;
         memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
       }

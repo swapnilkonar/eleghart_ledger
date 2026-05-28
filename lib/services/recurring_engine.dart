@@ -47,7 +47,6 @@ class RecurringEngine {
         // Avoid duplicate: check if we already generated for this dueDay
         final alreadyExists = expenses.any((e) =>
             e.description.contains(r.name) &&
-            e.categories.contains('Recurring') &&
             DateTime(e.date.year, e.date.month, e.date.day) == dueDay);
 
         if (!alreadyExists) {
@@ -56,7 +55,7 @@ class RecurringEngine {
             groupId: r.groupId,
             amount: r.amount,
             description: '${r.name} · ${_monthYear(next)}',
-            categories: [r.category, 'Recurring'],
+            categories: List.from(r.categories),
             date: next,
             type: 'debit',
           ));
@@ -110,7 +109,6 @@ class RecurringEngine {
         final instalment = completed + 1;
         final alreadyExists = expenses.any((e) =>
             e.description.contains(emi.productName) &&
-            e.categories.contains('EMI') &&
             e.description.contains('$instalment/${emi.tenure}'));
 
         if (!alreadyExists) {
@@ -119,7 +117,7 @@ class RecurringEngine {
             groupId: emi.groupId,
             amount: emi.amount,
             description: 'EMI · ${emi.productName} · $instalment/${emi.tenure}',
-            categories: [emi.category, 'EMI'],
+            categories: List.from(emi.categories),
             date: dueDate,
             type: 'debit',
           ));

@@ -36,6 +36,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   int _currentTab = 0;
   final _groupsKey = GlobalKey<GroupsScreenState>();
   final _expenseListKey = GlobalKey<ExpenseListScreenState>();
+  final _insightsKey = GlobalKey<InsightsScreenState>(); // Added Key for Insights
 
   // -------- LEDGER TOTALS --------
   double _totalDebit = 0;
@@ -161,12 +162,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _loadDashboardData();
     _groupsKey.currentState?.reload();
     _expenseListKey.currentState?.reload();
+    _insightsKey.currentState?.reload(); // Refresh Insights
   }
 
   void _switchTab(int index) {
     setState(() => _currentTab = index);
     if (index == 1) {
       _expenseListKey.currentState?.reload();
+    } else if (index == 3) {
+      _insightsKey.currentState?.reload(); // Refresh Insights on tab switch
     }
   }
 
@@ -332,14 +336,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
             )
           else
             IndexedStack(
-              index: _currentTab,
-              children: [
-                _buildHomeTab(greeting),
-                ExpenseListScreen(key: _expenseListKey, onExpenseAdded: _onExpenseAdded),
-                GroupsScreen(key: _groupsKey, userName: _userName),
-                const InsightsScreen(),
-                ProfileScreen(
-                  userName: _userName,
+            index: _currentTab,
+            children: [
+              _buildHomeTab(greeting),
+              ExpenseListScreen(key: _expenseListKey, onExpenseAdded: _onExpenseAdded),
+              GroupsScreen(key: _groupsKey, userName: _userName),
+              InsightsScreen(key: _insightsKey),
+              ProfileScreen(                  userName: _userName,
                   onNameChanged: (newName) {
                     setState(() => _userName = newName);
                   },

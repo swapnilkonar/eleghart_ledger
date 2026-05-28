@@ -11,12 +11,14 @@ class RecurringExpenseModel {
   final DateTime startDate;
   final DateTime? endDate;
   final String groupId;
-  final String category;
+  final List<String> categories;
   final String description;
   final bool isActive;
 
   /// Last date on which an expense was auto-generated
   final DateTime? lastGeneratedDate;
+
+  String get category => categories.isNotEmpty ? categories.first : 'Recurring';
 
   RecurringExpenseModel({
     required this.id,
@@ -26,7 +28,7 @@ class RecurringExpenseModel {
     required this.startDate,
     this.endDate,
     required this.groupId,
-    required this.category,
+    required this.categories,
     this.description = '',
     this.isActive = true,
     this.lastGeneratedDate,
@@ -39,34 +41,33 @@ class RecurringExpenseModel {
     required DateTime startDate,
     DateTime? endDate,
     required String groupId,
-    required String category,
+    required List<String> categories,
     String description = '',
-  }) =>
-      RecurringExpenseModel(
-        id: const Uuid().v4(),
-        name: name,
-        amount: amount,
-        frequency: frequency,
-        startDate: startDate,
-        endDate: endDate,
-        groupId: groupId,
-        category: category,
-        description: description,
-      );
+  }) => RecurringExpenseModel(
+    id: const Uuid().v4(),
+    name: name,
+    amount: amount,
+    frequency: frequency,
+    startDate: startDate,
+    endDate: endDate,
+    groupId: groupId,
+    categories: categories,
+    description: description,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'amount': amount,
-        'frequency': frequency,
-        'startDate': startDate.toIso8601String(),
-        'endDate': endDate?.toIso8601String(),
-        'groupId': groupId,
-        'category': category,
-        'description': description,
-        'isActive': isActive,
-        'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'amount': amount,
+    'frequency': frequency,
+    'startDate': startDate.toIso8601String(),
+    'endDate': endDate?.toIso8601String(),
+    'groupId': groupId,
+    'categories': categories,
+    'description': description,
+    'isActive': isActive,
+    'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
+  };
 
   factory RecurringExpenseModel.fromJson(Map<String, dynamic> j) =>
       RecurringExpenseModel(
@@ -77,7 +78,9 @@ class RecurringExpenseModel {
         startDate: DateTime.parse(j['startDate']),
         endDate: j['endDate'] != null ? DateTime.parse(j['endDate']) : null,
         groupId: j['groupId'] ?? '',
-        category: j['category'] ?? '',
+        categories: j['categories'] != null
+            ? (j['categories'] as List<dynamic>).cast<String>()
+            : (j['category'] != null ? [j['category'] as String] : []),
         description: j['description'] ?? '',
         isActive: j['isActive'] ?? true,
         lastGeneratedDate: j['lastGeneratedDate'] != null
@@ -92,28 +95,25 @@ class RecurringExpenseModel {
     DateTime? startDate,
     Object? endDate = _sentinel,
     String? groupId,
-    String? category,
+    List<String>? categories,
     String? description,
     bool? isActive,
     Object? lastGeneratedDate = _sentinel,
-  }) =>
-      RecurringExpenseModel(
-        id: id,
-        name: name ?? this.name,
-        amount: amount ?? this.amount,
-        frequency: frequency ?? this.frequency,
-        startDate: startDate ?? this.startDate,
-        endDate: endDate == _sentinel
-            ? this.endDate
-            : endDate as DateTime?,
-        groupId: groupId ?? this.groupId,
-        category: category ?? this.category,
-        description: description ?? this.description,
-        isActive: isActive ?? this.isActive,
-        lastGeneratedDate: lastGeneratedDate == _sentinel
-            ? this.lastGeneratedDate
-            : lastGeneratedDate as DateTime?,
-      );
+  }) => RecurringExpenseModel(
+    id: id,
+    name: name ?? this.name,
+    amount: amount ?? this.amount,
+    frequency: frequency ?? this.frequency,
+    startDate: startDate ?? this.startDate,
+    endDate: endDate == _sentinel ? this.endDate : endDate as DateTime?,
+    groupId: groupId ?? this.groupId,
+    categories: categories ?? this.categories,
+    description: description ?? this.description,
+    isActive: isActive ?? this.isActive,
+    lastGeneratedDate: lastGeneratedDate == _sentinel
+        ? this.lastGeneratedDate
+        : lastGeneratedDate as DateTime?,
+  );
 
   /// Frequency display label
   String get frequencyLabel {

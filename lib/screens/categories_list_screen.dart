@@ -97,14 +97,14 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
     final related = _expenses
         .where(
           (e) =>
-              e.categories.contains(category) && DateFilter.isInRange(e.date),
+              e.validCategories.contains(category) && DateFilter.isInRange(e.date),
         )
         .toList();
 
     double debit = 0;
     double credit = 0;
     for (final e in related) {
-      final share = e.amount / e.categories.length;
+      final share = e.categoryShare;
       if (e.type == 'debit') {
         debit += share;
       } else {

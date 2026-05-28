@@ -66,7 +66,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   // ── Filtered expenses for this category ──────────────────────────────────
   List<ExpenseModel> get _filtered => _expenses
       .where((e) =>
-          e.categories.contains(_categoryName) &&
+          e.validCategories.contains(_categoryName) &&
           DateFilter.isInRange(e.date))
       .toList();
 
@@ -75,7 +75,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     double debit = 0;
     double credit = 0;
     for (final e in _filtered) {
-      final share = e.amount / e.categories.length;
+      final share = e.categoryShare;
       if (e.type == 'debit') debit += share;
       else credit += share;
     }
@@ -92,7 +92,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       double debit = 0;
       double credit = 0;
       for (final e in expenses) {
-        final share = e.amount / e.categories.length;
+        final share = e.categoryShare;
         if (e.type == 'debit') debit += share;
         else credit += share;
       }

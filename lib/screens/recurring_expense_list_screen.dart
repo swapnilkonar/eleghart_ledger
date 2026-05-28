@@ -120,7 +120,7 @@ class _RecurringExpenseListScreenState
       frequency: r.frequency,
       startDate: DateTime.now(),
       groupId: r.groupId,
-      category: r.category,
+      categories: r.categories,
       description: r.description,
     ));
     await StorageService.saveRecurring(list);

@@ -103,12 +103,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     for (final c in _categories) {
       final related = expenses
           .where(
-            (e) => e.categories.contains(c) && DateFilter.isInRange(e.date),
+            (e) => e.validCategories.contains(c) && DateFilter.isInRange(e.date),
           )
           .toList();
 
       final total = related.fold<double>(0, (s, e) {
-        final share = e.amount / e.categories.length;
+        final share = e.categoryShare;
         return e.type == 'credit' ? s + share : s - share;
       });
 

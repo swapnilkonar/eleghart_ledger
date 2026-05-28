@@ -76,4 +76,17 @@ class ExpenseModel {
   /// Optional helper getters (useful for UI + PDF later)
   bool get isDebit => type == 'debit';
   bool get isCredit => type == 'credit';
+
+  /// Filters out system tags so amounts are only split among real categories
+  List<String> get validCategories {
+    final valid = categories.where((cat) {
+      final lower = cat.toLowerCase();
+      return lower != 'emi' && lower != 'recurring';
+    }).toList();
+    // If it only had system tags, bucket it to 'Uncategorized' to avoid division by zero
+    return valid.isEmpty ? ['Uncategorized'] : valid;
+  }
+
+  /// The amount divided by the number of valid (non-system) categories
+  double get categoryShare => amount / validCategories.length;
 }

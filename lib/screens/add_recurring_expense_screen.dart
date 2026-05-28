@@ -29,7 +29,7 @@ class _AddRecurringExpenseScreenState
   final _descCtrl = TextEditingController();
 
   String _frequency = 'monthly';
-  String _category = 'Bills & Utilities';
+  Set<String> _selectedCategories = {};
   String _groupId = '';
   DateTime _startDate = DateTime.now();
   DateTime? _endDate;
@@ -55,7 +55,7 @@ class _AddRecurringExpenseScreenState
       _amountCtrl.text = e.amount.toStringAsFixed(0);
       _descCtrl.text = e.description;
       _frequency = e.frequency;
-      _category = e.category;
+      _selectedCategories = e.categories.toSet();
       _groupId = e.groupId;
       _startDate = e.startDate;
       _endDate = e.endDate;
@@ -89,16 +89,112 @@ class _AddRecurringExpenseScreenState
         if (_groupId.isEmpty && g.isNotEmpty) _groupId = g.first.id;
         if (g.isNotEmpty) {
           final validCategories = _currentCategories;
-          if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
-            _category = validCategories.first;
+          if (_selectedCategories.isEmpty && validCategories.isNotEmpty) {
+            _selectedCategories.add(validCategories.first);
           }
         }
       });
     }
   }
 
+  Future<void> _showCategoryPicker() async {
+    final validCategories = _currentCategories;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.25) : Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Select Categories',
+                  style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: validCategories.map((c) {
+                      final sel = _selectedCategories.contains(c);
+                      return GestureDetector(
+                        onTap: () {
+                          setModalState(() {
+                            sel ? _selectedCategories.remove(c) : _selectedCategories.add(c);
+                          });
+                          setState(() {});
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: sel
+                                ? const Color(0xFFCC0020).withOpacity(0.12)
+                                : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: sel
+                                  ? const Color(0xFFCC0020).withOpacity(0.5)
+                                  : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.label_outline_rounded,
+                                  size: 18,
+                                  color: sel
+                                      ? const Color(0xFFCC0020)
+                                      : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(c,
+                                    style: GoogleFonts.sora(
+                                        fontSize: 14,
+                                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                                        fontWeight: sel
+                                            ? FontWeight.w600
+                                            : FontWeight.w400)),
+                              ),
+                              if (sel)
+                                const Icon(Icons.check_rounded,
+                                    color: Color(0xFFCC0020), size: 18),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedCategories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select at least one category')));
+      return;
+    }
     setState(() => _saving = true);
 
     final list = await StorageService.loadRecurring();
@@ -110,7 +206,7 @@ class _AddRecurringExpenseScreenState
       startDate: _startDate,
       endDate: _hasEndDate ? _endDate : null,
       groupId: _groupId,
-      category: _category,
+      categories: _selectedCategories.toList(),
       description: _descCtrl.text.trim(),
       isActive: widget.existing?.isActive ?? true,
       lastGeneratedDate: widget.existing?.lastGeneratedDate,
@@ -127,7 +223,7 @@ class _AddRecurringExpenseScreenState
         startDate: model.startDate,
         endDate: model.endDate,
         groupId: model.groupId,
-        category: model.category,
+        categories: model.categories,
         description: model.description,
       ));
     }
@@ -234,8 +330,11 @@ class _AddRecurringExpenseScreenState
                                 setState(() {
                                   _groupId = v!;
                                   final validCategories = _currentCategories;
-                                  if (!validCategories.contains(_category) && validCategories.isNotEmpty) {
-                                    _category = validCategories.first;
+                                  // Clear selected categories that are no longer valid for the new group
+                                  _selectedCategories.removeWhere((c) => !validCategories.contains(c));
+                                  // If no valid categories remain but the new group has categories, select the first one
+                                  if (_selectedCategories.isEmpty && validCategories.isNotEmpty) {
+                                    _selectedCategories.add(validCategories.first);
                                   }
                                 });
                               },
@@ -246,15 +345,33 @@ class _AddRecurringExpenseScreenState
                             ),
                             const SizedBox(height: 16),
                           ],
-                          _dropdownField(
-                            label: 'Category',
-                            value: _category,
-                            items: _currentCategories,
-                            onChanged: (v) => setState(() => _category = v!),
-                            textPrimary: textPrimary,
-                            textSec: textSec,
-                            border: border,
-                            cardBg: cardBg,
+                          _sectionLabel('Category', textSec),
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: _showCategoryPicker,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: cardBg,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _selectedCategories.isEmpty
+                                          ? 'Select Categories'
+                                          : _selectedCategories.join(', '),
+                                      style: GoogleFonts.sora(fontSize: 14, color: textPrimary),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Icon(Icons.arrow_drop_down, color: textSec),
+                                ],
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           _dateRow(
