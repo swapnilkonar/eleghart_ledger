@@ -40,10 +40,14 @@ class RecurringEngine {
       // Generate all dues from last generated up to today
       while (true) {
         final next = r.nextDueDate(current);
-        if (next.isAfter(today)) break;
-        if (r.endDate != null && next.isAfter(r.endDate!)) break;
-
         final dueDay = DateTime(next.year, next.month, next.day);
+        
+        if (dueDay.isAfter(today)) break;
+        if (r.endDate != null) {
+          final endDay = DateTime(r.endDate!.year, r.endDate!.month, r.endDate!.day);
+          if (dueDay.isAfter(endDay)) break;
+        }
+
         // Avoid duplicate: check if we already generated for this dueDay
         final alreadyExists = expenses.any((e) =>
             e.description.contains(r.name) &&

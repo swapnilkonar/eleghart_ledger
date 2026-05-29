@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../models/expense_model.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import 'expenses_screen.dart';
@@ -47,6 +48,7 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
   }
 
   Future<void> reload() async {
+    await RecurringEngine.run();
     final e = await StorageService.loadExpenses();
     final g = await StorageService.loadGroups();
     if (mounted) {

@@ -10,6 +10,7 @@ import 'profile_screen.dart';
 import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -83,6 +84,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // ---------------- LOAD DASHBOARD DATA ----------------
 
   Future<void> _loadDashboardData() async {
+    await RecurringEngine.run();
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
 
@@ -479,6 +481,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   _loadDashboardData();
                   _groupsKey.currentState?.reload();
                   _expenseListKey.currentState?.reload();
+                  _insightsKey.currentState?.reload();
                 },
               ),
             ),
@@ -500,6 +503,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   _loadDashboardData();
                   _groupsKey.currentState?.reload();
                   _expenseListKey.currentState?.reload();
+                  _insightsKey.currentState?.reload();
                 },
               ),
             ),

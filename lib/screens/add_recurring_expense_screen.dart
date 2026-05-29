@@ -31,7 +31,7 @@ class _AddRecurringExpenseScreenState
   String _frequency = 'monthly';
   Set<String> _selectedCategories = {};
   String _groupId = '';
-  DateTime _startDate = DateTime.now();
+  late DateTime _startDate;
   DateTime? _endDate;
   bool _hasEndDate = false;
 
@@ -47,6 +47,8 @@ class _AddRecurringExpenseScreenState
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
     AppThemeNotifier.instance.addListener(_onTheme);
     _loadGroups();
     if (widget.existing != null) {

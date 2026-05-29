@@ -80,7 +80,7 @@ class ExpenseModel {
   /// Filters out system tags so amounts are only split among real categories
   List<String> get validCategories {
     final valid = categories.where((cat) {
-      final lower = cat.toLowerCase();
+      final lower = cat.toLowerCase().trim();
       return lower != 'emi' && lower != 'recurring';
     }).toList();
     // If it only had system tags, bucket it to 'Uncategorized' to avoid division by zero

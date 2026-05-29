@@ -41,6 +41,7 @@ class _RecurringExpenseListScreenState
   }
 
   Future<void> _load() async {
+    await RecurringEngine.run();
     final r = await StorageService.loadRecurring();
     final g = await StorageService.loadGroups();
     if (mounted) setState(() { _list = r; _groups = g; _loading = false; });

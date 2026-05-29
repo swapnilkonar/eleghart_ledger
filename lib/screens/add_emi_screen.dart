@@ -28,7 +28,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
 
   String _groupId = '';
   Set<String> _selectedCategories = {'EMI'};
-  DateTime _startDate = DateTime.now();
+  late DateTime _startDate;
   List<GroupModel> _groups = [];
   bool _saving = false;
 
@@ -39,6 +39,8 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
     AppThemeNotifier.instance.addListener(_onTheme);
     _loadGroups();
     if (widget.existing != null) {

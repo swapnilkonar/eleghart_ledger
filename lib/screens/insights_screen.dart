@@ -54,9 +54,9 @@ class InsightsScreenState extends State<InsightsScreen> {
     final globalCats = await StorageService.loadGlobalCategories();
 
     // Build a set of all currently active/valid categories (case-insensitive)
-    final Set<String> activeCategories = globalCats.map((c) => c.toLowerCase()).toSet();
+    final Set<String> activeCategories = globalCats.map((c) => c.toLowerCase().trim()).toSet();
     for (var g in groups) {
-      activeCategories.addAll(g.categories.map((c) => c.toLowerCase()));
+      activeCategories.addAll(g.categories.map((c) => c.toLowerCase().trim()));
     }
 
     final now = DateTime.now();
@@ -83,7 +83,7 @@ class InsightsScreenState extends State<InsightsScreen> {
     // Category Totals
     for (var e in thisMonthExpenses) {
       final validCategories = e.categories.where((cat) {
-        final lower = cat.toLowerCase();
+        final lower = cat.toLowerCase().trim();
         if (lower == 'emi' || lower == 'recurring') return false;
         
         // Strict check: Only allow if it belongs to an active group or global category

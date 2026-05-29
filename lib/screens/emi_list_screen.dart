@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/emi_model.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -42,6 +43,7 @@ class _EmiListScreenState extends State<EmiListScreen>
   }
 
   Future<void> _load() async {
+    await RecurringEngine.run();
     final e = await StorageService.loadEmis();
     final g = await StorageService.loadGroups();
     if (mounted) setState(() { _list = e; _groups = g; _loading = false; });
@@ -334,51 +336,55 @@ class _EmiListScreenState extends State<EmiListScreen>
                   ],
                 ),
               ),
-              if (e.isCompleted)
-                _badge('Completed', const Color(0xFF22C55E))
-              else if (e.remaining <= 3)
-                _badge('${e.remaining} left', Colors.orange)
-              else
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert_rounded,
-                      color: textSec, size: 20),
-                  color: cardBg,
-                  onSelected: (action) async {
-                    if (action == 'edit') {
-                      final ok = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => AddEmiScreen(existing: e)));
-                      if (ok == true) _load();
-                    } else if (action == 'delete') {
-                      await _delete(e);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [
-                        Icon(Icons.edit_outlined,
-                            color: textPrimary, size: 18),
-                        const SizedBox(width: 10),
-                        Text('Edit',
-                            style: GoogleFonts.sora(
-                                fontSize: 13, color: textPrimary)),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        const Icon(Icons.delete_outline,
-                            color: Colors.red, size: 18),
-                        const SizedBox(width: 10),
-                        Text('Delete',
-                            style: GoogleFonts.sora(
-                                fontSize: 13, color: Colors.red)),
-                      ]),
-                    ),
-                  ],
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (e.isCompleted)
+                    _badge('Completed', const Color(0xFF22C55E))
+                  else if (e.remaining <= 3)
+                    _badge('${e.remaining} left', Colors.orange),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert_rounded,
+                        color: textSec, size: 20),
+                    color: cardBg,
+                    onSelected: (action) async {
+                      if (action == 'edit') {
+                        final ok = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => AddEmiScreen(existing: e)));
+                        if (ok == true) _load();
+                      } else if (action == 'delete') {
+                        await _delete(e);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(children: [
+                          Icon(Icons.edit_outlined,
+                              color: textPrimary, size: 18),
+                          const SizedBox(width: 10),
+                          Text('Edit',
+                              style: GoogleFonts.sora(
+                                  fontSize: 13, color: textPrimary)),
+                        ]),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          const Icon(Icons.delete_outline,
+                              color: Colors.red, size: 18),
+                          const SizedBox(width: 10),
+                          Text('Delete',
+                              style: GoogleFonts.sora(
+                                  fontSize: 13, color: Colors.red)),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 12),
