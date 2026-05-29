@@ -127,8 +127,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (q.contains("top category") || q.contains("where did i spend most") || q.contains("most money on")) {
       Map<String, double> catTotals = {};
       for (var e in targetExpenses) {
-        for (var c in e.categories) {
-          catTotals[c] = (catTotals[c] ?? 0) + (e.amount / e.categories.length);
+        for (var c in e.validCategories) {
+          catTotals[c] = (catTotals[c] ?? 0) + e.categoryShare;
         }
       }
       if (catTotals.isEmpty) return "You haven't categorized your expenses yet $monthStr.";
@@ -153,8 +153,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (q.contains("save") || q.contains("advice") || q.contains("tips") || q.contains("reduce") || q.contains("budget")) {
       Map<String, double> catTotals = {};
       for (var e in targetExpenses) {
-        for (var c in e.categories) {
-          catTotals[c] = (catTotals[c] ?? 0) + (e.amount / e.categories.length);
+        for (var c in e.validCategories) {
+          catTotals[c] = (catTotals[c] ?? 0) + e.categoryShare;
         }
       }
       if (catTotals.isEmpty) return "Track more categorized expenses so I can find savings opportunities!";

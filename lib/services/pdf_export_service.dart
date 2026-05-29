@@ -49,8 +49,8 @@ class PdfExportService {
     final Map<String, double> memberTotals = {};
 
     for (final e in filtered) {
-      final share = e.amount / e.categories.length;
-      for (final m in e.categories) {
+      final share = e.categoryShare;
+      for (final m in e.validCategories) {
         final signedShare = e.type == 'credit' ? share : -share;
         memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
       }
@@ -137,7 +137,7 @@ class PdfExportService {
     double totalDebit = 0;
     double totalCredit = 0;
     for (final e in filtered) {
-      final share = e.amount / e.categories.length;
+      final share = e.amount / e.validCategories.length;
       if (e.type == 'credit') totalCredit += share;
       else totalDebit += share;
     }
@@ -182,7 +182,7 @@ class PdfExportService {
             final gExpenses = entry.value;
             double gDebit = 0, gCredit = 0;
             for (final e in gExpenses) {
-              final share = e.amount / e.categories.length;
+              final share = e.amount / e.validCategories.length;
               if (e.type == 'credit') gCredit += share;
               else gDebit += share;
             }
@@ -233,7 +233,7 @@ class PdfExportService {
                   _tableRow(['Date', 'Type', 'Description', 'Members', 'Amount'],
                       isHeader: true),
                   ...gExpenses.map((e) {
-                    final share = e.amount / e.categories.length;
+                    final share = e.amount / e.validCategories.length;
                     final isCredit = e.type == 'credit';
                     return _tableRow([
                       DateFormat('dd MMM yyyy').format(e.date),

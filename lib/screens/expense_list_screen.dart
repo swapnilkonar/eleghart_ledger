@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../models/expense_model.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import 'expenses_screen.dart';
@@ -47,6 +48,7 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
   }
 
   Future<void> reload() async {
+    await RecurringEngine.run();
     final e = await StorageService.loadExpenses();
     final g = await StorageService.loadGroups();
     if (mounted) {
@@ -291,11 +293,13 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
               'Track monthly instalments & progress',
               textPrimary, textSec, sheetBg,
               accent: const Color(0xFF0EA5E9),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(context,
+                await Navigator.push(context,
                     MaterialPageRoute(
                         builder: (_) => const EmiListScreen()));
+                reload();
+                widget.onExpenseAdded?.call();
               },
             ),
           ],
@@ -907,21 +911,36 @@ class _BulkActionsSheet extends StatefulWidget {
 }
 
 class _BulkActionsSheetState extends State<_BulkActionsSheet> {
-  String _category = 'Food & Dining';
+  String? _category;
   GroupModel? _selectedGroup;
   final _noteCtrl = TextEditingController();
   bool _applying = false;
+  List<String> _globalCategories = ['Others']; // Fallback
 
-  static const _categories = [
-    'Food & Dining',
-    'Travel',
-    'Shopping',
-    'Bills & Utilities',
-    'Fuel',
-    'Entertainment',
-    'Health',
-    'Others'
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadGlobalCategories();
+  }
+
+  Future<void> _loadGlobalCategories() async {
+    final gc = await StorageService.loadGlobalCategories();
+    if (mounted) {
+      setState(() {
+        if (gc.isNotEmpty) _globalCategories = gc;
+        if (_category == null) {
+          _category = _currentCategories.isNotEmpty ? _currentCategories.first : 'Others';
+        }
+      });
+    }
+  }
+
+  List<String> get _currentCategories {
+    if (_selectedGroup != null && _selectedGroup!.categories.isNotEmpty) {
+      return _selectedGroup!.categories;
+    }
+    return _globalCategories;
+  }
 
   List<ExpenseModel> get _selected =>
       widget.expenses.where((e) => widget.selectedIds.contains(e.id)).toList();
@@ -940,7 +959,7 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
     final updated = widget.expenses.map((e) {
       if (!widget.selectedIds.contains(e.id)) return e;
       return e.copyWith(
-        categories: [_category],
+        categories: _category != null ? [_category!] : e.categories,
         groupId: _selectedGroup?.id,
         description: note.isNotEmpty ? '${e.description} · $note' : null,
       );
@@ -971,7 +990,20 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
       builder: (_) => _GroupPickerSheet(
         groups: widget.groups,
         selected: _selectedGroup,
-        onPicked: (g) => setState(() => _selectedGroup = g),
+        onPicked: (g) {
+          setState(() {
+            _selectedGroup = g;
+            if (g != null && g.categories.isNotEmpty) {
+              if (_category == null || !g.categories.contains(_category)) {
+                _category = g.categories.first;
+              }
+            } else {
+              if (_category == null || !_globalCategories.contains(_category)) {
+                _category = _globalCategories.isNotEmpty ? _globalCategories.first : 'Others';
+              }
+            }
+          });
+        },
       ),
     );
   }
@@ -988,6 +1020,9 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
         : Colors.white.withOpacity(0.08);
     final inputBg =
         isWhite ? const Color(0xFFF8F8F8) : const Color(0xFF1C0606);
+
+    final validCategories = _currentCategories.isNotEmpty ? _currentCategories : ['Others'];
+    final displayCategory = validCategories.contains(_category) ? _category : validCategories.first;
 
     return Container(
       margin: const EdgeInsets.only(top: 60),
@@ -1032,14 +1067,14 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: border)),
                 child: DropdownButton<String>(
-                  value: _category,
+                  value: displayCategory,
                   isExpanded: true,
                   underline: const SizedBox(),
                   dropdownColor: bg,
                   icon: Icon(Icons.keyboard_arrow_down_rounded,
                       color: textSecondary),
                   onChanged: (v) => setState(() => _category = v!),
-                  items: _categories
+                  items: validCategories
                       .map((c) => DropdownMenuItem(
                             value: c,
                             child: Row(children: [

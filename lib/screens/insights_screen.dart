@@ -14,10 +14,10 @@ class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
 
   @override
-  State<InsightsScreen> createState() => _InsightsScreenState();
+  State<InsightsScreen> createState() => InsightsScreenState();
 }
 
-class _InsightsScreenState extends State<InsightsScreen> {
+class InsightsScreenState extends State<InsightsScreen> {
   bool _loading = true;
   List<ExpenseModel> _expenses = [];
   List<GroupModel> _groups = [];
@@ -51,6 +51,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Future<void> _loadData() async {
     final expenses = await StorageService.loadExpenses();
     final groups = await StorageService.loadGroups();
+    final globalCats = await StorageService.loadGlobalCategories();
+
+    // Build a set of all currently active/valid categories (case-insensitive)
+    final Set<String> activeCategories = globalCats.map((c) => c.toLowerCase().trim()).toSet();
+    for (var g in groups) {
+      activeCategories.addAll(g.categories.map((c) => c.toLowerCase().trim()));
+    }
 
     final now = DateTime.now();
     final thisMonthExpenses = expenses.where((e) => e.date.month == now.month && e.date.year == now.year && e.isDebit).toList();
@@ -63,12 +70,32 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
     if (_lastMonthTotal > 0) {
       _growth = ((_thisMonthTotal - _lastMonthTotal) / _lastMonthTotal) * 100;
+    } else {
+      _growth = 0;
     }
+
+    // Reset before recalculating
+    _categoryTotals.clear();
+    _biggestExpense = null;
+    _topCategory = '-';
+    _mostActiveGroup = '-';
 
     // Category Totals
     for (var e in thisMonthExpenses) {
-      for (var cat in e.categories) {
-        _categoryTotals[cat] = (_categoryTotals[cat] ?? 0) + (e.amount / e.categories.length);
+      final validCategories = e.categories.where((cat) {
+        final lower = cat.toLowerCase().trim();
+        if (lower == 'emi' || lower == 'recurring') return false;
+        
+        // Strict check: Only allow if it belongs to an active group or global category
+        return activeCategories.contains(lower);
+      }).toList();
+
+      if (validCategories.isEmpty) {
+        _categoryTotals['Others'] = (_categoryTotals['Others'] ?? 0) + e.amount;
+      } else {
+        for (var cat in validCategories) {
+          _categoryTotals[cat] = (_categoryTotals[cat] ?? 0) + (e.amount / validCategories.length);
+        }
       }
     }
 
@@ -84,7 +111,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     // Group activity
     var groupCounts = <String, int>{};
     for (var e in expenses) {
-      groupCounts[e.groupId] = (groupCounts[e.groupId] ?? 0) + 1;
+      if (e.groupId != null) {
+        groupCounts[e.groupId!] = (groupCounts[e.groupId!] ?? 0) + 1;
+      }
     }
     if (groupCounts.isNotEmpty) {
       var topG = groupCounts.entries.reduce((a, b) => a.value > b.value ? a : b);
@@ -103,6 +132,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
       _groups = groups;
       _loading = false;
     });
+  }
+
+  void reload() {
+    setState(() => _loading = true);
+    _loadData();
   }
 
   // ── UI Helpers ────────────────────────────────────────────────────────────
@@ -324,60 +358,176 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   Widget _buildDistributionChart(bool isWhite) {
     if (_categoryTotals.isEmpty) return const SizedBox.shrink();
-    
-    final List<Color> colors = [const Color(0xFFCC0020), const Color(0xFF0066CC), const Color(0xFF00AA55), const Color(0xFFCC6600), const Color(0xFF8833CC)];
-    int cIdx = 0;
 
-    return Container(
-      height: 250,
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDeco(isWhite),
-      child: Row(
-        children: [
-          Expanded(
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 40,
-                sections: _categoryTotals.entries.map((e) {
-                  final color = colors[cIdx++ % colors.length];
-                  return PieChartSectionData(
-                    color: color,
-                    value: e.value,
-                    title: '${((e.value / _thisMonthTotal) * 100).toStringAsFixed(0)}%',
-                    radius: 45,
-                    titleStyle: GoogleFonts.sora(
-                      fontSize: 12, 
-                      fontWeight: FontWeight.w700, 
-                      color: Colors.white,
-                      shadows: [const Shadow(color: Colors.black45, blurRadius: 2)]),
+    // 1. Process data: Group small categories (< 3% for higher detail)
+    Map<String, double> processedTotals = {};
+    double otherTotal = 0;
+    
+    for (var entry in _categoryTotals.entries) {
+      double percentage = (entry.value / _thisMonthTotal) * 100;
+      if (percentage < 3) {
+        otherTotal += entry.value;
+      } else {
+        processedTotals[entry.key] = entry.value;
+      }
+    }
+
+    if (otherTotal > 0) {
+      processedTotals['Others'] = otherTotal;
+    }
+    
+    // Sort by largest first, 'Others' at the end
+    var sortedEntries = processedTotals.entries.toList()
+      ..sort((a, b) => a.key == 'Others' ? 1 : (b.key == 'Others' ? -1 : b.value.compareTo(a.value)));
+
+    // Strict Elegant Monochromatic Red Palette
+    final List<Color> colors = [
+      const Color(0xFF7F1D1D), // Deep wine
+      const Color(0xFF991B1B), // Rich crimson
+      const Color(0xFFB91C1C), // Ruby red
+      const Color(0xFFDC2626), // Premium red
+      const Color(0xFFEF4444), // Soft coral
+      const Color(0xFFF87171), // Blush red
+      const Color(0xFFFCA5A5), // Muted rose
+    ];
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 1000),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: 0.95 + (0.05 * value),
+          child: Opacity(
+            opacity: value,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        height: 240,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: isWhite ? Colors.white : const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: isWhite ? [
+            BoxShadow(
+              color: const Color(0xFF7F1D1D).withOpacity(0.08),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
+            )
+          ] : [],
+        ),
+        child: Row(
+          children: [
+            // Left: Elegant Donut Chart
+            Expanded(
+              flex: 11,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  PieChart(
+                    PieChartData(
+                      pieTouchData: PieTouchData(enabled: false),
+                      sectionsSpace: 4, // Subtle spacing
+                      centerSpaceRadius: 65, // Thin elegant ring
+                      sections: sortedEntries.asMap().entries.map((mapEntry) {
+                        final idx = mapEntry.key;
+                        final e = mapEntry.value;
+                        final color = colors[idx % colors.length];
+                        
+                        return PieChartSectionData(
+                          color: color,
+                          value: e.value,
+                          title: '',
+                          showTitle: false, // Clean, no clutter
+                          radius: 12, // Thin elegant ring
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  // Center Content
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('TOTAL SPENDING', 
+                        style: GoogleFonts.sora(
+                          fontSize: 9, 
+                          fontWeight: FontWeight.w700, 
+                          letterSpacing: 0.5,
+                          color: isWhite ? const Color(0xFF7F1D1D).withOpacity(0.5) : Colors.white54
+                        )
+                      ),
+                      const SizedBox(height: 4),
+                      Text('₹${_thisMonthTotal.toStringAsFixed(0)}', 
+                        style: GoogleFonts.sora(
+                          fontSize: 20, 
+                          fontWeight: FontWeight.w800, 
+                          color: isWhite ? const Color(0xFF7F1D1D) : Colors.white
+                        )
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24),
+            // Right: Minimal Vertical Legend
+            Expanded(
+              flex: 9,
+              child: ListView(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                children: sortedEntries.asMap().entries.map((mapEntry) {
+                  final idx = mapEntry.key;
+                  final e = mapEntry.value;
+                  final color = colors[idx % colors.length];
+                  final percentage = (e.value / _thisMonthTotal) * 100;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10, 
+                          height: 10, 
+                          decoration: BoxDecoration(
+                            color: color, 
+                            shape: BoxShape.circle,
+                            boxShadow: isWhite ? [
+                              BoxShadow(color: color.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2))
+                            ] : [],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            e.key, 
+                            maxLines: 1, 
+                            overflow: TextOverflow.ellipsis, 
+                            style: GoogleFonts.sora(
+                              fontSize: 13, 
+                              fontWeight: FontWeight.w600, 
+                              color: isWhite ? const Color(0xFF1E1E1E) : Colors.white
+                            )
+                          ),
+                        ),
+                        Text(
+                          '${percentage.toStringAsFixed(1)}%', 
+                          style: GoogleFonts.sora(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.w700, 
+                            color: isWhite ? const Color(0xFF7F1D1D).withOpacity(0.8) : Colors.white70
+                          )
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
               ),
             ),
-          ),
-          Expanded(
-            child: ListView(
-              shrinkWrap: true,
-              children: () {
-                int i = 0;
-                return _categoryTotals.entries.map((e) {
-                  final color = colors[i++ % colors.length];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      children: [
-                        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(e.key, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w500, color: isWhite ? EleghartColors.accentDark : Colors.white70))),
-                      ],
-                    ),
-                  );
-                }).toList();
-              }(),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

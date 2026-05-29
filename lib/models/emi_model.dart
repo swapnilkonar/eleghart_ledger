@@ -15,7 +15,7 @@ class EmiModel {
 
   final DateTime startDate;
   final String groupId;
-  final String category;
+  final List<String> categories;
   final String description;
 
   /// Last date on which an EMI expense was auto-generated
@@ -29,7 +29,7 @@ class EmiModel {
     required this.completed,
     required this.startDate,
     required this.groupId,
-    this.category = 'EMI',
+    this.categories = const ['EMI'],
     this.description = '',
     this.lastGeneratedDate,
   });
@@ -40,48 +40,49 @@ class EmiModel {
     required int tenure,
     required DateTime startDate,
     required String groupId,
-    String category = 'EMI',
+    List<String> categories = const ['EMI'],
     String description = '',
-  }) =>
-      EmiModel(
-        id: const Uuid().v4(),
-        productName: productName,
-        amount: amount,
-        tenure: tenure,
-        completed: 0,
-        startDate: startDate,
-        groupId: groupId,
-        category: category,
-        description: description,
-      );
+  }) => EmiModel(
+    id: const Uuid().v4(),
+    productName: productName,
+    amount: amount,
+    tenure: tenure,
+    completed: 0,
+    startDate: startDate,
+    groupId: groupId,
+    categories: categories,
+    description: description,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'productName': productName,
-        'amount': amount,
-        'tenure': tenure,
-        'completed': completed,
-        'startDate': startDate.toIso8601String(),
-        'groupId': groupId,
-        'category': category,
-        'description': description,
-        'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
-      };
+    'id': id,
+    'productName': productName,
+    'amount': amount,
+    'tenure': tenure,
+    'completed': completed,
+    'startDate': startDate.toIso8601String(),
+    'groupId': groupId,
+    'categories': categories,
+    'description': description,
+    'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
+  };
 
   factory EmiModel.fromJson(Map<String, dynamic> j) => EmiModel(
-        id: j['id'],
-        productName: j['productName'],
-        amount: (j['amount'] as num).toDouble(),
-        tenure: j['tenure'],
-        completed: j['completed'] ?? 0,
-        startDate: DateTime.parse(j['startDate']),
-        groupId: j['groupId'] ?? '',
-        category: j['category'] ?? 'EMI',
-        description: j['description'] ?? '',
-        lastGeneratedDate: j['lastGeneratedDate'] != null
-            ? DateTime.parse(j['lastGeneratedDate'])
-            : null,
-      );
+    id: j['id'],
+    productName: j['productName'],
+    amount: (j['amount'] as num).toDouble(),
+    tenure: j['tenure'],
+    completed: j['completed'] ?? 0,
+    startDate: DateTime.parse(j['startDate']),
+    groupId: j['groupId'] ?? '',
+    categories: j['categories'] != null
+        ? (j['categories'] as List<dynamic>).cast<String>()
+        : (j['category'] != null ? [j['category'] as String] : ['EMI']),
+    description: j['description'] ?? '',
+    lastGeneratedDate: j['lastGeneratedDate'] != null
+        ? DateTime.parse(j['lastGeneratedDate'])
+        : null,
+  );
 
   EmiModel copyWith({
     String? productName,
@@ -90,24 +91,23 @@ class EmiModel {
     int? completed,
     DateTime? startDate,
     String? groupId,
-    String? category,
+    List<String>? categories,
     String? description,
     Object? lastGeneratedDate = _sentinel,
-  }) =>
-      EmiModel(
-        id: id,
-        productName: productName ?? this.productName,
-        amount: amount ?? this.amount,
-        tenure: tenure ?? this.tenure,
-        completed: completed ?? this.completed,
-        startDate: startDate ?? this.startDate,
-        groupId: groupId ?? this.groupId,
-        category: category ?? this.category,
-        description: description ?? this.description,
-        lastGeneratedDate: lastGeneratedDate == _sentinel
-            ? this.lastGeneratedDate
-            : lastGeneratedDate as DateTime?,
-      );
+  }) => EmiModel(
+    id: id,
+    productName: productName ?? this.productName,
+    amount: amount ?? this.amount,
+    tenure: tenure ?? this.tenure,
+    completed: completed ?? this.completed,
+    startDate: startDate ?? this.startDate,
+    groupId: groupId ?? this.groupId,
+    categories: categories ?? this.categories,
+    description: description ?? this.description,
+    lastGeneratedDate: lastGeneratedDate == _sentinel
+        ? this.lastGeneratedDate
+        : lastGeneratedDate as DateTime?,
+  );
 
   int get remaining => (tenure - completed).clamp(0, tenure);
   bool get isCompleted => completed >= tenure;
@@ -117,8 +117,7 @@ class EmiModel {
 
   /// Due date for the next EMI
   DateTime get nextDueDate {
-    return DateTime(
-        startDate.year, startDate.month + completed, startDate.day);
+    return DateTime(startDate.year, startDate.month + completed, startDate.day);
   }
 }
 

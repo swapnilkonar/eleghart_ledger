@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/group_model.dart';
 import '../models/recurring_expense_model.dart';
 import '../services/storage_service.dart';
+import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -40,6 +41,7 @@ class _RecurringExpenseListScreenState
   }
 
   Future<void> _load() async {
+    await RecurringEngine.run();
     final r = await StorageService.loadRecurring();
     final g = await StorageService.loadGroups();
     if (mounted) setState(() { _list = r; _groups = g; _loading = false; });
@@ -79,6 +81,7 @@ class _RecurringExpenseListScreenState
     final idx = list.indexWhere((x) => x.id == r.id);
     if (idx >= 0) list[idx] = updated;
     await StorageService.saveRecurring(list);
+    await RecurringEngine.run();
     _load();
   }
 
@@ -118,10 +121,11 @@ class _RecurringExpenseListScreenState
       frequency: r.frequency,
       startDate: DateTime.now(),
       groupId: r.groupId,
-      category: r.category,
+      categories: r.categories,
       description: r.description,
     ));
     await StorageService.saveRecurring(list);
+    await RecurringEngine.run();
     _load();
   }
 
