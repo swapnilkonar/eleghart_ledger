@@ -39,16 +39,16 @@ dependencies:
   uuid: ^4.4.0
   pdf: ^3.10.7
   printing: ^5.12.0
-  intl: ^0.19.0
+  intl: ^0.20.2
   path_provider: ^2.1.2
-  share_plus: ^7.2.1
+  share_plus: ^13.1.0
   open_filex: ^4.3.2
-  google_fonts: ^6.2.1
-  smooth_page_indicator: ^1.1.0
-  fl_chart: ^0.68.0
-  google_mlkit_text_recognition: ^0.13.0
-  google_mlkit_entity_extraction: ^0.13.0
-  file_picker: ^8.1.2
+  google_fonts: ^8.1.0
+  smooth_page_indicator: ^2.0.1
+  fl_chart: ^1.2.0
+  google_mlkit_text_recognition: ^0.15.1
+  google_mlkit_entity_extraction: ^0.15.3
+  file_picker: ^12.0.0-beta.5
   pdfx: ^2.6.0
   http: ^1.2.0
 
@@ -62,7 +62,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.3.10
 
 # For information on the generic Dart part of this file, see the

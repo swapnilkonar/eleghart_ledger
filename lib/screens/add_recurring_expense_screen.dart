@@ -103,89 +103,98 @@ class _AddRecurringExpenseScreenState
     final validCategories = _currentCategories;
     await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.25) : Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('Select Categories',
-                  style: GoogleFonts.sora(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
-              const SizedBox(height: 16),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: validCategories.map((c) {
-                      final sel = _selectedCategories.contains(c);
-                      return GestureDetector(
-                        onTap: () {
-                          setModalState(() {
-                            sel ? _selectedCategories.remove(c) : _selectedCategories.add(c);
-                          });
-                          setState(() {});
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: sel
-                                ? const Color(0xFFCC0020).withOpacity(0.12)
-                                : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: sel
-                                  ? const Color(0xFFCC0020).withOpacity(0.5)
-                                  : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.label_outline_rounded,
-                                  size: 18,
-                                  color: sel
-                                      ? const Color(0xFFCC0020)
-                                      : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(c,
-                                    style: GoogleFonts.sora(
-                                        fontSize: 14,
-                                        color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
-                                        fontWeight: sel
-                                            ? FontWeight.w600
-                                            : FontWeight.w400)),
-                              ),
-                              if (sel)
-                                const Icon(Icons.check_rounded,
-                                    color: Color(0xFFCC0020), size: 18),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
+        builder: (ctx, setModalState) {
+          final bottomPad = 32.0 + MediaQuery.of(ctx).viewInsets.bottom;
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.65,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36, height: 4,
+                    decoration: BoxDecoration(
+                      color: AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.25) : Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text('Select Categories',
+                      style: GoogleFonts.sora(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white)),
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: validCategories.map((c) {
+                          final sel = _selectedCategories.contains(c);
+                          return GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                sel ? _selectedCategories.remove(c) : _selectedCategories.add(c);
+                              });
+                              setState(() {});
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: sel
+                                    ? const Color(0xFFCC0020).withOpacity(0.12)
+                                    : (AppThemeNotifier.isWhite ? Colors.white : Colors.white.withOpacity(0.05)),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: sel
+                                      ? const Color(0xFFCC0020).withOpacity(0.5)
+                                      : (AppThemeNotifier.isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.10)),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.label_outline_rounded,
+                                      size: 18,
+                                      color: sel
+                                          ? const Color(0xFFCC0020)
+                                          : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.45) : Colors.white38)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(c,
+                                        style: GoogleFonts.sora(
+                                            fontSize: 14,
+                                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                                            fontWeight: sel
+                                                ? FontWeight.w600
+                                                : FontWeight.w400)),
+                                  ),
+                                  if (sel)
+                                    const Icon(Icons.check_rounded,
+                                        color: Color(0xFFCC0020), size: 18),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -451,7 +460,7 @@ class _AddRecurringExpenseScreenState
                   onTap: () => setState(() => _frequency = f),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.only(right: 8),
+                    margin: EdgeInsets.only(right: f == _frequencies.last ? 0 : 8),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       color: _frequency == f
@@ -497,27 +506,30 @@ class _AddRecurringExpenseScreenState
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: textSec)),
-            Row(
-              children: [
-                Text('Never',
-                    style: GoogleFonts.sora(
-                        fontSize: 12, color: textSec)),
-                const SizedBox(width: 8),
-                Switch(
-                  value: _hasEndDate,
-                  onChanged: (v) => setState(() {
-                    _hasEndDate = v;
-                    if (v && _endDate == null) {
-                      _endDate = DateTime.now()
-                          .add(const Duration(days: 365));
-                    }
-                  }),
-                  activeColor: const Color(0xFFCC0020),
-                ),
-                Text('Set Date',
-                    style: GoogleFonts.sora(
-                        fontSize: 12, color: textSec)),
-              ],
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Never',
+                      style: GoogleFonts.sora(
+                          fontSize: 12, color: textSec)),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: _hasEndDate,
+                    onChanged: (v) => setState(() {
+                      _hasEndDate = v;
+                      if (v && _endDate == null) {
+                        _endDate = DateTime.now()
+                            .add(const Duration(days: 365));
+                      }
+                    }),
+                    activeColor: const Color(0xFFCC0020),
+                  ),
+                  Text('Set Date',
+                      style: GoogleFonts.sora(
+                          fontSize: 12, color: textSec)),
+                ],
+              ),
             ),
           ],
         ),
