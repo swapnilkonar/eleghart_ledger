@@ -10,6 +10,10 @@ class ExpenseModel {
   /// NEW: transaction type → 'debit' | 'credit'
   final String type;
 
+  /// Optional custom distribution: member/category → amount.
+  /// null = equal split (default, backward-compatible).
+  final Map<String, double>? distribution;
+
   ExpenseModel({
     required this.id,
     required this.groupId,
@@ -21,6 +25,7 @@ class ExpenseModel {
 
     /// Default = debit to keep old behavior unchanged
     this.type = 'debit',
+    this.distribution,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +39,7 @@ class ExpenseModel {
 
         /// NEW: persist transaction type
         'type': type,
+        'distribution': distribution,
       };
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +55,13 @@ class ExpenseModel {
       /// NEW: backward-compatible fallback
       /// Old expenses won’t have `type` → treat as debit
       type: json['type'] ?? 'debit',
+      distribution: json['distribution'] != null
+          ? Map<String, double>.from(
+              (json['distribution'] as Map).map(
+                (k, v) => MapEntry(k as String, (v as num).toDouble()),
+              ),
+            )
+          : null,
     );
   }
 
@@ -60,6 +73,7 @@ class ExpenseModel {
     DateTime? date,
     String? imagePath,
     String? type,
+    Object? distribution = _sentinel,
   }) {
     return ExpenseModel(
       id: id,
@@ -70,8 +84,13 @@ class ExpenseModel {
       date: date ?? this.date,
       imagePath: imagePath ?? this.imagePath,
       type: type ?? this.type,
+      distribution: distribution == _sentinel
+          ? this.distribution
+          : distribution as Map<String, double>?,
     );
   }
+
+  static const _sentinel = Object();
 
   /// Optional helper getters (useful for UI + PDF later)
   bool get isDebit => type == 'debit';

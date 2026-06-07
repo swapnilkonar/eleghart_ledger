@@ -4,6 +4,8 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../models/recurring_expense_model.dart';
 import '../models/emi_model.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
 
 class StorageService {
   static const _groupsKey = 'groups_v2';
@@ -12,6 +14,8 @@ class StorageService {
   static const _globalCategoriesKey = 'global_categories_v1';
   static const _recurringKey = 'recurring_v1';
   static const _emiKey = 'emi_v1';
+  static const _udhaarPersonsKey = 'udhaar_persons_v1';
+  static const _udhaarTransactionsKey = 'udhaar_transactions_v1';
 
   static Future<List<String>> loadGlobalCategories() async {
     final prefs = await SharedPreferences.getInstance();
@@ -88,5 +92,36 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final raw = list.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList(_emiKey, raw);
+  }
+
+  // ─── Udhaar – Persons ─────────────────────────────────────────────────────
+
+  static Future<List<PersonModel>> loadPersons() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_udhaarPersonsKey) ?? [];
+    return raw.map((e) => PersonModel.fromJson(jsonDecode(e))).toList();
+  }
+
+  static Future<void> savePersons(List<PersonModel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = list.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList(_udhaarPersonsKey, raw);
+  }
+
+  // ─── Udhaar – Transactions ────────────────────────────────────────────────
+
+  static Future<List<LedgerTransactionModel>> loadUdhaarTransactions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_udhaarTransactionsKey) ?? [];
+    return raw
+        .map((e) => LedgerTransactionModel.fromJson(jsonDecode(e)))
+        .toList();
+  }
+
+  static Future<void> saveUdhaarTransactions(
+      List<LedgerTransactionModel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = list.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList(_udhaarTransactionsKey, raw);
   }
 }

@@ -20,6 +20,13 @@
 -dontwarn com.pdfx.**
 -dontwarn io.scer.pdf_renderer.**
 
+# ── flutter_gemma / MediaPipe ─────────────────────────────────────────────────
+-dontwarn com.google.auto.value.extension.memoized.Memoized
+-dontwarn com.google.mediapipe.proto.CalculatorProfileProto$CalculatorProfile
+-dontwarn com.google.mediapipe.proto.GraphTemplateProto$CalculatorGraphTemplate
+-keep class com.google.mediapipe.** { *; }
+-dontwarn com.google.mediapipe.**
+
 # ── Flutter ───────────────────────────────────────────────────────────────────
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }

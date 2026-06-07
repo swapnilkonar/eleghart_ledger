@@ -21,6 +21,10 @@ class EmiModel {
   /// Last date on which an EMI expense was auto-generated
   final DateTime? lastGeneratedDate;
 
+  /// Optional custom distribution: category → amount per instalment.
+  /// null = equal split (default, backward-compatible).
+  final Map<String, double>? distribution;
+
   EmiModel({
     required this.id,
     required this.productName,
@@ -32,6 +36,7 @@ class EmiModel {
     this.categories = const ['EMI'],
     this.description = '',
     this.lastGeneratedDate,
+    this.distribution,
   });
 
   factory EmiModel.create({
@@ -42,6 +47,7 @@ class EmiModel {
     required String groupId,
     List<String> categories = const ['EMI'],
     String description = '',
+    Map<String, double>? distribution,
   }) => EmiModel(
     id: const Uuid().v4(),
     productName: productName,
@@ -52,6 +58,7 @@ class EmiModel {
     groupId: groupId,
     categories: categories,
     description: description,
+    distribution: distribution,
   );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +72,7 @@ class EmiModel {
     'categories': categories,
     'description': description,
     'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
+    'distribution': distribution,
   };
 
   factory EmiModel.fromJson(Map<String, dynamic> j) => EmiModel(
@@ -82,6 +90,13 @@ class EmiModel {
     lastGeneratedDate: j['lastGeneratedDate'] != null
         ? DateTime.parse(j['lastGeneratedDate'])
         : null,
+    distribution: j['distribution'] != null
+        ? Map<String, double>.from(
+            (j['distribution'] as Map).map(
+              (k, v) => MapEntry(k as String, (v as num).toDouble()),
+            ),
+          )
+        : null,
   );
 
   EmiModel copyWith({
@@ -94,6 +109,7 @@ class EmiModel {
     List<String>? categories,
     String? description,
     Object? lastGeneratedDate = _sentinel,
+    Object? distribution = _sentinel,
   }) => EmiModel(
     id: id,
     productName: productName ?? this.productName,
@@ -107,6 +123,9 @@ class EmiModel {
     lastGeneratedDate: lastGeneratedDate == _sentinel
         ? this.lastGeneratedDate
         : lastGeneratedDate as DateTime?,
+    distribution: distribution == _sentinel
+        ? this.distribution
+        : distribution as Map<String, double>?,
   );
 
   int get remaining => (tenure - completed).clamp(0, tenure);

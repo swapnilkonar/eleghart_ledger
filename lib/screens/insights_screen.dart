@@ -26,7 +26,7 @@ class InsightsScreenState extends State<InsightsScreen> {
   double _thisMonthTotal = 0;
   double _lastMonthTotal = 0;
   double _growth = 0;
-  int _healthScore = 85;
+  int _healthScore = 0;
   
   Map<String, double> _categoryTotals = {};
   ExpenseModel? _biggestExpense;
@@ -124,7 +124,7 @@ class InsightsScreenState extends State<InsightsScreen> {
     // Calculate Health Score
     double score = 100;
     if (_growth > 0) score -= _growth.clamp(0, 30); // deduct for spending more
-    if (thisMonthExpenses.isEmpty) score = 50; // Neutral if no data
+    if (thisMonthExpenses.isEmpty) score = 0; // No data → 0
     _healthScore = score.toInt().clamp(0, 100);
 
     setState(() {

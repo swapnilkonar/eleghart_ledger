@@ -10,6 +10,7 @@ import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
+import '../widgets/expense_distribution_widget.dart';
 
 class AddRecurringExpenseScreen extends StatefulWidget {
   final RecurringExpenseModel? existing;
@@ -38,6 +39,10 @@ class _AddRecurringExpenseScreenState
   List<GroupModel> _groups = [];
   bool _saving = false;
 
+  // Distribution
+  Map<String, double>? _distribution;
+  bool _customSplitValid = true;
+
   static const _frequencies = ['weekly', 'monthly', 'quarterly', 'yearly'];
   static const _categories = [
     'Food & Dining', 'Travel', 'Shopping', 'Bills & Utilities',
@@ -62,6 +67,7 @@ class _AddRecurringExpenseScreenState
       _startDate = e.startDate;
       _endDate = e.endDate;
       _hasEndDate = e.endDate != null;
+      _distribution = e.distribution;
     }
   }
 
@@ -206,6 +212,11 @@ class _AddRecurringExpenseScreenState
           const SnackBar(content: Text('Please select at least one category')));
       return;
     }
+    if (!_customSplitValid) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Distribution amounts must equal the recurring amount')));
+      return;
+    }
     setState(() => _saving = true);
 
     final list = await StorageService.loadRecurring();
@@ -221,6 +232,7 @@ class _AddRecurringExpenseScreenState
       description: _descCtrl.text.trim(),
       isActive: widget.existing?.isActive ?? true,
       lastGeneratedDate: widget.existing?.lastGeneratedDate,
+      distribution: _distribution,
     );
 
     if (widget.existing != null) {
@@ -236,6 +248,7 @@ class _AddRecurringExpenseScreenState
         groupId: model.groupId,
         categories: model.categories,
         description: model.description,
+        distribution: _distribution,
       ));
     }
 
@@ -407,6 +420,31 @@ class _AddRecurringExpenseScreenState
                             border: border,
                             cardBg: cardBg,
                           ),
+                          if (_selectedCategories.length > 1) ...
+                            [
+                              const SizedBox(height: 16),
+                              Text('Expense Distribution',
+                                  style: GoogleFonts.sora(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: textSec)),
+                              const SizedBox(height: 6),
+                              ExpenseDistributionWidget(
+                                key: ValueKey(
+                                    _selectedCategories.join(',')),
+                                totalAmount:
+                                    double.tryParse(_amountCtrl.text.trim()) ??
+                                        0,
+                                items: _selectedCategories.toList(),
+                                initialDistribution: _distribution,
+                                onChanged: (dist, valid) {
+                                  setState(() {
+                                    _distribution = dist;
+                                    _customSplitValid = valid;
+                                  });
+                                },
+                              ),
+                            ],
                           const SizedBox(height: 32),
                           _saveButton(),
                           const SizedBox(height: 20),

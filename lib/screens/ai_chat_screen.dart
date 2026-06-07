@@ -6,6 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/expense_model.dart';
 import '../models/group_model.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
+import '../services/gemma_service.dart';
+import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -28,6 +32,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   bool _isTyping = false;
 
+  // Udhaar data for AI context
+  List<PersonModel> _udhaarPersons = [];
+  List<LedgerTransactionModel> _udhaarTransactions = [];
+
+  // Gemma on-device AI state
+  bool _gemmaReady = false;
+  bool _isDownloading = false;
+  int _downloadProgress = 0;
+  String? _downloadError;
+
   final List<String> _suggestions = [
     "Where did my money go?",
     "How much on food?",
@@ -35,8 +49,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     "Can I save money?"
   ];
 
-  // Your FastAPI backend address (10.0.2.2 points to localhost on Android Emulators)
-  // Change this to your computer's local IP (e.g., 192.168.1.100) if testing on a real physical device.
+  // FastAPI backend (optional — used when Gemma is not ready)
   final String _backendUrl = "http://10.0.2.2:8000/api/chat";
 
   Future<void> _sendMessage(String text) async {
@@ -47,31 +60,41 @@ class _AiChatScreenState extends State<AiChatScreen> {
       _isTyping = true;
       _messages.add({"role": "ai", "text": "..."});
     });
-    
-    // Prepare context data to feed the local LLM
+
+    // 1. On-device Gemma AI (primary)
+    if (_gemmaReady && GemmaService.isAvailable) {
+      try {
+        final response = await GemmaService.respond(
+          systemInstruction: _buildSystemInstruction(),
+          userMessage: text,
+        );
+        if (mounted) _streamResponse(response.isEmpty ? _generateLocalResponse(text) : response);
+        return;
+      } catch (_) {
+        // Fall through to HTTP backend
+      }
+    }
+
+    // 2. FastAPI backend (optional)
     final contextData = {
       "total_groups": widget.groups.length,
       "total_expenses": widget.expenses.length,
       "recent_expenses": widget.expenses.take(15).map((e) => "${e.date.toIso8601String().split('T')[0]} - ${e.description}: ₹${e.amount} [${e.categories.first}]").toList(),
     };
-
     try {
-      // Attempt to contact the Advanced Local Backend (FastAPI + LangGraph + Ollama)
       final res = await http.post(
         Uri.parse(_backendUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"query": text, "ledger_context": contextData}),
       ).timeout(const Duration(seconds: 4));
-
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         _streamResponse(data['reply'] ?? "I received an empty response.");
         return;
       }
-    } catch (_) {
-      // Silently catch Timeout/Connection errors
-    }
-    // Fallback: If server is offline, use the on-device math engine
+    } catch (_) {}
+
+    // 3. Rule-based local engine (always works offline)
     if (mounted) _streamResponse(_generateLocalResponse(text));
   }
 
@@ -190,7 +213,61 @@ class _AiChatScreenState extends State<AiChatScreen> {
       return "You've spent a total of ₹${total.toStringAsFixed(0)} $monthStr.\n\nWant to know your 'top category' or 'biggest expense'?";
     }
 
-    // 8. General fallback
+    // 8. Udhaar queries
+    if (q.contains('udhaar') || q.contains('owe') || q.contains('collect') ||
+        q.contains('pending') || q.contains('dues') || q.contains('lend') ||
+        q.contains('borrow')) {
+      if (_udhaarPersons.isEmpty) {
+        return 'You have no Udhaar records yet. Open the Udhaar module to start tracking.';
+      }
+      final totalCollect = _udhaarTransactions
+          .where((t) => t.isCollection)
+          .fold(0.0, (s, t) => s + t.amount);
+      final totalPay = _udhaarTransactions
+          .where((t) => t.isPayment)
+          .fold(0.0, (s, t) => s + t.amount);
+      final netPositive = _udhaarPersons
+          .where((p) {
+            final c = _udhaarTransactions
+                .where((t) => t.personId == p.id && t.isCollection)
+                .fold(0.0, (s, t) => s + t.amount);
+            final pay = _udhaarTransactions
+                .where((t) => t.personId == p.id && t.isPayment)
+                .fold(0.0, (s, t) => s + t.amount);
+            return c - pay > 0;
+          })
+          .toList();
+      final highestOwing = netPositive.isEmpty
+          ? null
+          : netPositive.reduce((a, b) {
+              double netA(PersonModel p) => _udhaarTransactions
+                  .where((t) => t.personId == p.id && t.isCollection)
+                  .fold(0.0, (s, t) => s + t.amount) -
+                  _udhaarTransactions
+                      .where((t) => t.personId == p.id && t.isPayment)
+                      .fold(0.0, (s, t) => s + t.amount);
+              return netA(a) >= netA(b) ? a : b;
+            });
+
+      if (q.contains('who owes') || q.contains('who should pay') ||
+          q.contains('highest') || q.contains('most')) {
+        if (highestOwing == null) return 'Nobody owes you money right now.';
+        final amt = _udhaarTransactions
+            .where((t) => t.personId == highestOwing.id && t.isCollection)
+            .fold(0.0, (s, t) => s + t.amount) -
+            _udhaarTransactions
+                .where((t) =>
+                    t.personId == highestOwing.id && t.isPayment)
+                .fold(0.0, (s, t) => s + t.amount);
+        return '${highestOwing.name} owes you the most — ₹${amt.toStringAsFixed(0)}';
+      }
+      return 'Udhaar summary: To Collect ₹${totalCollect.toStringAsFixed(0)}, '
+          'To Pay ₹${totalPay.toStringAsFixed(0)}, '
+          'Net ${(totalCollect - totalPay) >= 0 ? "+" : ""}₹${(totalCollect - totalPay).toStringAsFixed(0)}. '
+          'You have ${netPositive.length} pending collection(s).';
+    }
+
+    // 9. General fallback
     final fallbacks = [
       "I'm analyzing your ledger locally. Try asking 'What was my biggest expense?' or 'How much did I spend on Food?'",
       "I didn't quite catch that. You can ask me about your total spending, top categories, or specific group expenses.",
@@ -198,6 +275,100 @@ class _AiChatScreenState extends State<AiChatScreen> {
     ];
     fallbacks.shuffle();
     return fallbacks.first;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initGemma();
+    _loadUdhaarData();
+  }
+
+  Future<void> _loadUdhaarData() async {
+    final persons = await StorageService.loadPersons();
+    final txs = await StorageService.loadUdhaarTransactions();
+    if (mounted) setState(() {
+      _udhaarPersons = persons;
+      _udhaarTransactions = txs;
+    });
+  }
+
+  Future<void> _initGemma() async {
+    final installed = await GemmaService.isModelInstalled();
+    if (!installed) return;
+    try {
+      await GemmaService.initialize();
+      if (mounted) setState(() => _gemmaReady = true);
+    } catch (_) {
+      // Model installed but init failed — show download option
+    }
+  }
+
+  Future<void> _downloadGemma() async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0;
+      _downloadError = null;
+    });
+    try {
+      await GemmaService.installModel(
+        onProgress: (p) {
+          if (mounted) setState(() => _downloadProgress = p);
+        },
+      );
+      await GemmaService.initialize();
+      if (mounted) setState(() {
+        _isDownloading = false;
+        _gemmaReady = true;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        _isDownloading = false;
+        _downloadError = 'Download failed. Check internet and try again.';
+      });
+    }
+  }
+
+  String _buildSystemInstruction() {
+    final now = DateTime.now();
+    final debitTotal = widget.expenses
+        .where((e) => e.isDebit)
+        .fold(0.0, (s, e) => s + e.amount);
+    final recent = widget.expenses
+        .take(20)
+        .map((e) =>
+            '${e.date.toIso8601String().split('T')[0]}: ${e.description.isEmpty ? 'Expense' : e.description} ₹${e.amount.toStringAsFixed(0)} [${e.categories.join(', ')}]')
+        .join('\n');
+
+    final udhaarSummary = _udhaarPersons.isNotEmpty
+        ? _udhaarPersons.map((p) {
+            final collect = _udhaarTransactions
+                .where((t) => t.personId == p.id && t.isCollection)
+                .fold(0.0, (s, t) => s + t.amount);
+            final pay = _udhaarTransactions
+                .where((t) => t.personId == p.id && t.isPayment)
+                .fold(0.0, (s, t) => s + t.amount);
+            final net = collect - pay;
+            return '${p.name}: net ₹${net >= 0 ? '+' : ''}${net.toStringAsFixed(0)}';
+          }).join('; ')
+        : 'No Udhaar records.';
+    final totalCollect = _udhaarTransactions
+        .where((t) => t.isCollection)
+        .fold(0.0, (s, t) => s + t.amount);
+    final totalPay = _udhaarTransactions
+        .where((t) => t.isPayment)
+        .fold(0.0, (s, t) => s + t.amount);
+
+    return 'You are Eleghart AI, a personal financial CFO assistant embedded '
+        'in a mobile ledger app. Today is ${now.toIso8601String().split('T')[0]}. '
+        'The user has ${widget.expenses.length} total expenses across '
+        '${widget.groups.length} group(s). Total spending: ₹${debitTotal.toStringAsFixed(0)}. '
+        'Recent transactions:\n$recent\n\n'
+        'Udhaar (dues) — To Collect total: ₹${totalCollect.toStringAsFixed(0)}, '
+        'To Pay total: ₹${totalPay.toStringAsFixed(0)}. '
+        'Per person: $udhaarSummary\n\n'
+        'Respond concisely in 1-3 sentences. Be specific with numbers from the data above. '
+        'Always use ₹ symbol for Indian Rupees.';
   }
 
   @override
@@ -228,9 +399,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                           Text('Eleghart AI', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
                           Row(
                             children: [
-                              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
+                              Container(width: 8, height: 8, decoration: BoxDecoration(color: _gemmaReady ? const Color(0xFF00CC66) : Colors.orange, shape: BoxShape.circle)),
                               const SizedBox(width: 6),
-                              Text('Online • Local', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                              Text(_gemmaReady ? 'Gemma AI • On-device' : 'Local Engine', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
                             ],
                           ),
                         ],
@@ -239,6 +410,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   ),
                 ),
                 Container(height: 1, color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.1)),
+
+                // ── Gemma Download Banner ──
+                if (!_gemmaReady) _buildGemmaBanner(isWhite),
 
                 // ── Chat List ──
                 Expanded(
@@ -315,6 +489,119 @@ class _AiChatScreenState extends State<AiChatScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildGemmaBanner(bool isWhite) {
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite ? EleghartColors.accentDark.withOpacity(0.55) : Colors.white54;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isWhite ? Colors.white : const Color(0xFF1A0505),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFCC0020).withOpacity(0.30),
+        ),
+      ),
+      child: _isDownloading
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Color(0xFFCC0020)),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Downloading Gemma AI...',
+                        style: GoogleFonts.sora(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary)),
+                    const Spacer(),
+                    Text('$_downloadProgress%',
+                        style: GoogleFonts.sora(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFCC0020))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _downloadProgress / 100,
+                    backgroundColor: const Color(0xFFCC0020).withOpacity(0.15),
+                    color: const Color(0xFFCC0020),
+                    minHeight: 5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('${(_downloadProgress * 12 / 100).toStringAsFixed(1)} / 1.2 GB  •  Do not close the app',
+                    style: GoogleFonts.sora(fontSize: 10, color: textSec)),
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCC0020).withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.psychology_rounded,
+                      color: Color(0xFFCC0020), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Upgrade to Gemma AI',
+                          style: GoogleFonts.sora(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary)),
+                      Text(
+                        _downloadError ??
+                            'On-device LLM • ~1.2 GB • No internet after download',
+                        style: GoogleFonts.sora(
+                            fontSize: 11,
+                            color: _downloadError != null
+                                ? const Color(0xFFCC0020)
+                                : textSec),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _isDownloading ? null : _downloadGemma,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCC0020),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _downloadError != null ? 'Retry' : 'Download',
+                      style: GoogleFonts.sora(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

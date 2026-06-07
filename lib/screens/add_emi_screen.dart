@@ -10,6 +10,7 @@ import '../services/recurring_engine.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
+import '../widgets/expense_distribution_widget.dart';
 
 class AddEmiScreen extends StatefulWidget {
   final EmiModel? existing;
@@ -32,6 +33,10 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
   List<GroupModel> _groups = [];
   bool _saving = false;
 
+  // Distribution
+  Map<String, double>? _distribution;
+  bool _customSplitValid = true;
+
   static const _categories = [
     'EMI', 'Shopping', 'Bills & Utilities', 'Health', 'Travel', 'Others',
   ];
@@ -52,6 +57,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
       _groupId = e.groupId;
       _selectedCategories = e.categories.toSet();
       _startDate = e.startDate;
+      _distribution = e.distribution;
     }
   }
 
@@ -188,6 +194,11 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
           const SnackBar(content: Text('Please select at least one category')));
       return;
     }
+    if (!_customSplitValid) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Distribution amounts must equal the EMI amount')));
+      return;
+    }
     setState(() => _saving = true);
 
     final list = await StorageService.loadEmis();
@@ -201,6 +212,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
         categories: _selectedCategories.toList(),
         description: _descCtrl.text.trim(),
         startDate: _startDate,
+        distribution: _distribution,
       );
       final idx = list.indexWhere((e) => e.id == widget.existing!.id);
       if (idx >= 0) list[idx] = updated;
@@ -213,6 +225,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
         groupId: _groupId,
         categories: _selectedCategories.toList(),
         description: _descCtrl.text.trim(),
+        distribution: _distribution,
       ));
     }
 
@@ -355,6 +368,31 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                               'e.g. iPhone Purchase',
                               textPrimary, textSec, border, cardBg),
                           const SizedBox(height: 16),
+                          if (_selectedCategories.length > 1) ...
+                            [
+                              Text('Expense Distribution',
+                                  style: GoogleFonts.sora(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: textSec)),
+                              const SizedBox(height: 6),
+                              ExpenseDistributionWidget(
+                                key: ValueKey(
+                                    _selectedCategories.join(',')),
+                                totalAmount:
+                                    double.tryParse(_amountCtrl.text.trim()) ??
+                                        0,
+                                items: _selectedCategories.toList(),
+                                initialDistribution: _distribution,
+                                onChanged: (dist, valid) {
+                                  setState(() {
+                                    _distribution = dist;
+                                    _customSplitValid = valid;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                           _preview(textPrimary, textSec, border, cardBg),
                           const SizedBox(height: 32),
                           _saveBtn(),

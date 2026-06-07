@@ -19,6 +19,7 @@ import 'expense_list_screen.dart';
 import 'recurring_expense_list_screen.dart';
 import 'emi_list_screen.dart';
 import 'insights_screen.dart';
+import 'udhaar_home_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -507,6 +508,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 },
               ),
             ),
+          ]),
+
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.handshake_outlined,
+                label: 'Udhaar',
+                color: const Color(0xFFE97C00),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const UdhaarHomeScreen()));
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: SizedBox.shrink()),
+            const SizedBox(width: 10),
+            Expanded(child: SizedBox.shrink()),
           ]),
 
           const SizedBox(height: 24),
