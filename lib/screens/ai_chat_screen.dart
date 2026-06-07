@@ -324,7 +324,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     } catch (e) {
       if (mounted) setState(() {
         _isDownloading = false;
-        _downloadError = 'Download failed. Check internet and try again.';
+        _downloadError = 'Download failed: $e';
       });
     }
   }
