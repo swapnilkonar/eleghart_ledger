@@ -41,6 +41,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   bool _isDownloading = false;
   int _downloadProgress = 0;
   String? _downloadError;
+  final _hfTokenCtrl = TextEditingController();
 
   final List<String> _suggestions = [
     "Where did my money go?",
@@ -305,6 +306,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   Future<void> _downloadGemma() async {
+    final token = _hfTokenCtrl.text.trim();
+    if (token.isEmpty) {
+      setState(() => _downloadError = 'Enter your HuggingFace token to continue.');
+      return;
+    }
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0;
@@ -315,8 +321,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
         onProgress: (p) {
           if (mounted) setState(() => _downloadProgress = p);
         },
+        hfToken: token,
       );
-      await GemmaService.initialize();
+      await GemmaService.initialize(hfToken: token);
       if (mounted) setState(() {
         _isDownloading = false;
         _gemmaReady = true;
@@ -324,7 +331,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     } catch (e) {
       if (mounted) setState(() {
         _isDownloading = false;
-        _downloadError = 'Download failed: $e';
+        _downloadError = 'Download failed. Check your token and internet connection.';
       });
     }
   }

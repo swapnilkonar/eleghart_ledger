@@ -40,7 +40,7 @@ class GemmaService {
     required void Function(int progress) onProgress,
     String? hfToken,
   }) async {
-    await FlutterGemma.initialize();
+    await FlutterGemma.initialize(huggingFaceToken: hfToken);
     await FlutterGemma.installModel(
       modelType: ModelType.gemmaIt,
       fileType: ModelFileType.litertlm,
@@ -55,8 +55,8 @@ class GemmaService {
 
   /// Loads the installed model into memory for inference.
   /// Must be called before [respond].
-  static Future<void> initialize() async {
-    await FlutterGemma.initialize();
+  static Future<void> initialize({String? hfToken}) async {
+    await FlutterGemma.initialize(huggingFaceToken: hfToken);
     _model = await FlutterGemma.getActiveModel(
       maxTokens: 1024,
       preferredBackend: PreferredBackend.cpu,

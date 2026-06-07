@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/eleghart_colors.dart';
 import 'utils/app_theme.dart';
+import 'services/database_service.dart';
 import 'services/recurring_engine.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -13,6 +14,7 @@ import 'screens/pin_unlock_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppThemeNotifier.initialize();
+  await DatabaseService.migrateFromSharedPreferences();
   await RecurringEngine.run();
   runApp(const EleghartLedgerApp());
 }
@@ -79,7 +81,7 @@ class _AppEntryGateState extends State<AppEntryGate> {
   Future<void> _loadUserState() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('user_name');
-    final pin = prefs.getString('user_pin');
+    final pin = prefs.getString('user_pin_hash') ?? prefs.getString('user_pin');
 
     setState(() {
       _userName = name;

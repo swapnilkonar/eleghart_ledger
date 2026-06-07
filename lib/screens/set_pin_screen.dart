@@ -5,7 +5,7 @@ import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/pin_service.dart';
 import 'home_dashboard.dart';
 
 class SetPinScreen extends StatefulWidget {
@@ -93,8 +93,7 @@ class _SetPinScreenState extends State<SetPinScreen>
 
     setState(() => _saving = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_pin', pin);
+    await PinService.setPin(pin);
 
     if (!mounted) return;
 
