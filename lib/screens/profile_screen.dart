@@ -403,15 +403,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: _editName,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _currentUserName,
-                style: GoogleFonts.sora(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AppThemeNotifier.isWhite
-                      ? EleghartColors.accentDark
-                      : Colors.white,
+              Flexible(
+                child: Text(
+                  _currentUserName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.sora(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark
+                        : Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),

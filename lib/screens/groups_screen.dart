@@ -672,6 +672,8 @@ class GroupsScreenState extends State<GroupsScreen>
           const SizedBox(height: 4),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.sora(
               fontSize: 18,
               fontWeight: FontWeight.w800,

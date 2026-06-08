@@ -20,6 +20,12 @@ import 'recurring_expense_list_screen.dart';
 import 'emi_list_screen.dart';
 import 'insights_screen.dart';
 import 'udhaar_home_screen.dart';
+import 'global_search_sheet.dart';
+import 'notifications_sheet.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
+import '../models/emi_model.dart';
+import '../models/recurring_expense_model.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -47,6 +53,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   String _lastExpenseDate = '-';
   int _totalExpensesCount = 0;
+  int _notifCount = 0;
 
   // -------- PROFILE --------
   String _userName = '';
@@ -88,14 +95,72 @@ class _HomeDashboardState extends State<HomeDashboard> {
     await RecurringEngine.run();
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
+    final persons = await StorageService.loadPersons();
+    final txns = await StorageService.loadUdhaarTransactions();
+    final emis = await StorageService.loadEmis();
+    final recurrings = await StorageService.loadRecurring();
 
     _recalculateSummary(groups, expenses);
 
-    setState(() {
-      _groups = groups;
-      _expenses = expenses;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _groups = groups;
+        _expenses = expenses;
+        _notifCount = _computeNotifCount(persons, txns, emis, recurrings);
+        _loading = false;
+      });
+    }
+  }
+
+  int _computeNotifCount(
+    List<PersonModel> persons,
+    List<LedgerTransactionModel> txns,
+    List<EmiModel> emis,
+    List<RecurringExpenseModel> recurrings,
+  ) {
+    int count = 0;
+    final netByPerson = <String, double>{};
+    for (final t in txns) {
+      final sign = t.isCollection ? 1.0 : -1.0;
+      netByPerson[t.personId] =
+          (netByPerson[t.personId] ?? 0) + sign * t.amount;
+    }
+    count += netByPerson.values.where((n) => n.abs() > 0.01).length;
+    final now = DateTime.now();
+    final soon = now.add(const Duration(days: 7));
+    count += emis
+        .where((e) => !e.isCompleted && e.nextDueDate.isBefore(soon))
+        .length;
+    count += recurrings.where((r) {
+      if (!r.isActive) return false;
+      try {
+        return r.nextDueDate(now).isBefore(soon);
+      } catch (_) {
+        return false;
+      }
+    }).length;
+    return count;
+  }
+
+  void _showGlobalSearch() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => const GlobalSearchSheet(),
+    );
+  }
+
+  void _showNotifications() {
+    setState(() => _notifCount = 0);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => NotificationsSheet(expenses: _expenses),
+    );
   }
 
   void _recalculateSummary(
@@ -246,12 +311,38 @@ class _HomeDashboardState extends State<HomeDashboard> {
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.search_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
-          onPressed: () {},
+          icon: Icon(Icons.search_rounded,
+              color: AppThemeNotifier.isWhite
+                  ? EleghartColors.accentDark
+                  : Colors.white70,
+              size: 22),
+          onPressed: _showGlobalSearch,
         ),
-        IconButton(
-          icon: Icon(Icons.notifications_none_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
-          onPressed: () {},
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: Icon(Icons.notifications_none_rounded,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white70,
+                  size: 22),
+              onPressed: _showNotifications,
+            ),
+            if (_notifCount > 0)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFCC0020),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.only(right: 14),
@@ -427,15 +518,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
-                  _summaryPill('↑ Income',
+                  Flexible(child: _summaryPill('↑ Income',
                       '₹${_totalCredit >= 1000 ? (_totalCredit / 1000).toStringAsFixed(1) + 'K' : _totalCredit.toStringAsFixed(0)}',
-                      const Color(0xFF22C55E)),
+                      const Color(0xFF22C55E))),
                   const SizedBox(width: 10),
-                  _summaryPill('↓ Spent',
+                  Flexible(child: _summaryPill('↓ Spent',
                       '₹${_totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
-                      Colors.white70),
+                      Colors.white70)),
                   const SizedBox(width: 10),
-                  _summaryPill('${_totalExpensesCount} Items', '', Colors.white54),
+                  Flexible(child: _summaryPill('${_totalExpensesCount} Items', '', Colors.white54)),
                 ]),
               ],
             ),
@@ -584,6 +675,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
         ),
         child: Text(
           value.isNotEmpty ? '$label: $value' : label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.sora(
               fontSize: 10,
               fontWeight: FontWeight.w600,

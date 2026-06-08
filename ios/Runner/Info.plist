@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Eleghart Ledger needs camera access to let you take a photo for the category.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Eleghart Ledger needs photo library access to let you choose a category image.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Eleghart Ledger needs access to save photos to your library.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

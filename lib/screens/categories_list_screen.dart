@@ -457,6 +457,8 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                           children: [
                                             Text(
                                               cat,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.sora(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w700,
@@ -468,6 +470,8 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                             const SizedBox(height: 3),
                                             Text(
                                               '$groupCount group${groupCount != 1 ? 's' : ''}  ·  ₹${debit.toStringAsFixed(0)} spent',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.sora(
                                                 fontSize: 11,
                                                 color: AppThemeNotifier.isWhite
@@ -479,29 +483,34 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                           ],
                                         ),
                                       ),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            '₹${net.abs().toStringAsFixed(0)}',
-                                            style: GoogleFonts.sora(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w800,
-                                              color: netColor,
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 80),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              '₹${net.abs().toStringAsFixed(0)}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.sora(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: netColor,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            isPositive
-                                                ? 'net credit'
-                                                : 'net debit',
-                                            style: GoogleFonts.sora(
-                                              fontSize: 10,
-                                              color: netColor.withOpacity(0.7),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              isPositive
+                                                  ? 'net credit'
+                                                  : 'net debit',
+                                              style: GoogleFonts.sora(
+                                                fontSize: 10,
+                                                color: netColor.withOpacity(0.7),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                       const SizedBox(width: 6),
                                       Icon(
