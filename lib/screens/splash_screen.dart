@@ -42,7 +42,7 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
     if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('user_name');
-    final pin = prefs.getString('user_pin');
+    final pin = prefs.getString('user_pin_hash') ?? prefs.getString('user_pin');
 
     if (!mounted) return;
 

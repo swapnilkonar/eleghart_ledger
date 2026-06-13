@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -42,8 +44,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final size = MediaQuery.of(context).size;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.5)
+        : Colors.white54;
+    final textMuted = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.35)
+        : Colors.white38;
+    final cardBg = isWhite ? Colors.white : Colors.white.withOpacity(0.05);
+    final cardBorder =
+        isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isWhite ? Colors.white : Colors.black,
       body: Stack(
         children: [
           // Background image
@@ -65,7 +79,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       boxShadow: [
                         BoxShadow(
                           color: Colors.red.withOpacity(
-                              0.15 + _pulseController.value * 0.12),
+                              (isWhite ? 0.08 : 0.15) +
+                                  _pulseController.value * 0.10),
                           blurRadius: 60 + _pulseController.value * 20,
                           spreadRadius: 10,
                         ),
@@ -85,7 +100,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   'Your personal expense vault',
                   style: GoogleFonts.sora(
                     fontSize: 13,
-                    color: Colors.white54,
+                    color: textSec,
                     letterSpacing: 1.5,
                   ),
                 ),
@@ -98,10 +113,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: Colors.white.withOpacity(0.08), width: 1),
+                      border: Border.all(color: cardBorder, width: 1),
+                      boxShadow: isWhite
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : [],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +143,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                           style: GoogleFonts.sora(
                                             fontSize: 17,
                                             fontWeight: FontWeight.w700,
-                                            color: Colors.white,
+                                            color: textPrimary,
                                           ),
                                         ),
                                         TextSpan(
@@ -139,7 +162,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     'Track, split and grow your money\nwith AI-powered insights.',
                                     style: GoogleFonts.sora(
                                       fontSize: 12,
-                                      color: Colors.white60,
+                                      color: textSec,
                                       height: 1.5,
                                     ),
                                   ),
@@ -252,6 +275,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _buildFeature(IconData icon, String title, String subtitle) {
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textMuted = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.38)
+        : Colors.white38;
     return Column(
       children: [
         Container(
@@ -272,7 +300,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           style: GoogleFonts.sora(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: textPrimary,
           ),
         ),
         const SizedBox(height: 2),
@@ -281,7 +309,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           textAlign: TextAlign.center,
           style: GoogleFonts.sora(
             fontSize: 9,
-            color: Colors.white38,
+            color: textMuted,
             height: 1.3,
           ),
         ),

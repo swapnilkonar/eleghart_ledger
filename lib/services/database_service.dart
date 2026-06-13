@@ -13,7 +13,7 @@ import '../models/recurring_expense_model.dart';
 
 class DatabaseService {
   static Database? _db;
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
   static const _migrationKey = 'db_migrated_v1';
 
   static Future<Database> get database async {
@@ -23,7 +23,19 @@ class DatabaseService {
 
   static Future<Database> _open() async {
     final dbPath = join(await getDatabasesPath(), 'eleghart_ledger.db');
-    return openDatabase(dbPath, version: _dbVersion, onCreate: _onCreate);
+    return openDatabase(
+      dbPath,
+      version: _dbVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  static Future<void> _onUpgrade(
+      Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createWealthTables(db);
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -103,6 +115,34 @@ class DatabaseService {
         notes TEXT,
         transaction_date TEXT NOT NULL,
         created_at TEXT NOT NULL
+      )
+    ''');
+    await _createWealthTables(db);
+  }
+
+  static Future<void> _createWealthTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS wealth_goals (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        goal_type TEXT NOT NULL,
+        target_amount REAL NOT NULL,
+        current_amount REAL NOT NULL DEFAULT 0,
+        start_amount REAL NOT NULL DEFAULT 0,
+        target_date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS wealth_contributions (
+        id TEXT PRIMARY KEY,
+        goal_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        contribution_date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (goal_id) REFERENCES wealth_goals(id)
       )
     ''');
   }

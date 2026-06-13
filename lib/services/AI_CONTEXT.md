@@ -4,6 +4,9 @@
 - `storage_service.dart` — All local persistence (47 lines, all static methods)
 - `pdf_export_service.dart` — PDF generation (~18KB, complex layout, rarely modified)
 - `ai_extraction_service.dart` — On-device OCR + smart receipt parsing (no API key, no internet)
+- `database_service.dart` — SQLite singleton for Wealth Journey (v2, wealth_goals + wealth_contributions)
+- `wealth_repository.dart` — All Wealth Journey DB CRUD (goals + contributions)
+- `wealth_service.dart` — Pure calculations: health, monthly required, expected, gap, format
 
 ## StorageService — Complete API
 ```dart
@@ -74,4 +77,47 @@ class ExtractedItem {
   final String category;     // one of the 8 valid categories
   final DateTime date;
 }
+```
+
+## DatabaseService — SQLite Singleton
+```dart
+// DB file: eleghart_ledger.db  |  Version: 2
+// Wealth tables added in v2 via onUpgrade (existing users safe)
+await DatabaseService.database  // → Future<Database> (singleton)
+// Tables: wealth_goals, wealth_contributions (+ all legacy tables)
+```
+
+## WealthRepository — Complete API
+```dart
+// Goals
+WealthRepository.loadGoals()                        → Future<List<WealthGoal>>  // DESC created_at
+WealthRepository.insertGoal(WealthGoal)             → Future<void>
+WealthRepository.updateGoal(WealthGoal)             → Future<void>              // preserves currentAmount
+WealthRepository.deleteGoal(String id)              → Future<void>              // cascades contributions
+
+// Contributions
+WealthRepository.loadContributions(String goalId)   → Future<List<WealthContribution>> // DESC date
+WealthRepository.addContribution({                  → Future<WealthGoal>        // returns updated goal
+  goal, amount, date, notes})
+// ⚠️ amount: positive=credit, negative=debit. currentAmount clamped to 0.
+WealthRepository.deleteContribution(c, goal)        → Future<WealthGoal>        // reverses amount
+
+WealthRepository.generateId()                       → String (UUID v4)
+```
+
+## WealthService — Calculation API
+```dart
+WealthService.calculateHealth(goal)        → GoalHealth   // uses expectedSaved()
+WealthService.calculateMonthlyRequired(g)  → double       // remaining ÷ monthsLeft
+WealthService.elapsedMonths(goal)          → int
+WealthService.remainingMonths(goal)        → int
+WealthService.totalMonths(goal)            → int (min 1)
+WealthService.expectedSaved(goal)          → double       // month-based, min 1 month → never ₹0
+WealthService.gap(goal)                    → double       // max(0, expected - actual)
+WealthService.coachMessage(goal)           → String
+WealthService.formatAmount(v)              → String       // ₹42, ₹1.2K, ₹1.5L, ₹1.2Cr
+WealthService.formatAmountFull(v)          → String       // ₹1.20L, ₹1.20Cr
+
+// GoalHealth enum: ahead | onTrack | slightlyBehind | critical
+// Health thresholds: actual/expected × 100 → ≥110=ahead, ≥95=onTrack, ≥75=slightlyBehind, else=critical
 ```

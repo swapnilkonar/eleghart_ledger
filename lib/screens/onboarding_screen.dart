@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,8 +57,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final size = MediaQuery.of(context).size;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.5)
+        : Colors.white54;
+    final inputFill = isWhite
+        ? const Color(0xFFF5F5F5)
+        : Colors.white.withOpacity(0.06);
+    final inputBorder = isWhite
+        ? const Color(0xFFDDDDDD)
+        : const Color(0xFF8E1D1D).withOpacity(0.6);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isWhite ? Colors.white : Colors.black,
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
@@ -102,7 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     'Your personal expense vault',
                     style: GoogleFonts.sora(
                       fontSize: 13,
-                      color: Colors.white54,
+                      color: textSec,
                       letterSpacing: 1.5,
                     ),
                     textAlign: TextAlign.center,
@@ -116,7 +130,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     style: GoogleFonts.sora(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: textPrimary,
                       letterSpacing: 0.3,
                     ),
                     textAlign: TextAlign.center,
@@ -128,7 +142,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     'Enter your name to personalise your experience',
                     style: GoogleFonts.sora(
                       fontSize: 13,
-                      color: Colors.white54,
+                      color: textSec,
                       letterSpacing: 0.3,
                     ),
                     textAlign: TextAlign.center,
@@ -142,7 +156,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF8E1D1D).withOpacity(0.4),
+                          color: const Color(0xFFCC0020).withOpacity(
+                              isWhite ? 0.12 : 0.4),
                           blurRadius: 18,
                           spreadRadius: 1,
                         ),
@@ -151,7 +166,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     child: TextField(
                       controller: _controller,
                       style: GoogleFonts.sora(
-                        color: Colors.white,
+                        color: textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -160,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       decoration: InputDecoration(
                         hintText: 'Enter your name',
                         hintStyle: GoogleFonts.sora(
-                          color: Colors.white38,
+                          color: textSec,
                           fontSize: 15,
                         ),
                         prefixIcon: const Icon(
@@ -169,7 +184,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           size: 22,
                         ),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.06),
+                        fillColor: inputFill,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 18,
@@ -177,7 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide(
-                            color: const Color(0xFF8E1D1D).withOpacity(0.6),
+                            color: inputBorder,
                             width: 1.5,
                           ),
                         ),
