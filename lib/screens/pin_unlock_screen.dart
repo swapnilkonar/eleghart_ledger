@@ -6,6 +6,7 @@ import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/pin_service.dart';
 import 'home_dashboard.dart';
 import 'set_pin_screen.dart';
 
@@ -24,6 +25,10 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
   bool _unlocking = false;
   bool _errorGlow = false;
   String _pin = '';
+  int _remainingAttempts = PinService.maxAttempts;
+  int _lockoutSecondsLeft = 0;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
 
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
@@ -49,7 +54,49 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      _initBiometric();
+      _checkLockout();
     });
+  }
+
+  Future<void> _initBiometric() async {
+    final available = await PinService.isBiometricAvailable();
+    final enabled = await PinService.isBiometricEnabled();
+    if (mounted) setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled = enabled;
+    });
+    if (available && enabled) _tryBiometric();
+  }
+
+  Future<void> _checkLockout() async {
+    final secs = await PinService.lockoutSecondsRemaining();
+    if (secs != null && mounted) {
+      setState(() => _lockoutSecondsLeft = secs);
+      _startLockoutTimer();
+    } else {
+      final rem = await PinService.remainingAttempts();
+      if (mounted) setState(() => _remainingAttempts = rem);
+    }
+  }
+
+  void _startLockoutTimer() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return false;
+      final secs = await PinService.lockoutSecondsRemaining();
+      if (secs == null) {
+        setState(() => _lockoutSecondsLeft = 0);
+        return false;
+      }
+      setState(() => _lockoutSecondsLeft = secs);
+      return true;
+    });
+  }
+
+  Future<void> _tryBiometric() async {
+    final ok = await PinService.authenticateWithBiometric();
+    if (ok && mounted) _navigateHome();
   }
 
   void _onThemeChanged() => setState(() {});
@@ -70,26 +117,42 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
   }
 
   Future<void> _unlock() async {
+    if (_lockoutSecondsLeft > 0) {
+      _toast('Too many attempts. Try in $_lockoutSecondsLeft seconds.');
+      return;
+    }
     final pin = _pin.trim();
     if (pin.length != 4) {
       _failFeedback('Enter your 4-digit PIN');
       return;
     }
-
     setState(() => _unlocking = true);
-
-    final prefs = await SharedPreferences.getInstance();
-    final storedPin = prefs.getString('user_pin');
-
-    if (pin != storedPin) {
-      setState(() => _unlocking = false);
-      _failFeedback('Incorrect PIN');
-      return;
+    try {
+      final correct = await PinService.verifyPin(pin);
+      if (!mounted) return;
+      if (correct) {
+        HapticFeedback.lightImpact();
+        _navigateHome();
+      } else {
+        final rem = await PinService.remainingAttempts();
+        setState(() {
+          _unlocking = false;
+          _remainingAttempts = rem;
+        });
+        _failFeedback('Incorrect PIN — $rem attempt${rem == 1 ? '' : 's'} left');
+      }
+    } on PinLockedException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _unlocking = false;
+        _lockoutSecondsLeft = e.secondsRemaining;
+      });
+      _startLockoutTimer();
+      _failFeedback('Too many attempts. Locked for ${e.secondsRemaining}s');
     }
+  }
 
-    HapticFeedback.lightImpact();
-    if (!mounted) return;
-
+  void _navigateHome() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -144,6 +207,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_pin');
+    await prefs.remove('user_pin_hash');
 
     if (!mounted) return;
 
@@ -258,6 +322,26 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
 
                     const SizedBox(height: 18),
 
+                    // Lockout / attempts info
+                    if (_lockoutSecondsLeft > 0)
+                      Text(
+                        'Locked — try again in $_lockoutSecondsLeft s',
+                        style: GoogleFonts.sora(
+                          fontSize: 13,
+                          color: const Color(0xFFFF2040),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    else if (_remainingAttempts < PinService.maxAttempts)
+                      Text(
+                        '$_remainingAttempts attempt${_remainingAttempts == 1 ? '' : 's'} remaining',
+                        style: GoogleFonts.sora(
+                          fontSize: 13,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
                     // Forgot PIN
                     TextButton(
                       onPressed: _forgotPin,
@@ -273,6 +357,21 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                     ),
 
                     const Spacer(),
+
+                    // Biometric button
+                    if (_biometricAvailable && _biometricEnabled)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: IconButton(
+                          onPressed: _tryBiometric,
+                          iconSize: 44,
+                          icon: const Icon(
+                            Icons.fingerprint_rounded,
+                            color: Color(0xFFCC0020),
+                          ),
+                          tooltip: 'Unlock with biometrics',
+                        ),
+                      ),
 
                     // Unlock button
                     _buildUnlockButton(),

@@ -259,31 +259,10 @@
     "overlay_opacity": 0.25
   },
 
-  "OnboardingScreen": {
-    "file": "lib/screens/onboarding_screen.dart",
-    "type": "StatefulWidget",
-    "purpose": "Name entry form. Saves to SharedPreferences key 'user_name'. Navigates to SetPinScreen.",
-    "overlay_opacity": 0.40
-  },
-
-  "WelcomeScreen": {
-    "file": "lib/screens/welcome_screen.dart",
-    "type": "StatefulWidget",
-    "purpose": "First screen for new users. Animated logo + Get Started button → OnboardingScreen.",
-    "overlay_opacity": 0.40
-  },
-
   "PremiumSplashScreen": {
     "file": "lib/screens/splash_screen.dart",
     "type": "StatefulWidget",
     "purpose": "3-second animated splash with progress bar. Reads SharedPreferences to decide next route."
-  },
-
-  "PremiumOnboardingScreen": {
-    "file": "lib/screens/premium_onboarding_screen.dart",
-    "type": "StatefulWidget",
-    "purpose": "Feature showcase PageView (4 pages). Leads to OnboardingScreen. No background image — custom blur UI.",
-    "note": "Does NOT use ThemedBackground. Has its own glass/blur aesthetic."
   },
 
   "CreateGroupScreen": {
@@ -292,5 +271,158 @@
     "constructor": "CreateGroupScreen({existingGroup:GroupModel?})",
     "purpose": "Create or edit a group. If existingGroup!=null it's edit mode.",
     "overlay_opacity": 0.70
+  },
+
+  "WelcomeScreen": {
+    "file": "lib/screens/welcome_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "First screen for new users. Logo + 'Smart finance, redefined' card + Get Started → OnboardingScreen.",
+    "overlay_opacity": 0.40,
+    "theme_aware": true,
+    "note": "Fully theme-aware since v2. Scaffold bg, text, card bg/border all adapt via AppThemeNotifier.isWhite."
+  },
+
+  "OnboardingScreen": {
+    "file": "lib/screens/onboarding_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "Name entry form. Saves to SharedPreferences key 'user_name'. Navigates to SetPinScreen.",
+    "overlay_opacity": 0.40,
+    "theme_aware": true,
+    "note": "Fully theme-aware since v2. Scaffold bg, text, input fill/border all adapt."
+  },
+
+  "PremiumOnboardingScreen": {
+    "file": "lib/screens/premium_onboarding_screen.dart",
+    "type": "StatefulWidget",
+    "purpose": "Feature showcase PageView (4 pages). Leads to OnboardingScreen.",
+    "theme_aware": true,
+    "note": "Dark mode: custom gradient background. White mode: background_theme_white.png + white cards. All text/dots/skip adapt via AppThemeNotifier.isWhite."
+  },
+
+  "DatabaseService": {
+    "file": "lib/services/database_service.dart",
+    "type": "class (all static)",
+    "db_name": "eleghart_ledger.db",
+    "db_version": 2,
+    "tables": ["groups", "expenses", "udhaar_persons", "udhaar_transactions", "emi_entries", "recurring_expenses", "ledger_transactions", "wealth_goals", "wealth_contributions"],
+    "methods": [
+      "database→Future<Database> (getter, singleton)",
+      "_onCreate(db, version) — creates all tables",
+      "_onUpgrade(db, old, new) — if old<2: _createWealthTables(db)",
+      "_createWealthTables(db) — creates wealth_goals + wealth_contributions with IF NOT EXISTS"
+    ],
+    "note": "Wealth tables added in v2. onUpgrade handles existing users upgrading from v1."
+  },
+
+  "WealthGoal": {
+    "file": "lib/models/wealth_models.dart",
+    "type": "class (immutable)",
+    "fields": ["id:String(UUID)", "name:String", "goalType:GoalType(enum)", "targetAmount:double", "currentAmount:double", "startAmount:double", "targetDate:DateTime", "notes:String?", "createdAt:DateTime"],
+    "getters": ["progress:double (0.0-1.0)", "progressPercent:double", "remaining:double"],
+    "methods": ["copyWith(...) — WARNING: cannot clear nullable notes via copyWith(notes:null), construct directly instead", "toMap()→Map", "fromMap(Map)→WealthGoal(factory)"],
+    "storage": "SQLite table wealth_goals"
+  },
+
+  "WealthContribution": {
+    "file": "lib/models/wealth_models.dart",
+    "type": "class (immutable)",
+    "fields": ["id:String(UUID)", "goalId:String", "amount:double (positive=credit, negative=debit)", "contributionDate:DateTime", "notes:String?", "createdAt:DateTime"],
+    "methods": ["toMap()→Map", "fromMap(Map)→WealthContribution(factory)"],
+    "storage": "SQLite table wealth_contributions",
+    "note": "Negative amount = debit (withdrawal). currentAmount is clamped to 0 by repository on add."
+  },
+
+  "GoalType": {
+    "file": "lib/models/wealth_models.dart",
+    "type": "enum",
+    "values": ["emergencyFund", "house", "car", "marriage", "retirement", "vacation", "education", "custom"],
+    "getters": ["label:String", "icon:IconData", "color:Color"]
+  },
+
+  "GoalHealth": {
+    "file": "lib/models/wealth_models.dart",
+    "type": "enum",
+    "values": ["ahead", "onTrack", "slightlyBehind", "critical"],
+    "getters": ["label:String", "color:Color", "emoji:String"]
+  },
+
+  "WealthRepository": {
+    "file": "lib/services/wealth_repository.dart",
+    "type": "class (all static)",
+    "methods": [
+      "loadGoals()→Future<List<WealthGoal>> — ordered by created_at DESC",
+      "insertGoal(WealthGoal)→Future<void>",
+      "updateGoal(WealthGoal)→Future<void> — updates by id, preserves currentAmount",
+      "deleteGoal(String id)→Future<void> — transaction: deletes contributions then goal",
+      "loadContributions(String goalId)→Future<List<WealthContribution>> — ordered by contribution_date DESC",
+      "addContribution({goal, amount, date, notes})→Future<WealthGoal> — amount clamped to 0, returns updatedGoal",
+      "deleteContribution(WealthContribution, WealthGoal)→Future<WealthGoal> — reverses amount effect",
+      "generateId()→String — Uuid().v4()"
+    ],
+    "note": "addContribution: newAmount = (currentAmount + amount).clamp(0, ∞). Debit stored as negative amount."
+  },
+
+  "WealthService": {
+    "file": "lib/services/wealth_service.dart",
+    "type": "class (all static)",
+    "methods": [
+      "calculateHealth(WealthGoal)→GoalHealth — calls expectedSaved(), ratio check",
+      "calculateMonthlyRequired(WealthGoal)→double — remaining / monthsLeft",
+      "elapsedMonths(WealthGoal)→int — months since createdAt",
+      "remainingMonths(WealthGoal)→int — months until targetDate",
+      "totalMonths(WealthGoal)→int — total duration in months (min 1)",
+      "expectedSaved(WealthGoal)→double — month-based, min 1 elapsed month so always non-zero for new goals",
+      "gap(WealthGoal)→double — max(0, expectedSaved - currentAmount)",
+      "coachMessage(WealthGoal)→String — AI coach text based on health",
+      "formatAmount(double)→String — compact: ₹1.2K, ₹1.2L, ₹1.2Cr",
+      "formatAmountFull(double)→String — full: ₹1.20L, ₹1.20Cr"
+    ],
+    "note": "expectedSaved uses max(1, elapsedMonths) so brand-new goals always show first month's target, never ₹0."
+  },
+
+  "WealthDashboardScreen": {
+    "file": "lib/screens/wealth_dashboard_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "WealthDashboardScreen({key})",
+    "key_state": ["_goals:List<WealthGoal>", "_loading:bool", "_animCtrl:AnimationController"],
+    "key_methods": [
+      "_load()→Future<void> — loads from DB, animCtrl.forward(from:0)",
+      "_buildHeroCard()→Widget — overall progress + monthly target",
+      "_buildGoalCard(WealthGoal,...)→Widget — month X of Y, progress bar, health badge",
+      "_summaryStrip()→Widget — avg progress, months left",
+      "_buildAICoachBanner()→Widget"
+    ],
+    "overlay_opacity": 0.65,
+    "sync": "Calls _load() unconditionally after every Navigator.push (FAB + goal cards)",
+    "access": "HomeDashboard Quick Action (Wealth) + Wealth Snapshot card"
+  },
+
+  "GoalDetailScreen": {
+    "file": "lib/screens/goal_detail_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "GoalDetailScreen({goal:WealthGoal})",
+    "key_state": ["_goal:WealthGoal (mutable, updated on contribution/edit)", "_contributions:List<WealthContribution>", "_loading:bool", "_animCtrl", "_progressAnim"],
+    "key_methods": [
+      "_load()→Future<void> — loads contributions from DB",
+      "_showAddContribution() — bottom sheet with Credit/Debit toggle, amount, date, notes",
+      "Edit button (AppBar ✏️) → CreateGoalScreen(goal:_goal) → setState(_goal = updated)"
+    ],
+    "returns": "PopScope wraps Scaffold: hardware/gesture back → Navigator.pop(context, _goal)",
+    "overlay_opacity": 0.65,
+    "note": "Credit/Debit toggle: green=credit(positive), red=debit(negative amount). Contribution list shows ↑green/↓red icons."
+  },
+
+  "CreateGoalScreen": {
+    "file": "lib/screens/create_goal_screen.dart",
+    "type": "StatefulWidget",
+    "constructor": "CreateGoalScreen({goal:WealthGoal?})",
+    "key_state": ["_nameCtrl", "_targetCtrl", "_startCtrl", "_notesCtrl", "_selectedType:GoalType", "_targetDate:DateTime", "_saving:bool"],
+    "getter": "_isEditing→bool (widget.goal != null)",
+    "behavior": {
+      "create": "insertGoal(new WealthGoal), shows Starting Amount field, button='Create Goal'",
+      "edit": "constructs WealthGoal directly (not copyWith) to allow null notes, updateGoal(), hides Starting Amount, button='Save Changes'"
+    },
+    "returns": "Navigator.pop(context, WealthGoal) on success",
+    "overlay_opacity": 0.65
   }
 }

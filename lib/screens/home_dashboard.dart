@@ -19,6 +19,17 @@ import 'expense_list_screen.dart';
 import 'recurring_expense_list_screen.dart';
 import 'emi_list_screen.dart';
 import 'insights_screen.dart';
+import 'udhaar_home_screen.dart';
+import 'global_search_sheet.dart';
+import 'wealth_dashboard_screen.dart';
+import '../models/wealth_models.dart';
+import '../services/wealth_repository.dart';
+import '../services/wealth_service.dart';
+import 'notifications_sheet.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
+import '../models/emi_model.dart';
+import '../models/recurring_expense_model.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -46,6 +57,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   String _lastExpenseDate = '-';
   int _totalExpensesCount = 0;
+  int _notifCount = 0;
+  WealthGoal? _topGoal;
 
   // -------- PROFILE --------
   String _userName = '';
@@ -87,14 +100,78 @@ class _HomeDashboardState extends State<HomeDashboard> {
     await RecurringEngine.run();
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
+    final persons = await StorageService.loadPersons();
+    final txns = await StorageService.loadUdhaarTransactions();
+    final emis = await StorageService.loadEmis();
+    final recurrings = await StorageService.loadRecurring();
+    WealthGoal? topGoal;
+    try {
+      final wealthGoals = await WealthRepository.loadGoals();
+      topGoal = wealthGoals.isNotEmpty ? wealthGoals.first : null;
+    } catch (_) {}
 
     _recalculateSummary(groups, expenses);
 
-    setState(() {
-      _groups = groups;
-      _expenses = expenses;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _groups = groups;
+        _expenses = expenses;
+        _notifCount = _computeNotifCount(persons, txns, emis, recurrings);
+        _topGoal = topGoal;
+        _loading = false;
+      });
+    }
+  }
+
+  int _computeNotifCount(
+    List<PersonModel> persons,
+    List<LedgerTransactionModel> txns,
+    List<EmiModel> emis,
+    List<RecurringExpenseModel> recurrings,
+  ) {
+    int count = 0;
+    final netByPerson = <String, double>{};
+    for (final t in txns) {
+      final sign = t.isCollection ? 1.0 : -1.0;
+      netByPerson[t.personId] =
+          (netByPerson[t.personId] ?? 0) + sign * t.amount;
+    }
+    count += netByPerson.values.where((n) => n.abs() > 0.01).length;
+    final now = DateTime.now();
+    final soon = now.add(const Duration(days: 7));
+    count += emis
+        .where((e) => !e.isCompleted && e.nextDueDate.isBefore(soon))
+        .length;
+    count += recurrings.where((r) {
+      if (!r.isActive) return false;
+      try {
+        return r.nextDueDate(now).isBefore(soon);
+      } catch (_) {
+        return false;
+      }
+    }).length;
+    return count;
+  }
+
+  void _showGlobalSearch() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => const GlobalSearchSheet(),
+    );
+  }
+
+  void _showNotifications() {
+    setState(() => _notifCount = 0);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => NotificationsSheet(expenses: _expenses),
+    );
   }
 
   void _recalculateSummary(
@@ -245,12 +322,38 @@ class _HomeDashboardState extends State<HomeDashboard> {
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.search_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
-          onPressed: () {},
+          icon: Icon(Icons.search_rounded,
+              color: AppThemeNotifier.isWhite
+                  ? EleghartColors.accentDark
+                  : Colors.white70,
+              size: 22),
+          onPressed: _showGlobalSearch,
         ),
-        IconButton(
-          icon: Icon(Icons.notifications_none_rounded, color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white70, size: 22),
-          onPressed: () {},
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: Icon(Icons.notifications_none_rounded,
+                  color: AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white70,
+                  size: 22),
+              onPressed: _showNotifications,
+            ),
+            if (_notifCount > 0)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFCC0020),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.only(right: 14),
@@ -426,15 +529,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
-                  _summaryPill('↑ Income',
+                  Flexible(child: _summaryPill('↑ Income',
                       '₹${_totalCredit >= 1000 ? (_totalCredit / 1000).toStringAsFixed(1) + 'K' : _totalCredit.toStringAsFixed(0)}',
-                      const Color(0xFF22C55E)),
+                      const Color(0xFF22C55E))),
                   const SizedBox(width: 10),
-                  _summaryPill('↓ Spent',
+                  Flexible(child: _summaryPill('↓ Spent',
                       '₹${_totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
-                      Colors.white70),
+                      Colors.white70)),
                   const SizedBox(width: 10),
-                  _summaryPill('${_totalExpensesCount} Items', '', Colors.white54),
+                  Flexible(child: _summaryPill('${_totalExpensesCount} Items', '', Colors.white54)),
                 ]),
               ],
             ),
@@ -509,6 +612,54 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           ]),
 
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.handshake_outlined,
+                label: 'Udhaar',
+                color: const Color(0xFFE97C00),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const UdhaarHomeScreen()));
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _quickActionCard(
+                icon: Icons.track_changes_rounded,
+                label: 'Wealth',
+                color: const Color(0xFFCC0020),
+                cardBg: cardBg,
+                border: border,
+                textPrimary: textPrimary,
+                textSec: textSec,
+                onTap: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              const WealthDashboardScreen()));
+                  _loadDashboardData();
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: SizedBox.shrink()),
+          ]),
+
+          const SizedBox(height: 20),
+
+          // ── Wealth Snapshot Card ───────────────────────
+          _buildWealthSnapshot(cardBg, border, textPrimary, textSec),
+
           const SizedBox(height: 24),
 
           // ── Recent Activity placeholder ────────────────────────
@@ -549,6 +700,174 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
+  Widget _buildWealthSnapshot(
+      Color cardBg, Color border, Color textPrimary, Color textSec) {
+    final goal = _topGoal;
+    if (goal == null) {
+      return GestureDetector(
+        onTap: () async {
+          await Navigator.push(context,
+              MaterialPageRoute(
+                  builder: (_) => const WealthDashboardScreen()));
+          _loadDashboardData();
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+          ),
+          child: Row(children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCC0020).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.track_changes_rounded,
+                  color: Color(0xFFCC0020), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('🎯 Wealth Journey',
+                        style: GoogleFonts.sora(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary)),
+                    Text('Set your first financial goal',
+                        style: GoogleFonts.sora(
+                            fontSize: 11, color: textSec)),
+                  ]),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: textSec, size: 18),
+          ]),
+        ),
+      );
+    }
+
+    final health = WealthService.calculateHealth(goal);
+    final monthly = WealthService.calculateMonthlyRequired(goal);
+
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const WealthDashboardScreen()));
+        _loadDashboardData();
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFCC0020).withOpacity(0.08),
+              const Color(0xFFCC0020).withOpacity(0.03),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: const Color(0xFFCC0020).withOpacity(0.15)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          Row(children: [
+            const Icon(Icons.track_changes_rounded,
+                color: Color(0xFFCC0020), size: 16),
+            const SizedBox(width: 6),
+            Text('🎯 Wealth Journey',
+                style: GoogleFonts.sora(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFCC0020))),
+            const Spacer(),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: health.color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('${health.emoji} ${health.label}',
+                  style: GoogleFonts.sora(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: health.color)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          Text(goal.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.sora(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: textPrimary)),
+          const SizedBox(height: 6),
+          Row(children: [
+            Text(
+              WealthService.formatAmount(goal.currentAmount),
+              style: GoogleFonts.sora(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary),
+            ),
+            Text(
+              ' / ${WealthService.formatAmountFull(goal.targetAmount)}',
+              style: GoogleFonts.sora(fontSize: 12, color: textSec),
+            ),
+            const Spacer(),
+            Text(
+              '${goal.progressPercent.toStringAsFixed(1)}% Complete',
+              style: GoogleFonts.sora(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFCC0020)),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: goal.progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFCC0020).withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(health.color),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            Text('Need this month: ',
+                style: GoogleFonts.sora(fontSize: 11, color: textSec)),
+            Text(
+              WealthService.formatAmountFull(monthly),
+              style: GoogleFonts.sora(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary),
+            ),
+            const Spacer(),
+            Text('Open Wealth Journey →',
+                style: GoogleFonts.sora(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFCC0020))),
+          ]),
+        ]),
+      ),
+    );
+  }
+
   Widget _summaryPill(String label, String value, Color color) => Container(
         padding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -558,6 +877,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
         ),
         child: Text(
           value.isNotEmpty ? '$label: $value' : label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.sora(
               fontSize: 10,
               fontWeight: FontWeight.w600,

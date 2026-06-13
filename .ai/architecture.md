@@ -158,6 +158,51 @@ GroupDetailScreen → ExportPdfScreen(group, filteredExpenses)
     → share_plus ShareXFiles OR open_filex OpenFile.open()
 ```
 
+## Wealth Journey Module
+```
+Isolated module — does NOT share state with Ledger/Expenses/Groups.
+Data:    SQLite via DatabaseService (wealth_goals + wealth_contributions tables)
+Access:  HomeDashboard Quick Action → WealthDashboardScreen
+Nav flow:
+  WealthDashboardScreen ──(FAB)──► CreateGoalScreen(goal:null)  → _load() on return
+  WealthDashboardScreen ──(card)──► GoalDetailScreen(goal)      → _load() on return
+  GoalDetailScreen      ──(✏️)───► CreateGoalScreen(goal:WealthGoal) → setState(_goal) on return
+  GoalDetailScreen      ──(back)──► WealthDashboardScreen  (via PopScope → Navigator.pop(context, _goal))
+  WealthDashboardScreen ──(back)──► HomeDashboard           (_loadDashboardData() called after await push)
+```
+
+## Wealth Journey Sync Chain
+```
+Add/Debit contribution in GoalDetailScreen
+    → WealthRepository.addContribution(goal, signedAmt, date, notes)  // debit=negative amount, clamped to 0
+    → setState({ _goal = updated, _contributions = fresh list })       // immediate UI update
+
+Edit goal (✏️ AppBar) in GoalDetailScreen
+    → CreateGoalScreen(goal: _goal) → updateGoal(editedGoal)
+    → Navigator.pop(context, editedGoal)
+    → setState(_goal = editedGoal)                                     // immediate UI update
+
+Back from GoalDetailScreen → WealthDashboardScreen
+    → PopScope.onPopInvokedWithResult → Navigator.pop(context, _goal)
+    → WealthDashboardScreen: await push unblocks → _load()             // full DB reload
+
+Back from WealthDashboardScreen → HomeDashboard
+    → HomeDashboard: await push unblocks → _loadDashboardData()        // refreshes wealth snapshot card
+```
+
+## DatabaseService — SQLite Setup
+```
+File:    lib/services/database_service.dart
+DB name: eleghart_ledger.db
+Version: 2  (bumped from 1 when wealth tables added)
+Tables:  groups, expenses, udhaar_persons, udhaar_transactions,
+         emi_entries, recurring_expenses, ledger_transactions,
+         wealth_goals, wealth_contributions
+
+Upgrade: onUpgrade(db, oldVersion, newVersion) { if (oldVersion < 2) _createWealthTables(db); }
+Create:  onCreate calls all tables including wealth tables via _createWealthTables(db)
+```
+
 ## PIN Flow
 ```
 First launch: SetPinScreen → prefs.setString('user_pin', pin) + prefs.setBool('pin_set', true)

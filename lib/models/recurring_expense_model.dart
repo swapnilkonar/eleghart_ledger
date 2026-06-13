@@ -18,6 +18,10 @@ class RecurringExpenseModel {
   /// Last date on which an expense was auto-generated
   final DateTime? lastGeneratedDate;
 
+  /// Optional custom distribution: category → amount.
+  /// null = equal split (default, backward-compatible).
+  final Map<String, double>? distribution;
+
   String get category => categories.isNotEmpty ? categories.first : 'Recurring';
 
   RecurringExpenseModel({
@@ -32,6 +36,7 @@ class RecurringExpenseModel {
     this.description = '',
     this.isActive = true,
     this.lastGeneratedDate,
+    this.distribution,
   });
 
   factory RecurringExpenseModel.create({
@@ -43,6 +48,7 @@ class RecurringExpenseModel {
     required String groupId,
     required List<String> categories,
     String description = '',
+    Map<String, double>? distribution,
   }) => RecurringExpenseModel(
     id: const Uuid().v4(),
     name: name,
@@ -53,6 +59,7 @@ class RecurringExpenseModel {
     groupId: groupId,
     categories: categories,
     description: description,
+    distribution: distribution,
   );
 
   Map<String, dynamic> toJson() => {
@@ -67,6 +74,7 @@ class RecurringExpenseModel {
     'description': description,
     'isActive': isActive,
     'lastGeneratedDate': lastGeneratedDate?.toIso8601String(),
+    'distribution': distribution,
   };
 
   factory RecurringExpenseModel.fromJson(Map<String, dynamic> j) =>
@@ -86,6 +94,13 @@ class RecurringExpenseModel {
         lastGeneratedDate: j['lastGeneratedDate'] != null
             ? DateTime.parse(j['lastGeneratedDate'])
             : null,
+        distribution: j['distribution'] != null
+            ? Map<String, double>.from(
+                (j['distribution'] as Map).map(
+                  (k, v) => MapEntry(k as String, (v as num).toDouble()),
+                ),
+              )
+            : null,
       );
 
   RecurringExpenseModel copyWith({
@@ -99,6 +114,7 @@ class RecurringExpenseModel {
     String? description,
     bool? isActive,
     Object? lastGeneratedDate = _sentinel,
+    Object? distribution = _sentinel,
   }) => RecurringExpenseModel(
     id: id,
     name: name ?? this.name,
@@ -113,6 +129,9 @@ class RecurringExpenseModel {
     lastGeneratedDate: lastGeneratedDate == _sentinel
         ? this.lastGeneratedDate
         : lastGeneratedDate as DateTime?,
+    distribution: distribution == _sentinel
+        ? this.distribution
+        : distribution as Map<String, double>?,
   );
 
   /// Frequency display label

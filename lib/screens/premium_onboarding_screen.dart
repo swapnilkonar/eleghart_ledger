@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
+import '../utils/app_theme.dart';
+import '../theme/eleghart_colors.dart';
 import 'onboarding_screen.dart';
 
 class PremiumOnboardingScreen extends StatefulWidget {
@@ -66,23 +68,47 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isWhite = AppThemeNotifier.isWhite;
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.55)
+        : Colors.white70;
+    final cardBg = isWhite
+        ? Colors.white
+        : Colors.white.withOpacity(0.06);
+    final cardBorder = isWhite
+        ? const Color(0xFFEEEEEE)
+        : Colors.white.withOpacity(0.08);
+    final dotInactive = isWhite
+        ? EleghartColors.accentDark.withOpacity(0.15)
+        : Colors.white24;
+
     return Scaffold(
+      backgroundColor: isWhite ? Colors.white : Colors.black,
       body: Stack(
         children: [
-          /// BACKGROUND GRADIENT
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF050505),
-                  Color(0xFF2B0007),
-                  Color(0xFF700014),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+          /// BACKGROUND
+          if (!isWhite)
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF050505),
+                    Color(0xFF2B0007),
+                    Color(0xFF700014),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            )
+          else
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/background_theme_white.png',
+                fit: BoxFit.cover,
               ),
             ),
-          ),
 
           SafeArea(
             child: Column(
@@ -97,7 +123,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.red.withOpacity(0.4),
+                        color: Colors.red.withOpacity(isWhite ? 0.2 : 0.4),
                         blurRadius: 35,
                         spreadRadius: 5,
                       ),
@@ -116,7 +142,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                 Text(
                   "ELEGHART LEDGER",
                   style: GoogleFonts.orbitron(
-                    color: Colors.white,
+                    color: textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
@@ -141,11 +167,19 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(30),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.06),
+                                color: cardBg,
                                 borderRadius: BorderRadius.circular(32),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.08),
-                                ),
+                                border: Border.all(color: cardBorder),
+                                boxShadow: isWhite
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black
+                                              .withOpacity(0.06),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ]
+                                    : [],
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -163,7 +197,8 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.red.withOpacity(0.4),
+                                          color: Colors.red.withOpacity(
+                                              isWhite ? 0.25 : 0.4),
                                           blurRadius: 40,
                                         ),
                                       ],
@@ -183,7 +218,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                                     style: GoogleFonts.sora(
                                       fontSize: 28,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                      color: textPrimary,
                                     ),
                                   ),
 
@@ -194,7 +229,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.sora(
                                       fontSize: 16,
-                                      color: Colors.white70,
+                                      color: textSec,
                                       height: 1.6,
                                     ),
                                   ),
@@ -212,11 +247,11 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                 SmoothPageIndicator(
                   controller: _controller,
                   count: _pages.length,
-                  effect: const ExpandingDotsEffect(
+                  effect: ExpandingDotsEffect(
                     dotHeight: 8,
                     dotWidth: 8,
                     activeDotColor: Colors.redAccent,
-                    dotColor: Colors.white24,
+                    dotColor: dotInactive,
                   ),
                 ),
 
@@ -238,7 +273,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.red.withOpacity(0.45),
+                          color: Colors.red.withOpacity(0.35),
                           blurRadius: 25,
                           offset: const Offset(0, 10),
                         ),
@@ -274,7 +309,10 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
                   onPressed: _goToOnboarding,
                   child: Text(
                     "Skip",
-                    style: GoogleFonts.sora(color: Colors.white60),
+                    style: GoogleFonts.sora(
+                        color: isWhite
+                            ? EleghartColors.accentDark.withOpacity(0.4)
+                            : Colors.white60),
                   ),
                 ),
 

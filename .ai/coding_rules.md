@@ -11,11 +11,13 @@
 
 ## DO NOT
 - Do NOT use Provider, Riverpod, Bloc, GetX, or any state management package
-- Do NOT use SQLite, Hive, Firebase, or any network calls
+- Do NOT use SQLite for Ledger/Expenses/Groups — those use SharedPreferences. Only Wealth Journey uses DatabaseService (SQLite).
+- Do NOT use Hive, Firebase, or any network calls
 - Do NOT add new SharedPreferences keys without documenting in project_overview.md Data Keys table
 - Do NOT use `const` on widgets that contain theme-conditional colors
 - Do NOT use `Colors.white` directly in screen text — use conditional with `AppThemeNotifier.isWhite`
 - Do NOT call `AppThemeNotifier.toggle()` from `setState` — it triggers its own listeners
+- Do NOT use `copyWith(nullableField: null)` to clear a nullable String — `??` in copyWith will silently retain the old value. Construct the object directly instead.
 
 ## New Screen Checklist
 1. Import `themed_background.dart`
@@ -77,6 +79,44 @@ if (result == true) _loadData(); // refresh if changed
 
 // Return data
 Navigator.pop(context, someData);
+```
+
+## Wealth Module — SQLite Data Pattern
+```dart
+// Load (always from DB):
+Future<void> _load() async {
+  final goals = await WealthRepository.loadGoals();
+  if (mounted) setState(() { _goals = goals; _loading = false; });
+  _animCtrl.forward(from: 0);
+}
+
+// Add contribution (credit = positive, debit = negative):
+final signedAmt = isCredit ? amt : -amt;
+final updated = await WealthRepository.addContribution(
+  goal: _goal, amount: signedAmt, date: date, notes: notes);
+// → currentAmount is clamped to 0 inside repository (cannot go negative)
+
+// Edit goal (DO NOT use copyWith for nullable notes — construct directly):
+final edited = WealthGoal(
+  id: orig.id, name: newName, goalType: ..., targetAmount: ...,
+  currentAmount: orig.currentAmount, startAmount: orig.startAmount,
+  targetDate: ..., notes: notesCtrl.isEmpty ? null : notesCtrl.text,
+  createdAt: orig.createdAt,
+);
+await WealthRepository.updateGoal(edited);
+```
+
+## Wealth Module — PopScope Back-Navigation Pattern
+```dart
+// Always wrap GoalDetailScreen Scaffold in PopScope so hardware back returns updated goal:
+return PopScope(
+  canPop: false,
+  onPopInvokedWithResult: (didPop, _) {
+    if (!didPop) Navigator.pop(context, _goal);
+  },
+  child: Scaffold(...),
+);
+// Caller must: final updated = await Navigator.push<WealthGoal>(...); _load();
 ```
 
 ## Naming

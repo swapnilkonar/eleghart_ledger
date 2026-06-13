@@ -882,6 +882,8 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
             Icon(icon, color: color, size: 22),
             const SizedBox(height: 3),
             Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.sora(
                     fontSize: 10,
                     color: color,

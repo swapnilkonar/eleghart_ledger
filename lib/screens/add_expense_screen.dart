@@ -12,6 +12,7 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../widgets/expense_distribution_widget.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final GroupModel group;
@@ -41,6 +42,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // Transaction type
   String _type = 'debit'; // default
 
+  // Distribution
+  Map<String, double>? _distribution;
+  bool _customSplitValid = true;
+
   bool get isEditMode => widget.existingExpense != null;
 
   @override
@@ -55,6 +60,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _date = e.date;
       _selected.addAll(e.categories);
       _type = e.type;
+      _distribution = e.distribution;
 
       if (e.imagePath != null && File(e.imagePath!).existsSync()) {
         _image = File(e.imagePath!);
@@ -171,6 +177,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           date: _date,
           imagePath: _image?.path,
           type: _type,
+          distribution: _distribution,
         );
       }
     } else {
@@ -184,6 +191,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           date: _date,
           imagePath: _image?.path,
           type: _type,
+          distribution: _distribution,
         ),
       );
     }
@@ -201,7 +209,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   bool get _isValid =>
-      _amountController.text.trim().isNotEmpty && _selected.isNotEmpty;
+      _amountController.text.trim().isNotEmpty &&
+      _selected.isNotEmpty &&
+      _customSplitValid;
 
   Future<void> _showMemberPicker() async {
     await showModalBottomSheet(
@@ -432,6 +442,26 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         ),
 
                         const SizedBox(height: 20),
+
+                        // Distribution
+                        if (_selected.length > 1) ...
+                          [
+                            _label('Expense Distribution'),
+                            const SizedBox(height: 8),
+                            ExpenseDistributionWidget(
+                              key: ValueKey(_selected.join(',')),
+                              totalAmount: double.tryParse(_amountController.text.trim()) ?? 0,
+                              items: _selected.toList(),
+                              initialDistribution: _distribution,
+                              onChanged: (dist, valid) {
+                                setState(() {
+                                  _distribution = dist;
+                                  _customSplitValid = valid;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                          ],
 
                         // Date
                         _label('Date'),

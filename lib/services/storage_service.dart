@@ -4,14 +4,15 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 import '../models/recurring_expense_model.dart';
 import '../models/emi_model.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
+import 'database_service.dart';
 
 class StorageService {
-  static const _groupsKey = 'groups_v2';
-  static const _expensesKey = 'expenses_v2';
   static const _categoryImagesKey = 'category_images_v1';
   static const _globalCategoriesKey = 'global_categories_v1';
-  static const _recurringKey = 'recurring_v1';
-  static const _emiKey = 'emi_v1';
+
+  // ─── Settings (stay in SharedPreferences) ─────────────────────────────────
 
   static Future<List<String>> loadGlobalCategories() async {
     final prefs = await SharedPreferences.getInstance();
@@ -35,58 +36,34 @@ class StorageService {
     await prefs.setString(_categoryImagesKey, jsonEncode(images));
   }
 
-  static Future<List<GroupModel>> loadGroups() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_groupsKey) ?? [];
-    return raw.map((e) => GroupModel.fromJson(jsonDecode(e))).toList();
-  }
+  // ─── Data (delegated to SQLite) ───────────────────────────────────────────
 
-  static Future<void> saveGroups(List<GroupModel> groups) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = groups.map((g) => jsonEncode(g.toJson())).toList();
-    await prefs.setStringList(_groupsKey, raw);
-  }
+  static Future<List<GroupModel>> loadGroups() => DatabaseService.loadGroups();
+  static Future<void> saveGroups(List<GroupModel> groups) =>
+      DatabaseService.saveGroups(groups);
 
-  static Future<List<ExpenseModel>> loadExpenses() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_expensesKey) ?? [];
-    return raw.map((e) => ExpenseModel.fromJson(jsonDecode(e))).toList();
-  }
+  static Future<List<ExpenseModel>> loadExpenses() =>
+      DatabaseService.loadExpenses();
+  static Future<void> saveExpenses(List<ExpenseModel> expenses) =>
+      DatabaseService.saveExpenses(expenses);
 
-  static Future<void> saveExpenses(List<ExpenseModel> expenses) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = expenses.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList(_expensesKey, raw);
-  }
+  static Future<List<RecurringExpenseModel>> loadRecurring() =>
+      DatabaseService.loadRecurring();
+  static Future<void> saveRecurring(List<RecurringExpenseModel> list) =>
+      DatabaseService.saveRecurring(list);
 
-  // ─── Recurring Expenses ───────────────────────────────────────────────────
+  static Future<List<EmiModel>> loadEmis() => DatabaseService.loadEmis();
+  static Future<void> saveEmis(List<EmiModel> list) =>
+      DatabaseService.saveEmis(list);
 
-  static Future<List<RecurringExpenseModel>> loadRecurring() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_recurringKey) ?? [];
-    return raw
-        .map((e) => RecurringExpenseModel.fromJson(jsonDecode(e)))
-        .toList();
-  }
+  static Future<List<PersonModel>> loadPersons() =>
+      DatabaseService.loadPersons();
+  static Future<void> savePersons(List<PersonModel> list) =>
+      DatabaseService.savePersons(list);
 
-  static Future<void> saveRecurring(
-      List<RecurringExpenseModel> list) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = list.map((r) => jsonEncode(r.toJson())).toList();
-    await prefs.setStringList(_recurringKey, raw);
-  }
-
-  // ─── EMI ─────────────────────────────────────────────────────────────────
-
-  static Future<List<EmiModel>> loadEmis() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_emiKey) ?? [];
-    return raw.map((e) => EmiModel.fromJson(jsonDecode(e))).toList();
-  }
-
-  static Future<void> saveEmis(List<EmiModel> list) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = list.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList(_emiKey, raw);
-  }
+  static Future<List<LedgerTransactionModel>> loadUdhaarTransactions() =>
+      DatabaseService.loadUdhaarTransactions();
+  static Future<void> saveUdhaarTransactions(
+          List<LedgerTransactionModel> list) =>
+      DatabaseService.saveUdhaarTransactions(list);
 }

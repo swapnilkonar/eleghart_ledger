@@ -526,11 +526,19 @@ class PdfExportService {
               final isCredit = e.type == 'credit';
               final sign = isCredit ? '+' : '-';
 
+              // Build members column: show custom amounts if available
+              final membersText = e.distribution != null
+                  ? e.distribution!.entries
+                      .map((entry) =>
+                          '${entry.key}: Rs. ${entry.value.toStringAsFixed(0)}')
+                      .join(', ')
+                  : e.categories.join(', ');
+
               return _tableRow([
                 DateFormat('dd MMM yyyy').format(e.date),
                 e.type.toUpperCase(),
                 e.description.isEmpty ? 'Expense' : e.description,
-                e.categories.join(', '),
+                membersText,
                 '$sign Rs. ${e.amount.toStringAsFixed(0)}',
               ]);
             }),

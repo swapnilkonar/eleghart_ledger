@@ -638,16 +638,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       children: [
         Icon(icon, size: 16, color: iconColor),
         const SizedBox(width: 8),
-        Text(
-          value,
-          style: GoogleFonts.sora(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color:
-                valueColor ??
-                (AppThemeNotifier.isWhite
-                    ? EleghartColors.accentDark
-                    : Colors.white),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.sora(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color:
+                  valueColor ??
+                  (AppThemeNotifier.isWhite
+                      ? EleghartColors.accentDark
+                      : Colors.white),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -1313,40 +1317,22 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return GestureDetector(
       onTap: () => setState(() => _expenseFilter = value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFFCC0020).withOpacity(0.18)
+              ? const Color(0xFFCC0020)
               : (AppThemeNotifier.isWhite
-                    ? Colors.white
+                    ? EleghartColors.accentDark.withOpacity(0.06)
                     : Colors.white.withOpacity(0.06)),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? const Color(0xFFCC0020)
+                ? Colors.transparent
                 : (AppThemeNotifier.isWhite
-                      ? const Color(0xFFEEEEEE)
-                      : Colors.white.withOpacity(0.18)),
-            width: selected ? 1.5 : 1,
+                      ? EleghartColors.accentDark.withOpacity(0.12)
+                      : Colors.white.withOpacity(0.1)),
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFCC0020).withOpacity(0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : (AppThemeNotifier.isWhite
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFFCC0020).withOpacity(0.07),
-                          blurRadius: 6,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : []),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1354,7 +1340,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             if (selected) ...[
               const Icon(
                 Icons.check_rounded,
-                color: Color(0xFFCC0020),
+                color: Colors.white,
                 size: 13,
               ),
               const SizedBox(width: 5),
@@ -1363,14 +1349,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               label,
               style: GoogleFonts.sora(
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                 color: selected
-                    ? (AppThemeNotifier.isWhite
-                          ? const Color(0xFFCC0020)
-                          : Colors.white)
+                    ? Colors.white
                     : (AppThemeNotifier.isWhite
-                          ? EleghartColors.accentDark.withOpacity(0.7)
-                          : Colors.white60),
+                          ? EleghartColors.accentDark.withOpacity(0.6)
+                          : Colors.white54),
               ),
             ),
           ],
