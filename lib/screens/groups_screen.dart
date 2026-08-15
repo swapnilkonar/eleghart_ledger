@@ -15,6 +15,8 @@ import 'categories_list_screen.dart';
 import 'create_group_screen.dart';
 import 'group_detail_screen.dart';
 
+import '../utils/data_sync.dart';
+
 class GroupsScreen extends StatefulWidget {
   final String userName;
   const GroupsScreen({super.key, required this.userName});
@@ -30,17 +32,17 @@ class GroupsScreenState extends State<GroupsScreen>
   Map<String, String> _categoryImages = {};
   int _globalCategoriesCount = 0;
   bool _loading = true;
-  String _selectedFilter = 'All';
-  late AnimationController _glowController;
 
-  final List<String> _filters = [
-    'All',
-    'Trips',
-    'Friends',
-    'Family',
-    'Work',
-    'Others',
-  ];
+  late AnimationController _glowController;
+  String _selectedFilter = 'All';
+
+  List<String> get _dynamicFilters {
+    final set = <String>{'All'};
+    for (final g in _groups) {
+      set.addAll(g.categories);
+    }
+    return set.toList();
+  }
   final List<Color> _avatarColors = [
     const Color(0xFFCC0020),
     const Color(0xFF0066CC),
@@ -59,6 +61,7 @@ class GroupsScreenState extends State<GroupsScreen>
     _loadData();
     DateFilter.notifier.addListener(_onFilterChanged);
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DataSyncNotifier.instance.addListener(_loadData);
   }
 
   void _onThemeChanged() => setState(() {});
@@ -69,6 +72,7 @@ class GroupsScreenState extends State<GroupsScreen>
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DataSyncNotifier.instance.removeListener(_loadData);
     _glowController.dispose();
     super.dispose();
   }
@@ -233,14 +237,11 @@ class GroupsScreenState extends State<GroupsScreen>
 
   List<GroupModel> get _filteredGroups {
     if (_selectedFilter == 'All') return _groups;
-    final filter = _selectedFilter.toLowerCase();
+    final filter = _selectedFilter.toLowerCase().trim();
     return _groups
         .where(
           (g) => g.categories.any(
-            (c) =>
-                c.toLowerCase() == filter ||
-                filter.startsWith(c.toLowerCase()) ||
-                c.toLowerCase().startsWith(filter.replaceAll('s', '')),
+            (c) => c.toLowerCase().trim() == filter || c.toLowerCase().contains(filter),
           ),
         )
         .toList();
@@ -519,70 +520,70 @@ class GroupsScreenState extends State<GroupsScreen>
 
                 const SizedBox(height: 16),
 
-                // ── Filter tabs ───────────────────────────────────────────
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _filters.map((f) {
-                      final active = _selectedFilter == f;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedFilter = f),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: active
-                                ? const Color(0xFFCC0020)
-                                : AppThemeNotifier.isWhite
-                                ? EleghartColors.accentDark.withOpacity(0.06)
-                                : Colors.white.withOpacity(0.06),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
+                // ── Filter tabs (shown only if user categories exist) ─────
+                if (_dynamicFilters.length > 1) ...[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _dynamicFilters.map((f) {
+                        final active = _selectedFilter == f;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedFilter = f),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
                               color: active
-                                  ? Colors.transparent
+                                  ? const Color(0xFFCC0020)
                                   : AppThemeNotifier.isWhite
-                                  ? EleghartColors.accentDark.withOpacity(0.12)
-                                  : Colors.white.withOpacity(0.1),
+                                  ? EleghartColors.accentDark.withOpacity(0.06)
+                                  : Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: active
+                                    ? Colors.transparent
+                                    : AppThemeNotifier.isWhite
+                                    ? EleghartColors.accentDark.withOpacity(0.12)
+                                    : Colors.white.withOpacity(0.1),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (active) ...[
+                                  const Icon(
+                                    Icons.grid_view_rounded,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+                                Text(
+                                  f,
+                                  style: GoogleFonts.sora(
+                                    fontSize: 13,
+                                    fontWeight: active
+                                        ? FontWeight.w700
+                                        : FontWeight.w400,
+                                    color: active
+                                        ? Colors.white
+                                        : AppThemeNotifier.isWhite
+                                        ? EleghartColors.accentDark.withOpacity(0.6)
+                                        : Colors.white54,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (active) ...[
-                                const Icon(
-                                  Icons.grid_view_rounded,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                              Text(
-                                f,
-                                style: GoogleFonts.sora(
-                                  fontSize: 13,
-                                  fontWeight: active
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
-                                  color: active
-                                      ? Colors.white
-                                      : AppThemeNotifier.isWhite
-                                      ? EleghartColors.accentDark.withOpacity(
-                                          0.6,
-                                        )
-                                      : Colors.white54,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                        );
+                      }).toList(),
+                    ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 20),
 
@@ -1189,7 +1190,7 @@ class GroupsScreenState extends State<GroupsScreen>
                     height: 110,
                     decoration: BoxDecoration(
                       color: AppThemeNotifier.isWhite
-                          ? const Color(0xFFFFF0F0)
+                          ? const Color(0xFFF4F6F9)
                           : const Color(0xFF1A0A0A),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(

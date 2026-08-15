@@ -14,6 +14,9 @@ import 'expenses_screen.dart';
 import 'recurring_expense_list_screen.dart';
 import 'emi_list_screen.dart';
 
+import '../utils/data_sync.dart';
+import '../utils/date_filter.dart';
+
 class ExpenseListScreen extends StatefulWidget {
   final VoidCallback? onExpenseAdded;
 
@@ -30,20 +33,47 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
   DateTime _selectedMonth = DateTime.now();
   final Set<String> _selectedIds = {};
 
-  static const _tabs = ['All', 'Food', 'Travel', 'Shopping', 'Bills', 'Others'];
+  List<String> _userCategories = [];
+
+  List<String> get _dynamicTabs {
+    final set = <String>{'All'};
+    for (final c in _userCategories) {
+      final lower = c.trim().toLowerCase();
+      if (lower.isNotEmpty && lower != 'emi' && lower != 'recurring') {
+        set.add(c.trim());
+      }
+    }
+    for (final e in _expenses) {
+      for (final c in e.validCategories) {
+        final lower = c.trim().toLowerCase();
+        if (lower.isNotEmpty && lower != 'uncategorized' && lower != 'emi' && lower != 'recurring') {
+          set.add(c.trim());
+        }
+      }
+    }
+    return set.toList();
+  }
 
   @override
   void initState() {
     super.initState();
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DateFilter.notifier.addListener(_onDateFilterChanged);
+    DataSyncNotifier.instance.addListener(reload);
     reload();
   }
 
   void _onThemeChanged() => setState(() {});
 
+  void _onDateFilterChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DateFilter.notifier.removeListener(_onDateFilterChanged);
+    DataSyncNotifier.instance.removeListener(reload);
     super.dispose();
   }
 
@@ -51,10 +81,12 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
     await RecurringEngine.run();
     final e = await StorageService.loadExpenses();
     final g = await StorageService.loadGroups();
+    final gc = await StorageService.loadGlobalCategories();
     if (mounted) {
       setState(() {
         _expenses = e;
         _groups = g;
+        _userCategories = gc;
       });
     }
   }
@@ -62,36 +94,14 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
   // ─── filtering ─────────────────────────────────────────────────────────────
 
   bool _matchesTab(ExpenseModel e) {
-    if (_activeCategory == 'All') return true;
-    final cats = e.categories.map((c) => c.toLowerCase()).join(' ');
-    switch (_activeCategory) {
-      case 'Food':
-        return cats.contains('food') ||
-            cats.contains('dining') ||
-            cats.contains('restaurant') ||
-            cats.contains('café') ||
-            cats.contains('coffee');
-      case 'Travel':
-        return cats.contains('travel') ||
-            cats.contains('uber') ||
-            cats.contains('ola') ||
-            cats.contains('cab') ||
-            cats.contains('transport') ||
-            cats.contains('flight');
-      case 'Shopping':
-        return cats.contains('shop') ||
-            cats.contains('retail') ||
-            cats.contains('amazon') ||
-            cats.contains('mall');
-      case 'Bills':
-        return cats.contains('bill') ||
-            cats.contains('util') ||
-            cats.contains('electr') ||
-            cats.contains('water') ||
-            cats.contains('rent');
-      default:
-        return !_matchesMajorTab(e);
-    }
+    if (_activeCategory.trim().toLowerCase() == 'all') return true;
+    final target = _activeCategory.trim().toLowerCase();
+    return e.categories.any(
+          (c) => c.trim().toLowerCase() == target,
+        ) ||
+        e.validCategories.any(
+          (c) => c.trim().toLowerCase() == target,
+        );
   }
 
   bool _matchesMajorTab(ExpenseModel e) {
@@ -107,10 +117,16 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
   }
 
   List<ExpenseModel> get _filtered => _expenses
-      .where((e) =>
-          e.date.year == _selectedMonth.year &&
-          e.date.month == _selectedMonth.month &&
-          _matchesTab(e))
+      .where((e) {
+        final matchesMonth = e.date.year == _selectedMonth.year &&
+            e.date.month == _selectedMonth.month;
+        final matchesGlobalDate = DateFilter.isInRange(e.date);
+        final dateOk = (DateFilter.current == DateFilterType.allTime ||
+                DateFilter.current == DateFilterType.custom)
+            ? matchesGlobalDate
+            : (matchesMonth || matchesGlobalDate);
+        return dateOk && _matchesTab(e);
+      })
       .toList()
     ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -453,10 +469,10 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          itemCount: _tabs.length,
+          itemCount: _dynamicTabs.length,
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (_, i) {
-            final tab = _tabs[i];
+            final tab = _dynamicTabs[i];
             final sel = tab == _activeCategory;
             return GestureDetector(
               onTap: () => setState(() => _activeCategory = tab),
@@ -964,6 +980,7 @@ class _BulkActionsSheetState extends State<_BulkActionsSheet> {
         categories: _category != null ? [_category!] : e.categories,
         groupId: _selectedGroup?.id,
         description: note.isNotEmpty ? '${e.description} · $note' : null,
+        distribution: _category != null ? null : e.distribution,
       );
     }).toList();
     await StorageService.saveExpenses(updated);

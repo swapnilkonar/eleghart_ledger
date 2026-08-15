@@ -14,6 +14,8 @@ import '../widgets/themed_background.dart';
 import 'add_person_screen.dart';
 import 'person_detail_screen.dart';
 
+import '../utils/data_sync.dart';
+
 class UdhaarHomeScreen extends StatefulWidget {
   const UdhaarHomeScreen({super.key});
 
@@ -46,6 +48,7 @@ class _UdhaarHomeScreenState extends State<UdhaarHomeScreen>
       });
     });
     AppThemeNotifier.instance.addListener(_onTheme);
+    DataSyncNotifier.instance.addListener(_load);
     _load();
   }
 
@@ -56,6 +59,7 @@ class _UdhaarHomeScreenState extends State<UdhaarHomeScreen>
     _tabCtrl.dispose();
     _searchCtrl.dispose();
     AppThemeNotifier.instance.removeListener(_onTheme);
+    DataSyncNotifier.instance.removeListener(_load);
     super.dispose();
   }
 
@@ -696,12 +700,27 @@ class _UdhaarHomeScreenState extends State<UdhaarHomeScreen>
           _load();
         },
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: border),
+            color: isWhite
+                ? Colors.white.withValues(alpha: 0.92)
+                : const Color(0xFF140306).withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isWhite
+                  ? const Color(0xFFCC0020).withValues(alpha: 0.14)
+                  : const Color(0xFFCC0020).withValues(alpha: 0.22),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFCC0020).withValues(alpha: isWhite ? 0.06 : 0.16),
+                blurRadius: 14,
+                spreadRadius: 1,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             children: [

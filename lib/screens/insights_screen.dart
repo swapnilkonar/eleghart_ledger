@@ -4,10 +4,18 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/expense_model.dart';
 import '../models/group_model.dart';
+import '../models/person_model.dart';
+import '../models/ledger_transaction_model.dart';
+import '../models/emi_model.dart';
+import '../models/recurring_expense_model.dart';
+import '../models/wealth_models.dart';
 import '../services/storage_service.dart';
+import '../services/wealth_repository.dart';
+import '../services/gemini_ai_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
-import '../widgets/themed_background.dart';
+import '../utils/date_filter.dart';
+import '../widgets/date_filter_pill.dart';
 import 'ai_chat_screen.dart';
 
 class InsightsScreen extends StatefulWidget {
@@ -21,30 +29,47 @@ class InsightsScreenState extends State<InsightsScreen> {
   bool _loading = true;
   List<ExpenseModel> _expenses = [];
   List<GroupModel> _groups = [];
+  List<PersonModel> _udhaarPersons = [];
+  List<LedgerTransactionModel> _udhaarTxns = [];
+  List<EmiModel> _emis = [];
+  List<RecurringExpenseModel> _recurrings = [];
+  List<WealthGoal> _wealthGoals = [];
 
   // Analytics
-  double _thisMonthTotal = 0;
-  double _lastMonthTotal = 0;
+  double _totalIncome = 0;
+  double _totalDebit = 0;
+  double _lastPeriodDebit = 0;
   double _growth = 0;
   int _healthScore = 0;
-  
+  String _aiExecutiveSummary = '';
+
   Map<String, double> _categoryTotals = {};
   ExpenseModel? _biggestExpense;
   String _topCategory = '-';
   String _mostActiveGroup = '-';
 
+  final List<String> _quickPrompts = [
+    "Where did my money go?",
+    "How can I save ₹10,000?",
+    "Which group spent most?",
+    "Am I on track for my goals?",
+  ];
+
   @override
   void initState() {
     super.initState();
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DateFilter.notifier.addListener(_onFilterChanged);
     _loadData();
   }
 
   void _onThemeChanged() => setState(() {});
+  void _onFilterChanged() => _loadData();
 
   @override
   void dispose() {
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DateFilter.notifier.removeListener(_onFilterChanged);
     super.dispose();
   }
 
@@ -52,49 +77,56 @@ class InsightsScreenState extends State<InsightsScreen> {
     final expenses = await StorageService.loadExpenses();
     final groups = await StorageService.loadGroups();
     final globalCats = await StorageService.loadGlobalCategories();
+    final persons = await StorageService.loadPersons();
+    final txns = await StorageService.loadUdhaarTransactions();
+    final emis = await StorageService.loadEmis();
+    final recurrings = await StorageService.loadRecurring();
+    List<WealthGoal> wealthGoals = [];
+    try {
+      wealthGoals = await WealthRepository.loadGoals();
+    } catch (_) {}
 
-    // Build a set of all currently active/valid categories (case-insensitive)
+    // Filter by DateFilter
+    final inRangeExpenses = expenses.where((e) => DateFilter.isInRange(e.date)).toList();
+
+    double income = 0;
+    double debit = 0;
+    for (final e in inRangeExpenses) {
+      if (e.isCredit) {
+        income += e.amount;
+      } else {
+        debit += e.amount;
+      }
+    }
+
+    _totalIncome = income;
+    _totalDebit = debit;
+
+    // Build category breakdown
     final Set<String> activeCategories = globalCats.map((c) => c.toLowerCase().trim()).toSet();
     for (var g in groups) {
       activeCategories.addAll(g.categories.map((c) => c.toLowerCase().trim()));
     }
 
-    final now = DateTime.now();
-    final thisMonthExpenses = expenses.where((e) => e.date.month == now.month && e.date.year == now.year && e.isDebit).toList();
-    final lastMonthExpenses = expenses.where((e) => 
-      (now.month == 1 ? e.date.month == 12 : e.date.month == now.month - 1) && 
-      (now.month == 1 ? e.date.year == now.year - 1 : e.date.year == now.year) && e.isDebit).toList();
-
-    _thisMonthTotal = thisMonthExpenses.fold(0, (sum, item) => sum + item.amount);
-    _lastMonthTotal = lastMonthExpenses.fold(0, (sum, item) => sum + item.amount);
-
-    if (_lastMonthTotal > 0) {
-      _growth = ((_thisMonthTotal - _lastMonthTotal) / _lastMonthTotal) * 100;
-    } else {
-      _growth = 0;
-    }
-
-    // Reset before recalculating
     _categoryTotals.clear();
     _biggestExpense = null;
     _topCategory = '-';
     _mostActiveGroup = '-';
 
-    // Category Totals
-    for (var e in thisMonthExpenses) {
+    final debitExpenses = inRangeExpenses.where((e) => e.isDebit).toList();
+
+    for (var e in debitExpenses) {
       final validCategories = e.categories.where((cat) {
         final lower = cat.toLowerCase().trim();
         if (lower == 'emi' || lower == 'recurring') return false;
-        
-        // Strict check: Only allow if it belongs to an active group or global category
-        return activeCategories.contains(lower);
+        return activeCategories.isEmpty || activeCategories.contains(lower);
       }).toList();
 
       if (validCategories.isEmpty) {
         _categoryTotals['Others'] = (_categoryTotals['Others'] ?? 0) + e.amount;
       } else {
         for (var cat in validCategories) {
-          _categoryTotals[cat] = (_categoryTotals[cat] ?? 0) + (e.amount / validCategories.length);
+          _categoryTotals[cat] = (_categoryTotals[cat] ?? 0) + e.shareForCategory(cat);
         }
       }
     }
@@ -104,13 +136,13 @@ class InsightsScreenState extends State<InsightsScreen> {
       _topCategory = top.key;
     }
 
-    if (thisMonthExpenses.isNotEmpty) {
-      _biggestExpense = thisMonthExpenses.reduce((a, b) => a.amount > b.amount ? a : b);
+    if (debitExpenses.isNotEmpty) {
+      _biggestExpense = debitExpenses.reduce((a, b) => a.amount > b.amount ? a : b);
     }
 
-    // Group activity
+    // Active Group calculation
     var groupCounts = <String, int>{};
-    for (var e in expenses) {
+    for (var e in inRangeExpenses) {
       if (e.groupId != null) {
         groupCounts[e.groupId!] = (groupCounts[e.groupId!] ?? 0) + 1;
       }
@@ -121,25 +153,94 @@ class InsightsScreenState extends State<InsightsScreen> {
       if (g != null) _mostActiveGroup = g.name;
     }
 
-    // Calculate Health Score
+    // Calculate Health Score (0 - 100)
     double score = 100;
-    if (_growth > 0) score -= _growth.clamp(0, 30); // deduct for spending more
-    if (thisMonthExpenses.isEmpty) score = 0; // No data → 0
+    if (_totalIncome > 0) {
+      final savingsRate = ((_totalIncome - _totalDebit) / _totalIncome).clamp(0.0, 1.0);
+      score = (savingsRate * 70) + 30;
+    } else {
+      if (_totalDebit > 50000) score = 45;
+      else if (_totalDebit > 20000) score = 65;
+      else if (_totalDebit > 0) score = 85;
+      else score = 100;
+    }
     _healthScore = score.toInt().clamp(0, 100);
 
-    setState(() {
-      _expenses = expenses;
-      _groups = groups;
-      _loading = false;
-    });
+    // Build Executive AI Summary
+    _aiExecutiveSummary = _generateLocalCfoSummary();
+
+    if (mounted) {
+      setState(() {
+        _expenses = expenses;
+        _groups = groups;
+        _udhaarPersons = persons;
+        _udhaarTxns = txns;
+        _emis = emis;
+        _recurrings = recurrings;
+        _wealthGoals = wealthGoals;
+        _loading = false;
+      });
+    }
+
+    // Try background Gemini API call for real AI executive summary
+    _fetchGeminiExecutiveSummary(expenses, groups, persons, txns, emis, recurrings, wealthGoals);
+  }
+
+  Future<void> _fetchGeminiExecutiveSummary(
+    List<ExpenseModel> expenses,
+    List<GroupModel> groups,
+    List<PersonModel> persons,
+    List<LedgerTransactionModel> txns,
+    List<EmiModel> emis,
+    List<RecurringExpenseModel> recurrings,
+    List<WealthGoal> wealthGoals,
+  ) async {
+    try {
+      final sysPrompt = GeminiAiService.buildSystemContext(
+        expenses: expenses,
+        groups: groups,
+        udhaarPersons: persons,
+        udhaarTxns: txns,
+        emis: emis,
+        recurrings: recurrings,
+        wealthGoals: wealthGoals,
+      );
+
+      final result = await GeminiAiService.generateContent(
+        systemInstruction: sysPrompt,
+        userPrompt: "Provide a 2-sentence executive summary of my financial health for ${DateFilter.label} with 1 key recommendation.",
+      );
+
+      if (result.isNotEmpty && mounted) {
+        setState(() {
+          _aiExecutiveSummary = result;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _generateLocalCfoSummary() {
+    if (_totalDebit == 0) {
+      return "No debit transactions recorded for ${DateFilter.label}. Your financial health score is optimal!";
+    }
+
+    final topCatStr = _topCategory != '-' ? "Top spending went to '$_topCategory' (₹${(_categoryTotals[_topCategory] ?? 0).toStringAsFixed(0)})." : "";
+    if (_totalIncome > 0) {
+      final savings = _totalIncome - _totalDebit;
+      if (savings >= 0) {
+        return "You're in a positive cash flow position for ${DateFilter.label} with ₹${savings.toStringAsFixed(0)} saved! $topCatStr";
+      } else {
+        return "You've spent ₹${savings.abs().toStringAsFixed(0)} more than your recorded income for ${DateFilter.label}. $topCatStr";
+      }
+    } else {
+      return "Total expenses for ${DateFilter.label} stand at ₹${_totalDebit.toStringAsFixed(0)}. $topCatStr";
+    }
   }
 
   void reload() {
     setState(() => _loading = true);
     _loadData();
   }
-
-  // ── UI Helpers ────────────────────────────────────────────────────────────
 
   BoxDecoration _cardDeco(bool isWhite) => BoxDecoration(
     color: isWhite ? Colors.white : const Color(0xFF120404),
@@ -150,8 +251,24 @@ class InsightsScreenState extends State<InsightsScreen> {
 
   Widget _sectionTitle(String title, bool isWhite) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Text(title, style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+    child: Text(
+      title,
+      style: GoogleFonts.sora(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: isWhite ? EleghartColors.accentDark : Colors.white,
+      ),
+    ),
   );
+
+  void _openChatWithPrompt(String prompt) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AiChatScreen(expenses: _expenses, groups: _groups),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -168,34 +285,48 @@ class InsightsScreenState extends State<InsightsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('AI Insights', style: GoogleFonts.sora(fontSize: 28, fontWeight: FontWeight.w800, color: textPrimary)),
-            Text('Your personal financial analyst', style: GoogleFonts.sora(fontSize: 13, color: textSec)),
+            // ── Header & Date Filter ────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('AI Insights', style: GoogleFonts.sora(fontSize: 26, fontWeight: FontWeight.w800, color: textPrimary)),
+                      Text('AI-Powered Financial CFO', style: GoogleFonts.sora(fontSize: 12, color: textSec)),
+                    ],
+                  ),
+                ),
+                const DateFilterPill(),
+              ],
+            ),
             const SizedBox(height: 20),
 
-            // SECTION 1: AI Summary Card
-            _buildSummaryCard(isWhite),
+            // SECTION 1: AI Executive Summary Card
+            _buildExecutiveSummaryCard(isWhite),
+            const SizedBox(height: 20),
+
+            // SECTION 2: Ask Eleghart AI Bar & Quick Prompt Chips
+            _buildAskAiSection(isWhite),
             const SizedBox(height: 24),
 
-            // SECTION 2: Ask Eleghart AI
-            _buildAskAiBar(isWhite),
-            const SizedBox(height: 24),
-
-            // SECTION 4: Health Score
+            // SECTION 3: Financial Health Score
             _sectionTitle('Financial Health', isWhite),
             _buildHealthScore(isWhite),
             const SizedBox(height: 24),
 
-            // SECTION 5: Quick Highlights
-            _sectionTitle('Quick Highlights', isWhite),
+            // SECTION 4: Quick Highlights
+            _sectionTitle('Key Metrics', isWhite),
             _buildHighlights(isWhite),
             const SizedBox(height: 24),
 
-            // SECTION 7: Distribution
+            // SECTION 5: Spending Distribution Donut Chart
             _sectionTitle('Spending Distribution', isWhite),
             _buildDistributionChart(isWhite),
             const SizedBox(height: 24),
 
-            // SECTION 6 & 9: Recommendations & Savings
+            // SECTION 6: Smart AI Recommendations
             _sectionTitle('AI Recommendations', isWhite),
             _buildRecommendations(isWhite),
           ],
@@ -204,81 +335,182 @@ class InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
-  Widget _buildSummaryCard(bool isWhite) {
-    final savings = _lastMonthTotal > 0 && _thisMonthTotal < _lastMonthTotal 
-        ? _lastMonthTotal - _thisMonthTotal 
-        : 0.0;
-
+  Widget _buildExecutiveSummaryCard(bool isWhite) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF7A0010), Color(0xFFCC0020)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: const Color(0xFFCC0020).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 6))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('You spent', style: GoogleFonts.sora(fontSize: 12, color: Colors.white70)),
-                Text('₹${_thisMonthTotal.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 12),
-                if (_growth > 0)
-                  Text('📈 Spending increased by ${_growth.toStringAsFixed(1)}%', style: GoogleFonts.sora(fontSize: 12, color: const Color(0xFFFFB3B3)))
-                else
-                  Text('📉 Spending decreased by ${_growth.abs().toStringAsFixed(1)}%', style: GoogleFonts.sora(fontSize: 12, color: const Color(0xFF00FF88))),
-                if (savings > 0)
-                  Text('💡 Potential savings: ₹${savings.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-              ],
-            ),
+        gradient: LinearGradient(
+          colors: isWhite
+              ? [const Color(0xFF8B0010), const Color(0xFFCC0020)]
+              : [const Color(0xFF5A000A), const Color(0xFF990018)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFCC0020).withOpacity(isWhite ? 0.25 : 0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
-          Container(
-            width: 70, height: 70,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Image.asset('assets/icons/eleghart_icon.png'),
-            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'AI CFO Scorecard (${DateFilter.label})',
+                style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _aiExecutiveSummary,
+            style: GoogleFonts.sora(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _summaryPill('Income: ₹${_totalIncome.toStringAsFixed(0)}', const Color(0xFF22C55E)),
+              const SizedBox(width: 8),
+              _summaryPill('Spent: ₹${_totalDebit.toStringAsFixed(0)}', Colors.white70),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAskAiBar(bool isWhite) {
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(expenses: _expenses, groups: _groups))),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isWhite ? const Color(0xFFF8F8F8) : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.1)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.auto_awesome_rounded, color: Color(0xFFCC0020), size: 22),
-            const SizedBox(width: 12),
-            Expanded(child: Text('Ask Eleghart AI...', style: GoogleFonts.sora(fontSize: 14, color: isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFFCC0020).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: Text('Ask', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFCC0020))),
-            ),
-          ],
-        ),
+  Widget _summaryPill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }
 
+  Widget _buildAskAiSection(bool isWhite) {
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AiChatScreen(expenses: _expenses, groups: _groups),
+            ),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isWhite ? Colors.white : const Color(0xFF160606),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.3)),
+              boxShadow: isWhite
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFCC0020).withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      )
+                    ]
+                  : [],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, color: Color(0xFFCC0020), size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Ask Eleghart AI CFO...',
+                    style: GoogleFonts.sora(
+                      fontSize: 14,
+                      color: isWhite
+                          ? EleghartColors.accentDark.withOpacity(0.5)
+                          : Colors.white54,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCC0020),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Chat',
+                    style: GoogleFonts.sora(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 34,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _quickPrompts.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final prompt = _quickPrompts[i];
+              return GestureDetector(
+                onTap: () => _openChatWithPrompt(prompt),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCC0020).withOpacity(isWhite ? 0.08 : 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    prompt,
+                    style: GoogleFonts.sora(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isWhite ? EleghartColors.accentDark : Colors.white70,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildHealthScore(bool isWhite) {
-    String interpretation = "Average";
-    Color color = Colors.orangeAccent;
-    if (_healthScore >= 90) { interpretation = "Excellent"; color = const Color(0xFF00CC66); }
-    else if (_healthScore >= 75) { interpretation = "Good"; color = Colors.blueAccent; }
-    else if (_healthScore < 50) { interpretation = "Needs Attention"; color = const Color(0xFFFF3355); }
+    String interpretation = "Fair";
+    Color color = Colors.amber;
+    if (_healthScore >= 85) {
+      interpretation = "Excellent";
+      color = const Color(0xFF00CC66);
+    } else if (_healthScore >= 70) {
+      interpretation = "Good";
+      color = Colors.blueAccent;
+    } else if (_healthScore < 50) {
+      interpretation = "Needs Attention";
+      color = const Color(0xFFFF3355);
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -286,27 +518,73 @@ class InsightsScreenState extends State<InsightsScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 140, height: 140,
+            width: 120,
+            height: 120,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width: 120, height: 120,
-                  child: CircularProgressIndicator(value: _healthScore / 100, strokeWidth: 12, color: color, backgroundColor: color.withOpacity(0.15)),
+                  width: 100,
+                  height: 100,
+                  child: CircularProgressIndicator(
+                    value: _healthScore / 100,
+                    strokeWidth: 10,
+                    color: color,
+                    backgroundColor: color.withOpacity(0.15),
+                  ),
                 ),
-                Text('$_healthScore', style: GoogleFonts.sora(fontSize: 28, fontWeight: FontWeight.w800, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$_healthScore',
+                      style: GoogleFonts.sora(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: isWhite ? EleghartColors.accentDark : Colors.white,
+                      ),
+                    ),
+                    Text(
+                      '/ 100',
+                      style: GoogleFonts.sora(
+                        fontSize: 10,
+                        color: isWhite ? Colors.black45 : Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Health Score', style: GoogleFonts.sora(fontSize: 14, color: isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54)),
-                Text(interpretation, style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: color)),
-                const SizedBox(height: 4),
-                Text('Based on spending stability and budget compliance.', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white38)),
+                Text(
+                  'Score Status',
+                  style: GoogleFonts.sora(
+                    fontSize: 12,
+                    color: isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54,
+                  ),
+                ),
+                Text(
+                  interpretation,
+                  style: GoogleFonts.sora(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Analyzed against spending rate & net financial velocity for ${DateFilter.label}.',
+                  style: GoogleFonts.sora(
+                    fontSize: 11,
+                    color: isWhite ? EleghartColors.accentDark.withOpacity(0.6) : Colors.white38,
+                    height: 1.3,
+                  ),
+                ),
               ],
             ),
           ),
@@ -328,9 +606,9 @@ class InsightsScreenState extends State<InsightsScreen> {
         const SizedBox(height: 12),
         Row(
           children: [
-            _highlightCard('Active Group', _mostActiveGroup, 'Most transactions', Icons.group_rounded, isWhite),
+            _highlightCard('Active Group', _mostActiveGroup, 'Most activity', Icons.group_rounded, isWhite),
             const SizedBox(width: 12),
-            _highlightCard('Month Growth', '${_growth > 0 ? '+' : ''}${_growth.toStringAsFixed(1)}%', 'vs last month', Icons.trending_up_rounded, isWhite),
+            _highlightCard('Total Spent', '₹${_totalDebit.toStringAsFixed(0)}', DateFilter.label, Icons.account_balance_wallet_rounded, isWhite),
           ],
         ),
       ],
@@ -357,14 +635,25 @@ class InsightsScreenState extends State<InsightsScreen> {
   }
 
   Widget _buildDistributionChart(bool isWhite) {
-    if (_categoryTotals.isEmpty) return const SizedBox.shrink();
+    if (_categoryTotals.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: _cardDeco(isWhite),
+        child: Center(
+          child: Text(
+            'No expense data for ${DateFilter.label}',
+            style: GoogleFonts.sora(fontSize: 13, color: isWhite ? Colors.black54 : Colors.white54),
+          ),
+        ),
+      );
+    }
 
-    // 1. Process data: Group small categories (< 3% for higher detail)
     Map<String, double> processedTotals = {};
     double otherTotal = 0;
     
     for (var entry in _categoryTotals.entries) {
-      double percentage = (entry.value / _thisMonthTotal) * 100;
+      double percentage = _totalDebit > 0 ? (entry.value / _totalDebit) * 100 : 0;
       if (percentage < 3) {
         otherTotal += entry.value;
       } else {
@@ -376,158 +665,123 @@ class InsightsScreenState extends State<InsightsScreen> {
       processedTotals['Others'] = otherTotal;
     }
     
-    // Sort by largest first, 'Others' at the end
     var sortedEntries = processedTotals.entries.toList()
       ..sort((a, b) => a.key == 'Others' ? 1 : (b.key == 'Others' ? -1 : b.value.compareTo(a.value)));
 
-    // Strict Elegant Monochromatic Red Palette
     final List<Color> colors = [
-      const Color(0xFF7F1D1D), // Deep wine
-      const Color(0xFF991B1B), // Rich crimson
-      const Color(0xFFB91C1C), // Ruby red
-      const Color(0xFFDC2626), // Premium red
-      const Color(0xFFEF4444), // Soft coral
-      const Color(0xFFF87171), // Blush red
-      const Color(0xFFFCA5A5), // Muted rose
+      const Color(0xFF7F1D1D),
+      const Color(0xFF991B1B),
+      const Color(0xFFB91C1C),
+      const Color(0xFFDC2626),
+      const Color(0xFFEF4444),
+      const Color(0xFFF87171),
+      const Color(0xFFFCA5A5),
     ];
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.95 + (0.05 * value),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
-        );
-      },
-      child: Container(
-        height: 240,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-        decoration: BoxDecoration(
-          color: isWhite ? Colors.white : const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: isWhite ? [
-            BoxShadow(
-              color: const Color(0xFF7F1D1D).withOpacity(0.08),
-              blurRadius: 32,
-              offset: const Offset(0, 12),
-            )
-          ] : [],
-        ),
-        child: Row(
-          children: [
-            // Left: Elegant Donut Chart
-            Expanded(
-              flex: 11,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  PieChart(
-                    PieChartData(
-                      pieTouchData: PieTouchData(enabled: false),
-                      sectionsSpace: 4, // Subtle spacing
-                      centerSpaceRadius: 65, // Thin elegant ring
-                      sections: sortedEntries.asMap().entries.map((mapEntry) {
-                        final idx = mapEntry.key;
-                        final e = mapEntry.value;
-                        final color = colors[idx % colors.length];
-                        
-                        return PieChartSectionData(
-                          color: color,
-                          value: e.value,
-                          title: '',
-                          showTitle: false, // Clean, no clutter
-                          radius: 12, // Thin elegant ring
-                        );
-                      }).toList(),
-                    ),
+    return Container(
+      height: 240,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+      decoration: _cardDeco(isWhite),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 11,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                PieChart(
+                  PieChartData(
+                    pieTouchData: PieTouchData(enabled: false),
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 55,
+                    sections: sortedEntries.asMap().entries.map((mapEntry) {
+                      final idx = mapEntry.key;
+                      final e = mapEntry.value;
+                      final color = colors[idx % colors.length];
+                      
+                      return PieChartSectionData(
+                        color: color,
+                        value: e.value,
+                        title: '',
+                        showTitle: false,
+                        radius: 14,
+                      );
+                    }).toList(),
                   ),
-                  // Center Content
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('TOTAL SPENDING', 
-                        style: GoogleFonts.sora(
-                          fontSize: 9, 
-                          fontWeight: FontWeight.w700, 
-                          letterSpacing: 0.5,
-                          color: isWhite ? const Color(0xFF7F1D1D).withOpacity(0.5) : Colors.white54
-                        )
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('TOTAL SPENT', 
+                      style: GoogleFonts.sora(
+                        fontSize: 9, 
+                        fontWeight: FontWeight.w700, 
+                        letterSpacing: 0.5,
+                        color: isWhite ? const Color(0xFF7F1D1D).withOpacity(0.6) : Colors.white54,
                       ),
-                      const SizedBox(height: 4),
-                      Text('₹${_thisMonthTotal.toStringAsFixed(0)}', 
+                    ),
+                    const SizedBox(height: 2),
+                    Text('₹${_totalDebit.toStringAsFixed(0)}', 
+                      style: GoogleFonts.sora(
+                        fontSize: 18, 
+                        fontWeight: FontWeight.w800, 
+                        color: isWhite ? const Color(0xFF7F1D1D) : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 10,
+            child: ListView(
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
+              children: sortedEntries.asMap().entries.map((mapEntry) {
+                final idx = mapEntry.key;
+                final e = mapEntry.value;
+                final color = colors[idx % colors.length];
+                final percentage = _totalDebit > 0 ? (e.value / _totalDebit) * 100 : 0;
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 9, 
+                        height: 9, 
+                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          e.key, 
+                          maxLines: 1, 
+                          overflow: TextOverflow.ellipsis, 
+                          style: GoogleFonts.sora(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.w600, 
+                            color: isWhite ? const Color(0xFF1E1E1E) : Colors.white,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${percentage.toStringAsFixed(1)}%', 
                         style: GoogleFonts.sora(
-                          fontSize: 20, 
-                          fontWeight: FontWeight.w800, 
-                          color: isWhite ? const Color(0xFF7F1D1D) : Colors.white
-                        )
+                          fontSize: 11, 
+                          fontWeight: FontWeight.w700, 
+                          color: isWhite ? const Color(0xFF7F1D1D) : Colors.white70,
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-            const SizedBox(width: 24),
-            // Right: Minimal Vertical Legend
-            Expanded(
-              flex: 9,
-              child: ListView(
-                shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
-                children: sortedEntries.asMap().entries.map((mapEntry) {
-                  final idx = mapEntry.key;
-                  final e = mapEntry.value;
-                  final color = colors[idx % colors.length];
-                  final percentage = (e.value / _thisMonthTotal) * 100;
-                  
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 10, 
-                          height: 10, 
-                          decoration: BoxDecoration(
-                            color: color, 
-                            shape: BoxShape.circle,
-                            boxShadow: isWhite ? [
-                              BoxShadow(color: color.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2))
-                            ] : [],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            e.key, 
-                            maxLines: 1, 
-                            overflow: TextOverflow.ellipsis, 
-                            style: GoogleFonts.sora(
-                              fontSize: 13, 
-                              fontWeight: FontWeight.w600, 
-                              color: isWhite ? const Color(0xFF1E1E1E) : Colors.white
-                            )
-                          ),
-                        ),
-                        Text(
-                          '${percentage.toStringAsFixed(1)}%', 
-                          style: GoogleFonts.sora(
-                            fontSize: 12, 
-                            fontWeight: FontWeight.w700, 
-                            color: isWhite ? const Color(0xFF7F1D1D).withOpacity(0.8) : Colors.white70
-                          )
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -535,10 +789,22 @@ class InsightsScreenState extends State<InsightsScreen> {
   Widget _buildRecommendations(bool isWhite) {
     return Column(
       children: [
-        if (_growth > 0 && _topCategory != '-')
-          _recCard(Icons.warning_amber_rounded, 'Overspending detected', 'You spent ${_growth.toStringAsFixed(0)}% more this month. Consider reducing spending in "$_topCategory" to stay on track.', const Color(0xFFCC6600), isWhite),
+        if (_topCategory != '-')
+          _recCard(
+            Icons.warning_amber_rounded,
+            'Top Category Focus',
+            'Your highest expenditure in ${DateFilter.label} is "$_topCategory" (₹${(_categoryTotals[_topCategory] ?? 0).toStringAsFixed(0)}). Monitoring this category can net immediate savings.',
+            const Color(0xFFCC6600),
+            isWhite,
+          ),
         const SizedBox(height: 10),
-        _recCard(Icons.savings_rounded, 'Savings Goal', 'If you reduce non-essential expenses by 15%, you can easily save ₹${(_thisMonthTotal * 0.15).toStringAsFixed(0)} next month.', const Color(0xFF00CC66), isWhite),
+        _recCard(
+          Icons.savings_rounded,
+          'Savings Optimization',
+          'Reducing discretionary categories by 15% could add ₹${(_totalDebit * 0.15).toStringAsFixed(0)} to your monthly savings pool.',
+          const Color(0xFF00CC66),
+          isWhite,
+        ),
       ],
     );
   }

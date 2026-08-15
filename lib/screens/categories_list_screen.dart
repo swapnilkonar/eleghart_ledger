@@ -12,6 +12,8 @@ import '../utils/date_filter.dart';
 import '../widgets/date_filter_pill.dart';
 import 'category_detail_screen.dart';
 
+import '../utils/data_sync.dart';
+
 class CategoriesListScreen extends StatefulWidget {
   final List<GroupModel> allGroups;
   final List<ExpenseModel> allExpenses;
@@ -41,6 +43,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
     _loadInitialData();
     DateFilter.notifier.addListener(_onFilter);
     AppThemeNotifier.instance.addListener(_onFilter);
+    DataSyncNotifier.instance.addListener(_reloadData);
   }
 
   Future<void> _loadInitialData() async {
@@ -87,6 +90,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
   void dispose() {
     DateFilter.notifier.removeListener(_onFilter);
     AppThemeNotifier.instance.removeListener(_onFilter);
+    DataSyncNotifier.instance.removeListener(_reloadData);
     super.dispose();
   }
 
@@ -104,7 +108,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
     double debit = 0;
     double credit = 0;
     for (final e in related) {
-      final share = e.categoryShare;
+      final share = e.shareForCategory(category);
       if (e.type == 'debit') {
         debit += share;
       } else {
@@ -368,28 +372,25 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
                                     color: AppThemeNotifier.isWhite
-                                        ? Colors.white
-                                        : Colors.white.withOpacity(0.04),
-                                    borderRadius: BorderRadius.circular(16),
+                                        ? Colors.white.withValues(alpha: 0.92)
+                                        : const Color(0xFF140306).withValues(alpha: 0.78),
+                                    borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
                                       color: AppThemeNotifier.isWhite
-                                          ? const Color(0xFFEEEEEE)
-                                          : const Color(
-                                              0xFFCC0020,
-                                            ).withOpacity(0.15),
-                                      width: 1,
+                                          ? const Color(0xFFCC0020).withValues(alpha: 0.14)
+                                          : const Color(0xFFCC0020).withValues(alpha: 0.22),
+                                      width: 1.2,
                                     ),
-                                    boxShadow: AppThemeNotifier.isWhite
-                                        ? [
-                                            BoxShadow(
-                                              color: const Color(
-                                                0xFFCC0020,
-                                              ).withOpacity(0.10),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : [],
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFCC0020).withValues(
+                                          alpha: AppThemeNotifier.isWhite ? 0.06 : 0.16,
+                                        ),
+                                        blurRadius: 14,
+                                        spreadRadius: 1,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
                                   child: Row(
                                     children: [

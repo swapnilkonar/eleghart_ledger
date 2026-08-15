@@ -1,12 +1,12 @@
-import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../utils/app_theme.dart';
-import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/pin_service.dart';
+import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'home_dashboard.dart';
 import 'set_pin_screen.dart';
 
@@ -20,52 +20,53 @@ class PinUnlockScreen extends StatefulWidget {
 
 class _PinUnlockScreenState extends State<PinUnlockScreen>
     with TickerProviderStateMixin {
-  final _pinController = TextEditingController();
-  final _focusNode = FocusNode();
-  bool _unlocking = false;
-  bool _errorGlow = false;
   String _pin = '';
+  bool _unlocking = false;
+  bool _errorState = false;
   int _remainingAttempts = PinService.maxAttempts;
   int _lockoutSecondsLeft = 0;
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
 
+  late AnimationController _pulseController;
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
-  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
     AppThemeNotifier.instance.addListener(_onThemeChanged);
 
-    _shakeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    _shakeAnimation = Tween<double>(begin: 0, end: 14)
-        .chain(CurveTween(curve: Curves.elasticIn))
-        .animate(_shakeController);
-
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _shakeAnimation = Tween<double>(begin: 0, end: 14)
+        .chain(CurveTween(curve: Curves.elasticIn))
+        .animate(_shakeController);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
       _initBiometric();
       _checkLockout();
     });
   }
 
+  void _onThemeChanged() => setState(() {});
+
   Future<void> _initBiometric() async {
     final available = await PinService.isBiometricAvailable();
     final enabled = await PinService.isBiometricEnabled();
-    if (mounted) setState(() {
-      _biometricAvailable = available;
-      _biometricEnabled = enabled;
-    });
+    if (mounted) {
+      setState(() {
+        _biometricAvailable = available;
+        _biometricEnabled = enabled;
+      });
+    }
     if (available && enabled) _tryBiometric();
   }
 
@@ -99,57 +100,78 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
     if (ok && mounted) _navigateHome();
   }
 
-  void _onThemeChanged() => setState(() {});
-
   @override
   void dispose() {
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
-    _shakeController.dispose();
     _pulseController.dispose();
-    _pinController.dispose();
-    _focusNode.dispose();
+    _shakeController.dispose();
     super.dispose();
   }
 
-  void _onPinChanged(String val) {
-    setState(() => _pin = val);
-    if (val.length == 4) _unlock();
+  void _handleKeyPress(String key) {
+    if (_unlocking || _lockoutSecondsLeft > 0) return;
+    if (_pin.length >= 4) return;
+
+    HapticFeedback.lightImpact();
+
+    setState(() => _pin += key);
+    if (_pin.length == 4) {
+      _verifyPin();
+    }
   }
 
-  Future<void> _unlock() async {
+  void _handleBackspace() {
+    if (_unlocking || _pin.isEmpty) return;
+    HapticFeedback.selectionClick();
+    setState(() => _pin = _pin.substring(0, _pin.length - 1));
+  }
+
+  Future<void> _verifyPin() async {
     if (_lockoutSecondsLeft > 0) {
-      _toast('Too many attempts. Try in $_lockoutSecondsLeft seconds.');
+      _toast('Locked out. Please wait $_lockoutSecondsLeft seconds.');
       return;
     }
-    final pin = _pin.trim();
-    if (pin.length != 4) {
-      _failFeedback('Enter your 4-digit PIN');
-      return;
-    }
+
     setState(() => _unlocking = true);
+
     try {
-      final correct = await PinService.verifyPin(pin);
+      final correct = await PinService.verifyPin(_pin);
       if (!mounted) return;
+
       if (correct) {
         HapticFeedback.lightImpact();
         _navigateHome();
       } else {
         final rem = await PinService.remainingAttempts();
-        setState(() {
-          _unlocking = false;
-          _remainingAttempts = rem;
-        });
-        _failFeedback('Incorrect PIN — $rem attempt${rem == 1 ? '' : 's'} left');
+        _failFeedback('Incorrect PIN — $rem attempt${rem == 1 ? '' : 's'} left', rem);
       }
     } on PinLockedException catch (e) {
       if (!mounted) return;
-      setState(() {
-        _unlocking = false;
-        _lockoutSecondsLeft = e.secondsRemaining;
-      });
+      setState(() => _lockoutSecondsLeft = e.secondsRemaining);
       _startLockoutTimer();
-      _failFeedback('Too many attempts. Locked for ${e.secondsRemaining}s');
+      _failFeedback('Too many failed attempts. Locked for ${e.secondsRemaining}s', 0);
+    } finally {
+      if (mounted) setState(() => _unlocking = false);
     }
+  }
+
+  void _failFeedback(String msg, int rem) {
+    HapticFeedback.heavyImpact();
+    _shakeController.forward(from: 0);
+    setState(() {
+      _errorState = true;
+      _remainingAttempts = rem;
+    });
+    _toast(msg);
+
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) {
+        setState(() {
+          _pin = '';
+          _errorState = false;
+        });
+      }
+    });
   }
 
   void _navigateHome() {
@@ -161,43 +183,48 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
     );
   }
 
-  void _failFeedback(String msg) {
-    _pinController.clear();
-    setState(() {
-      _pin = '';
-      _errorGlow = true;
-    });
-    _shakeController.forward(from: 0);
-    HapticFeedback.heavyImpact();
-    _toast(msg);
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted) setState(() => _errorGlow = false);
-    });
-  }
-
   Future<void> _forgotPin() async {
+    final isWhite = AppThemeNotifier.isWhite;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF1A0005),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF1B0205),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(
-          'Reset PIN?',
-          style: TextStyle(color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white, fontWeight: FontWeight.w700),
+          'Reset Security PIN?',
+          style: GoogleFonts.sora(
+            color: isWhite ? EleghartColors.accentDark : Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         content: Text(
-          'If you forgot your PIN, you can set a new one.\n\nThis will replace your old PIN.',
-          style: TextStyle(color: AppThemeNotifier.isWhite ? Colors.black54 : Colors.white70),
+          'If you forgot your passkey, you can clear and create a new 4-digit PIN.',
+          style: GoogleFonts.sora(
+            fontSize: 13,
+            color: isWhite ? Colors.black54 : Colors.white70,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: AppThemeNotifier.isWhite ? Colors.black45 : Colors.white54)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.sora(
+                color: isWhite ? Colors.black45 : Colors.white54,
+              ),
+            ),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF2040)),
-            child: const Text('Reset PIN', style: TextStyle(fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFCC0020),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: Text(
+              'Reset PIN',
+              style: GoogleFonts.sora(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -220,189 +247,179 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(msg, style: GoogleFonts.sora(fontWeight: FontWeight.w600)),
         backgroundColor: const Color(0xFF8E1D1D),
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isWhite = AppThemeNotifier.isWhite;
     final size = MediaQuery.of(context).size;
-    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final primaryColor = isWhite ? EleghartColors.accentDark : Colors.white;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.black,
+      backgroundColor: isWhite ? Colors.white : const Color(0xFF0A0204),
       body: Stack(
         children: [
-          // Background image
-          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.25)),
+          const Positioned.fill(child: ThemedBackground()),
 
-          // Subtle light rays from logo
-          Positioned.fill(
-            child: CustomPaint(painter: _PinRaysPainter()),
-          ),
-
-          // Main content
           SafeArea(
-            child: GestureDetector(
-              onTap: () => _focusNode.requestFocus(),
-              behavior: HitTestBehavior.translucent,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    SizedBox(height: size.height * 0.04),
+            child: Column(
+              children: [
+                SizedBox(height: size.height * 0.03),
 
-                    // Logo with pulsing red glow
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (_, child) => Container(
-                        height: size.height * 0.30,
+                // Animated Logo Emblem
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (_, child) => Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFCC0020).withValues(
+                            alpha: 0.22 + _pulseController.value * 0.24,
+                          ),
+                          blurRadius: 40 + _pulseController.value * 22,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: child,
+                  ),
+                  child: Image.asset(
+                    'assets/icons/eleghart_icon.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // Greeting & Title
+                Text(
+                  widget.userName.isNotEmpty
+                      ? 'Welcome, ${widget.userName}'
+                      : 'Welcome Back',
+                  style: GoogleFonts.sora(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Enter your 4-digit security PIN',
+                  style: GoogleFonts.sora(
+                    fontSize: 13,
+                    color: isWhite ? Colors.black54 : Colors.white54,
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // PIN Dots Indicator with Shake Animation
+                AnimatedBuilder(
+                  animation: _shakeAnimation,
+                  builder: (context, child) => Transform.translate(
+                    offset: Offset(_shakeAnimation.value, 0),
+                    child: child,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(4, (index) {
+                      final filled = index < _pin.length;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.symmetric(horizontal: 10),
+                        width: filled ? 22 : 18,
+                        height: filled ? 22 : 18,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(
-                                  0.15 + _pulseController.value * 0.14),
-                              blurRadius: 60 + _pulseController.value * 25,
-                              spreadRadius: 12,
-                            ),
-                          ],
-                        ),
-                        child: child,
-                      ),
-                      child: Image.asset(
-                        'assets/icons/eleghart_icon.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      'Enter your PIN',
-                      style: GoogleFonts.sora(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Welcome back!',
-                      style: GoogleFonts.sora(
-                        fontSize: 14,
-                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.6) : Colors.white54,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-
-                    SizedBox(height: size.height * 0.045),
-
-                    // PIN dots with shake animation
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: AnimatedBuilder(
-                        animation: _shakeAnimation,
-                        builder: (context, child) => Transform.translate(
-                          offset: Offset(_shakeAnimation.value, 0),
-                          child: child,
-                        ),
-                        child: GestureDetector(
-                          onTap: () => _focusNode.requestFocus(),
-                          child: _buildPinDotsContainer(),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // Lockout / attempts info
-                    if (_lockoutSecondsLeft > 0)
-                      Text(
-                        'Locked — try again in $_lockoutSecondsLeft s',
-                        style: GoogleFonts.sora(
-                          fontSize: 13,
-                          color: const Color(0xFFFF2040),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      )
-                    else if (_remainingAttempts < PinService.maxAttempts)
-                      Text(
-                        '$_remainingAttempts attempt${_remainingAttempts == 1 ? '' : 's'} remaining',
-                        style: GoogleFonts.sora(
-                          fontSize: 13,
-                          color: Colors.orange,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-
-                    // Forgot PIN
-                    TextButton(
-                      onPressed: _forgotPin,
-                      child: Text(
-                        'Forgot PIN?',
-                        style: GoogleFonts.sora(
-                          color: const Color(0xFFFF2040),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // Biometric button
-                    if (_biometricAvailable && _biometricEnabled)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: IconButton(
-                          onPressed: _tryBiometric,
-                          iconSize: 44,
-                          icon: const Icon(
-                            Icons.fingerprint_rounded,
-                            color: Color(0xFFCC0020),
+                          color: filled
+                              ? (_errorState
+                                  ? const Color(0xFFFF2040)
+                                  : const Color(0xFFCC0020))
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: filled
+                                ? (_errorState
+                                    ? const Color(0xFFFF2040)
+                                    : const Color(0xFFCC0020))
+                                : (isWhite
+                                    ? const Color(0xFFCC0020).withValues(alpha: 0.35)
+                                    : Colors.white38),
+                            width: 2,
                           ),
-                          tooltip: 'Unlock with biometrics',
+                          boxShadow: filled
+                              ? [
+                                  BoxShadow(
+                                    color: (_errorState
+                                            ? const Color(0xFFFF2040)
+                                            : const Color(0xFFCC0020))
+                                        .withValues(alpha: 0.55),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ]
+                              : null,
                         ),
-                      ),
-
-                    // Unlock button
-                    _buildUnlockButton(),
-
-                    SizedBox(height: safeBottom + 24),
-                  ],
+                      );
+                    }),
+                  ),
                 ),
-              ),
-            ),
-          ),
 
-          // Hidden text field to capture keyboard input
-          Positioned(
-            left: -300,
-            top: 0,
-            child: SizedBox(
-              width: 10,
-              height: 10,
-              child: TextField(
-                controller: _pinController,
-                focusNode: _focusNode,
-                maxLength: 4,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                obscureText: true,
-                decoration: const InputDecoration(
-                  counterText: '',
-                  border: InputBorder.none,
+                const SizedBox(height: 14),
+
+                // Status & Lockout Info
+                if (_lockoutSecondsLeft > 0)
+                  Text(
+                    'App locked. Try again in $_lockoutSecondsLeft s',
+                    style: GoogleFonts.sora(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFFF2040),
+                    ),
+                  )
+                else if (_remainingAttempts < PinService.maxAttempts)
+                  Text(
+                    '$_remainingAttempts attempt${_remainingAttempts == 1 ? '' : 's'} remaining',
+                    style: GoogleFonts.sora(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                    ),
+                  )
+                else
+                  const SizedBox(height: 16),
+
+                const Spacer(),
+
+                // Custom Numpad Keyboard Grid
+                _buildNumpad(isWhite),
+
+                const SizedBox(height: 12),
+
+                // Forgot PIN Action Button
+                TextButton(
+                  onPressed: _forgotPin,
+                  child: Text(
+                    'Forgot PIN?',
+                    style: GoogleFonts.sora(
+                      color: const Color(0xFFCC0020),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
-                onChanged: _onPinChanged,
-              ),
+
+                SizedBox(height: size.height * 0.02),
+              ],
             ),
           ),
         ],
@@ -410,142 +427,131 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
     );
   }
 
-  Widget _buildPinDotsContainer() {
-    final borderColor =
-        _errorGlow ? const Color(0xFFFF2040) : const Color(0xFF8E1D1D);
-    final glowColor = _errorGlow
-        ? Colors.red.withOpacity(0.6)
-        : const Color(0xFF8E1D1D).withOpacity(0.5);
-
+  Widget _buildNumpad(bool isWhite) {
     return Container(
-      width: double.infinity,
-      height: 68,
-      decoration: BoxDecoration(
-        color: AppThemeNotifier.isWhite ? const Color(0xFFFFECEC) : Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: 1.8),
-        boxShadow: [
-          BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 36),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['1', '2', '3'].map((k) => _buildKey(k, isWhite)).toList(),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['4', '5', '6'].map((k) => _buildKey(k, isWhite)).toList(),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['7', '8', '9'].map((k) => _buildKey(k, isWhite)).toList(),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Biometric key or empty space
+              if (_biometricAvailable && _biometricEnabled)
+                _buildActionKey(
+                  icon: Icons.fingerprint_rounded,
+                  onPressed: _tryBiometric,
+                  isWhite: isWhite,
+                  iconColor: const Color(0xFFCC0020),
+                )
+              else
+                const SizedBox(width: 72, height: 72),
+
+              _buildKey('0', isWhite),
+
+              _buildActionKey(
+                icon: Icons.backspace_outlined,
+                onPressed: _handleBackspace,
+                isWhite: isWhite,
+              ),
+            ],
+          ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(4, (i) {
-          final filled = i < _pin.length;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: filled ? const Color(0xFFCC0020) : Colors.transparent,
-              border: Border.all(
-                color: filled ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.35) : Colors.white54),
-                width: 2,
-              ),
-              boxShadow: filled
-                  ? [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.55),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : null,
-            ),
-          );
-        }),
-      ),
     );
   }
 
-  Widget _buildUnlockButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        width: double.infinity,
-        height: 58,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.45),
-              blurRadius: 22,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
+  Widget _buildKey(String key, bool isWhite) {
+    final keyBg = isWhite
+        ? Colors.white.withValues(alpha: 0.85)
+        : Colors.white.withValues(alpha: 0.08);
+    final textColor = isWhite ? EleghartColors.accentDark : Colors.white;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _handleKeyPress(key),
+        borderRadius: BorderRadius.circular(36),
+        splashColor: const Color(0xFFCC0020).withValues(alpha: 0.25),
+        child: Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: keyBg,
+            border: Border.all(
+              color: isWhite
+                  ? const Color(0xFFCC0020).withValues(alpha: 0.20)
+                  : Colors.white.withValues(alpha: 0.12),
+              width: 1.2,
             ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: _unlocking ? null : _unlock,
-          icon: _unlocking
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.lock_rounded, color: Colors.white, size: 22),
-          label: _unlocking
-              ? const SizedBox.shrink()
-              : Text(
-                  'Unlock',
-                  style: GoogleFonts.sora(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+            boxShadow: isWhite
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
+                  ]
+                : null,
+          ),
+          child: Text(
+            key,
+            style: GoogleFonts.sora(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
           ),
         ),
       ),
-    ),
     );
   }
-}
 
-class _PinRaysPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.28);
-    final angles = [-160.0, -140.0, -120.0, 120.0, 140.0, 160.0];
-
-    for (final angleDeg in angles) {
-      final rad = angleDeg * pi / 180.0;
-      final length = size.width * 0.95;
-      final end = Offset(
-        center.dx + cos(rad) * length,
-        center.dy + sin(rad) * length,
-      );
-
-      final paint = Paint()
-        ..strokeWidth = 1.0
-        ..shader = ui.Gradient.linear(
-          center,
-          end,
-          [
-            const Color(0xFFCC0020).withOpacity(0.18),
-            Colors.transparent,
-          ],
-        );
-
-      canvas.drawLine(center, end, paint);
-    }
+  Widget _buildActionKey({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required bool isWhite,
+    Color? iconColor,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(36),
+        splashColor: const Color(0xFFCC0020).withValues(alpha: 0.25),
+        child: Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isWhite
+                ? Colors.white.withValues(alpha: 0.65)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: iconColor ?? (isWhite ? EleghartColors.accentDark : Colors.white70),
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

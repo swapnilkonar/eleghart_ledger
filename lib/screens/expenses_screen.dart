@@ -6,12 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../models/group_model.dart';
 import '../services/ai_extraction_service.dart';
+import '../services/pdf_export_service.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import 'add_expense_screen.dart';
+import 'export_pdf_screen.dart';
 import 'extracted_expenses_screen.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -455,6 +461,84 @@ class _ExpensesScreenState extends State<ExpensesScreen>
     if (added == true && mounted) Navigator.pop(context);
   }
 
+  // ─── Export PDF / PNG / JPG Reports ─────────────────────────────────────
+
+  Future<void> _exportAsPdf() async {
+    final groups = await StorageService.loadGroups();
+    final expenses = await StorageService.loadExpenses();
+    final group = groups.isNotEmpty
+        ? groups.first
+        : GroupModel(id: 'all', name: 'All Expenses', categories: []);
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ExportPdfScreen(
+            group: group,
+            allExpenses: expenses,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportAsImage({required bool isJpg}) async {
+    setState(() {
+      _processing = true;
+      _statusText = isJpg ? 'Generating JPG report image...' : 'Generating PNG report image...';
+    });
+
+    try {
+      final groups = await StorageService.loadGroups();
+      final expenses = await StorageService.loadExpenses();
+      final group = groups.isNotEmpty
+          ? groups.first
+          : GroupModel(id: 'all', name: 'All Expenses', categories: []);
+
+      final now = DateTime.now();
+      final from = DateTime(now.year, now.month - 1, now.day);
+      final pdfFile = await PdfExportService.exportGroupReport(
+        group: group,
+        expenses: expenses,
+        from: from,
+        to: now,
+      );
+
+      final pdfBytes = await pdfFile.readAsBytes();
+      final images = Printing.raster(pdfBytes, dpi: 200);
+      final firstPage = await images.first;
+      final imageBytes = await firstPage.toPng();
+
+      final tempDir = await getTemporaryDirectory();
+      final ext = isJpg ? 'jpg' : 'png';
+      final imgPath = '${tempDir.path}/eleghart_expense_report.$ext';
+      final imgFile = File(imgPath);
+      await imgFile.writeAsBytes(imageBytes);
+
+      if (mounted) {
+        setState(() {
+          _processing = false;
+          _statusText = 'Ready to extract expenses';
+        });
+        await Share.shareXFiles(
+          [XFile(imgFile.path)],
+          text: 'Eleghart Expense Report ($ext)',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _processing = false;
+          _statusText = 'Ready to extract expenses';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   // ─── build ────────────────────────────────────────────────────────────────
 
   @override
@@ -655,23 +739,33 @@ class _ExpensesScreenState extends State<ExpensesScreen>
               ),
               const SizedBox(height: 20),
 
-              // ── Supported formats ──────────────────────────
-              Text('Supported formats',
-                  style: GoogleFonts.sora(
-                      fontSize: 12,
-                      color: textSecondary,
-                      letterSpacing: 0.4)),
+              // ── Supported formats & Quick Export ──────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Quick Export & Supported Formats',
+                      style: GoogleFonts.sora(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                          letterSpacing: 0.4)),
+                  Text('Tap to export report',
+                      style: GoogleFonts.sora(
+                          fontSize: 11,
+                          color: textSecondary)),
+                ],
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   _formatChip('PNG', Icons.image_outlined, isWhite,
-                      textSecondary),
+                      textSecondary, () => _exportAsImage(isJpg: false)),
                   const SizedBox(width: 10),
                   _formatChip('JPG', Icons.photo_outlined, isWhite,
-                      textSecondary),
+                      textSecondary, () => _exportAsImage(isJpg: true)),
                   const SizedBox(width: 10),
                   _formatChip('PDF', Icons.picture_as_pdf_outlined, isWhite,
-                      textSecondary),
+                      textSecondary, _exportAsPdf),
                 ],
               ),
             ],
@@ -823,29 +917,32 @@ class _ExpensesScreenState extends State<ExpensesScreen>
     );
   }
 
-  Widget _formatChip(
-      String label, IconData icon, bool isWhite, Color textSecondary) {
+  Widget _formatChip(String label, IconData icon, bool isWhite,
+      Color textSecondary, VoidCallback? onTap) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isWhite ? Colors.white : const Color(0xFF120404),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: const Color(0xFFCC0020).withOpacity(0.35), width: 1),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: const Color(0xFFCC0020), size: 22),
-            const SizedBox(height: 6),
-            Text(label,
-                style: GoogleFonts.sora(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isWhite
-                        ? EleghartColors.accentDark
-                        : Colors.white)),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isWhite ? Colors.white : const Color(0xFF120404),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: const Color(0xFFCC0020).withOpacity(0.35), width: 1),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: const Color(0xFFCC0020), size: 22),
+              const SizedBox(height: 6),
+              Text(label,
+                  style: GoogleFonts.sora(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isWhite
+                          ? EleghartColors.accentDark
+                          : Colors.white)),
+            ],
+          ),
         ),
       ),
     );

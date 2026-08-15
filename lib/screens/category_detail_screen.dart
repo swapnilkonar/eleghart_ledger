@@ -14,6 +14,8 @@ import '../services/storage_service.dart';
 import '../utils/date_filter.dart';
 import '../widgets/date_filter_pill.dart';
 
+import '../utils/data_sync.dart';
+
 class CategoryDetailScreen extends StatefulWidget {
   final String categoryName;
   final List<GroupModel> allGroups;
@@ -44,20 +46,30 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     _categoryName = widget.categoryName;
     _groups = List.from(widget.allGroups);
     _expenses = List.from(widget.allExpenses);
-    _loadCategoryImages();
+    _reloadData();
     DateFilter.notifier.addListener(_onFilter);
     AppThemeNotifier.instance.addListener(_onFilter);
+    DataSyncNotifier.instance.addListener(_reloadData);
   }
 
-  Future<void> _loadCategoryImages() async {
+  Future<void> _reloadData() async {
     final imgs = await StorageService.loadCategoryImages();
-    if (mounted) setState(() => _categoryImages = imgs);
+    final allG = await StorageService.loadGroups();
+    final allE = await StorageService.loadExpenses();
+    if (mounted) {
+      setState(() {
+        _categoryImages = imgs;
+        _groups = allG;
+        _expenses = allE;
+      });
+    }
   }
 
   @override
   void dispose() {
     DateFilter.notifier.removeListener(_onFilter);
     AppThemeNotifier.instance.removeListener(_onFilter);
+    DataSyncNotifier.instance.removeListener(_reloadData);
     super.dispose();
   }
 
@@ -75,7 +87,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     double debit = 0;
     double credit = 0;
     for (final e in _filtered) {
-      final share = e.categoryShare;
+      final share = e.shareForCategory(_categoryName);
       if (e.type == 'debit') debit += share;
       else credit += share;
     }
@@ -92,7 +104,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       double debit = 0;
       double credit = 0;
       for (final e in expenses) {
-        final share = e.categoryShare;
+        final share = e.shareForCategory(_categoryName);
         if (e.type == 'debit') debit += share;
         else credit += share;
       }
@@ -161,7 +173,21 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     final allExpenses = await StorageService.loadExpenses();
     final updatedExpenses = allExpenses.map((e) {
       if (!e.categories.contains(oldName)) return e;
-      return e.copyWith(categories: e.categories.map((c) => c == oldName ? newName : c).toList());
+      Map<String, double>? newDist;
+      if (e.distribution != null) {
+        newDist = {};
+        e.distribution!.forEach((k, v) {
+          if (k == oldName) {
+            newDist![newName] = v;
+          } else {
+            newDist![k] = v;
+          }
+        });
+      }
+      return e.copyWith(
+        categories: e.categories.map((c) => c == oldName ? newName : c).toList(),
+        distribution: newDist ?? e.distribution,
+      );
     }).toList();
     await StorageService.saveExpenses(updatedExpenses);
 

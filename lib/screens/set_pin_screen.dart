@@ -1,11 +1,11 @@
-import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../utils/app_theme.dart';
-import '../widgets/themed_background.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../services/pin_service.dart';
+import '../theme/eleghart_colors.dart';
+import '../utils/app_theme.dart';
+import '../widgets/themed_background.dart';
 import 'home_dashboard.dart';
 
 class SetPinScreen extends StatefulWidget {
@@ -18,16 +18,16 @@ class SetPinScreen extends StatefulWidget {
 }
 
 class _SetPinScreenState extends State<SetPinScreen>
-    with SingleTickerProviderStateMixin {
-  final _pinController = TextEditingController();
-  final _confirmController = TextEditingController();
-  final _pinFocus = FocusNode();
-  final _confirmFocus = FocusNode();
-  bool _saving = false;
+    with TickerProviderStateMixin {
   String _pin = '';
-  String _confirm = '';
+  String _confirmPin = '';
+  int _step = 1; // 1 = Enter PIN, 2 = Confirm PIN
+  bool _saving = false;
+  bool _errorState = false;
 
   late AnimationController _pulseController;
+  late AnimationController _shakeController;
+  late Animation<double> _shakeAnimation;
 
   @override
   void initState() {
@@ -39,12 +39,13 @@ class _SetPinScreenState extends State<SetPinScreen>
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
-    _pinFocus.addListener(() => setState(() {}));
-    _confirmFocus.addListener(() => setState(() {}));
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pinFocus.requestFocus();
-    });
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _shakeAnimation = Tween<double>(begin: 0, end: 14)
+        .chain(CurveTween(curve: Curves.elasticIn))
+        .animate(_shakeController);
   }
 
   void _onThemeChanged() => setState(() {});
@@ -53,47 +54,75 @@ class _SetPinScreenState extends State<SetPinScreen>
   void dispose() {
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
     _pulseController.dispose();
-    _pinController.dispose();
-    _confirmController.dispose();
-    _pinFocus.dispose();
-    _confirmFocus.dispose();
+    _shakeController.dispose();
     super.dispose();
   }
 
-  void _onPinChanged(String val) {
-    setState(() => _pin = val);
-    if (val.length == 4) {
-      Future.delayed(const Duration(milliseconds: 80), () {
-        if (mounted) _confirmFocus.requestFocus();
+  void _handleKeyPress(String key) {
+    if (_saving) return;
+
+    HapticFeedback.lightImpact();
+
+    if (_step == 1) {
+      if (_pin.length < 4) {
+        setState(() => _pin += key);
+        if (_pin.length == 4) {
+          Future.delayed(const Duration(milliseconds: 220), () {
+            if (mounted) setState(() => _step = 2);
+          });
+        }
+      }
+    } else {
+      if (_confirmPin.length < 4) {
+        setState(() => _confirmPin += key);
+        if (_confirmPin.length == 4) {
+          _verifyAndSave();
+        }
+      }
+    }
+  }
+
+  void _handleBackspace() {
+    if (_saving) return;
+    HapticFeedback.selectionClick();
+
+    if (_step == 1) {
+      if (_pin.isNotEmpty) {
+        setState(() => _pin = _pin.substring(0, _pin.length - 1));
+      }
+    } else {
+      if (_confirmPin.isNotEmpty) {
+        setState(() => _confirmPin = _confirmPin.substring(0, _confirmPin.length - 1));
+      } else {
+        // Go back to step 1 if backspace on empty confirm
+        setState(() {
+          _step = 1;
+          _pin = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyAndSave() async {
+    if (_pin != _confirmPin) {
+      HapticFeedback.heavyImpact();
+      _shakeController.forward(from: 0);
+      setState(() => _errorState = true);
+      _toast('PINs do not match. Try again.');
+
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (mounted) {
+          setState(() {
+            _confirmPin = '';
+            _errorState = false;
+          });
+        }
       });
-    }
-  }
-
-  void _onConfirmChanged(String val) {
-    setState(() => _confirm = val);
-    if (val.length == 4) _savePin();
-  }
-
-  Future<void> _savePin() async {
-    final pin = _pin.trim();
-    final confirm = _confirm.trim();
-
-    if (pin.length != 4 || confirm.length != 4) {
-      _toast('PIN must be exactly 4 digits');
-      return;
-    }
-
-    if (pin != confirm) {
-      _toast('PINs do not match');
-      _confirmController.clear();
-      setState(() => _confirm = '');
-      _confirmFocus.requestFocus();
       return;
     }
 
     setState(() => _saving = true);
-
-    await PinService.setPin(pin);
+    await PinService.setPin(_pin);
 
     if (!mounted) return;
 
@@ -113,189 +142,198 @@ class _SetPinScreenState extends State<SetPinScreen>
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(msg, style: GoogleFonts.sora(fontWeight: FontWeight.w600)),
         backgroundColor: const Color(0xFF8E1D1D),
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isWhite = AppThemeNotifier.isWhite;
     final size = MediaQuery.of(context).size;
-    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final primaryColor = isWhite ? EleghartColors.accentDark : Colors.white;
+
+    final currentPin = _step == 1 ? _pin : _confirmPin;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.black,
+      backgroundColor: isWhite ? Colors.white : const Color(0xFF0A0204),
       body: Stack(
         children: [
-          // Background image
-          Positioned.fill(child: ThemedBackground(darkOverlayOpacity: 0.25)),
+          const Positioned.fill(child: ThemedBackground()),
 
-          // Subtle light rays from logo
-          Positioned.fill(
-            child: CustomPaint(painter: _SetPinRaysPainter()),
-          ),
-
-          // Main content
           SafeArea(
-            child: GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              behavior: HitTestBehavior.translucent,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    if (widget.isReset)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          alignment: Alignment.centerLeft,
+            child: Column(
+              children: [
+                // Top Header Navigation Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (widget.isReset || _step == 2)
+                        IconButton(
                           icon: Icon(
                             Icons.arrow_back_ios_new_rounded,
-                            color: AppThemeNotifier.isWhite
-                                ? const Color(0xFF8E1D1D)
-                                : Colors.white,
+                            color: primaryColor,
+                            size: 20,
                           ),
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () {
+                            if (_step == 2) {
+                              setState(() {
+                                _step = 1;
+                                _confirmPin = '';
+                              });
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+                        )
+                      else
+                        const SizedBox(width: 48),
+
+                      // Step Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCC0020).withValues(alpha: isWhite ? 0.12 : 0.22),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFCC0020).withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(
+                          'STEP $_step OF 2',
+                          style: GoogleFonts.sora(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: const Color(0xFFCC0020),
+                          ),
                         ),
                       ),
 
-                    SizedBox(
-                        height: widget.isReset ? size.height * 0.01 : size.height * 0.04),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
+                ),
 
-                    // Logo with pulsing red glow
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (_, child) => Container(
-                        height: size.height * 0.28,
+                const Spacer(),
+
+                // Animated Logo Emblem
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (_, child) => Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFCC0020).withValues(
+                            alpha: 0.20 + _pulseController.value * 0.22,
+                          ),
+                          blurRadius: 35 + _pulseController.value * 20,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: child,
+                  ),
+                  child: Image.asset(
+                    'assets/icons/eleghart_icon.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Title & Subtitle
+                Text(
+                  _step == 1
+                      ? (widget.isReset ? 'Set New Security PIN' : 'Create Security PIN')
+                      : 'Confirm Your PIN',
+                  style: GoogleFonts.sora(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _step == 1
+                      ? 'Enter a 4-digit passkey to lock your ledger'
+                      : 'Re-enter your 4-digit passkey to verify',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.sora(
+                    fontSize: 13,
+                    color: isWhite ? Colors.black54 : Colors.white54,
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // PIN Dots Indicator with Shake Animation
+                AnimatedBuilder(
+                  animation: _shakeAnimation,
+                  builder: (context, child) => Transform.translate(
+                    offset: Offset(_shakeAnimation.value, 0),
+                    child: child,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(4, (index) {
+                      final filled = index < currentPin.length;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.symmetric(horizontal: 10),
+                        width: filled ? 22 : 18,
+                        height: filled ? 22 : 18,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(
-                                  0.15 + _pulseController.value * 0.14),
-                              blurRadius: 60 + _pulseController.value * 25,
-                              spreadRadius: 12,
-                            ),
-                          ],
+                          color: filled
+                              ? (_errorState
+                                  ? const Color(0xFFFF2040)
+                                  : const Color(0xFFCC0020))
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: filled
+                                ? (_errorState
+                                    ? const Color(0xFFFF2040)
+                                    : const Color(0xFFCC0020))
+                                : (isWhite
+                                    ? const Color(0xFFCC0020).withValues(alpha: 0.35)
+                                    : Colors.white38),
+                            width: 2,
+                          ),
+                          boxShadow: filled
+                              ? [
+                                  BoxShadow(
+                                    color: (_errorState
+                                            ? const Color(0xFFFF2040)
+                                            : const Color(0xFFCC0020))
+                                        .withValues(alpha: 0.55),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ]
+                              : null,
                         ),
-                        child: child,
-                      ),
-                      child: Image.asset(
-                        'assets/icons/eleghart_icon.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      widget.isReset ? 'Reset your PIN' : 'Set your PIN',
-                      style: GoogleFonts.sora(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.isReset
-                          ? 'Choose a new 4-digit PIN to secure your app'
-                          : 'Choose a 4-digit PIN to secure your app',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.sora(
-                        fontSize: 13,
-                        color: AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.6) : Colors.white54,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-
-                    SizedBox(height: size.height * 0.04),
-
-                    // Enter PIN row
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: _buildLabeledPinRow(
-                        label: 'Enter PIN',
-                        pin: _pin,
-                        focusNode: _pinFocus,
-                        isActive: _pinFocus.hasFocus,
-                        onTap: () => _pinFocus.requestFocus(),
-                      ),
-                    ),
-
-                    SizedBox(height: size.height * 0.02),
-
-                    // Confirm PIN row
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: _buildLabeledPinRow(
-                        label: 'Confirm PIN',
-                        pin: _confirm,
-                        focusNode: _confirmFocus,
-                        isActive: _confirmFocus.hasFocus,
-                        onTap: () => _confirmFocus.requestFocus(),
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // Continue button
-                    _buildContinueButton(),
-
-                    SizedBox(height: safeBottom + 24),
-                  ],
+                      );
+                    }),
+                  ),
                 ),
-              ),
-            ),
-          ),
 
-          // Hidden text fields for keyboard capture
-          Positioned(
-            left: -300,
-            top: 0,
-            child: SizedBox(
-              width: 10,
-              height: 10,
-              child: TextField(
-                controller: _pinController,
-                focusNode: _pinFocus,
-                maxLength: 4,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                obscureText: true,
-                decoration: const InputDecoration(
-                  counterText: '',
-                  border: InputBorder.none,
-                ),
-                onChanged: _onPinChanged,
-              ),
-            ),
-          ),
-          Positioned(
-            left: -300,
-            top: 50,
-            child: SizedBox(
-              width: 10,
-              height: 10,
-              child: TextField(
-                controller: _confirmController,
-                focusNode: _confirmFocus,
-                maxLength: 4,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                obscureText: true,
-                decoration: const InputDecoration(
-                  counterText: '',
-                  border: InputBorder.none,
-                ),
-                onChanged: _onConfirmChanged,
-              ),
+                const Spacer(),
+
+                // Custom Numpad Keyboard Grid
+                _buildNumpad(isWhite),
+
+                SizedBox(height: size.height * 0.03),
+              ],
             ),
           ),
         ],
@@ -303,170 +341,119 @@ class _SetPinScreenState extends State<SetPinScreen>
     );
   }
 
-  Widget _buildLabeledPinRow({
-    required String label,
-    required String pin,
-    required FocusNode focusNode,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    final borderColor =
-        isActive ? const Color(0xFFCC0020) : const Color(0xFF8E1D1D);
-    final glowColor = isActive
-        ? Colors.red.withOpacity(0.5)
-        : const Color(0xFF8E1D1D).withOpacity(0.3);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 10),
-          child: Text(
-            label,
-            style: GoogleFonts.sora(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isActive
-                  ? (AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D) : Colors.white70)
-                  : (AppThemeNotifier.isWhite ? const Color(0xFF8E1D1D).withOpacity(0.5) : Colors.white38),
-              letterSpacing: 0.3,
-            ),
+  Widget _buildNumpad(bool isWhite) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 36),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['1', '2', '3'].map((k) => _buildKey(k, isWhite)).toList(),
           ),
-        ),
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            height: 68,
-            decoration: BoxDecoration(
-              color: AppThemeNotifier.isWhite ? const Color(0xFFFFECEC) : Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderColor, width: 1.8),
-              boxShadow: [
-                BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: 2),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(4, (i) {
-                final filled = i < pin.length;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: filled ? const Color(0xFFCC0020) : Colors.transparent,
-                    border: Border.all(
-                      color: filled ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? const Color(0xFFCC0020).withOpacity(0.35) : Colors.white38),
-                      width: 2,
-                    ),
-                    boxShadow: filled
-                        ? [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.5),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            )
-                          ]
-                        : null,
-                  ),
-                );
-              }),
-            ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['4', '5', '6'].map((k) => _buildKey(k, isWhite)).toList(),
           ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['7', '8', '9'].map((k) => _buildKey(k, isWhite)).toList(),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              const SizedBox(width: 72, height: 72), // Spacer
+              _buildKey('0', isWhite),
+              _buildActionKey(
+                icon: Icons.backspace_outlined,
+                onPressed: _handleBackspace,
+                isWhite: isWhite,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildContinueButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        width: double.infinity,
-        height: 58,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.45),
-              blurRadius: 22,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
+  Widget _buildKey(String key, bool isWhite) {
+    final keyBg = isWhite
+        ? Colors.white.withValues(alpha: 0.85)
+        : Colors.white.withValues(alpha: 0.08);
+    final textColor = isWhite ? EleghartColors.accentDark : Colors.white;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _handleKeyPress(key),
+        borderRadius: BorderRadius.circular(36),
+        splashColor: const Color(0xFFCC0020).withValues(alpha: 0.25),
+        child: Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: keyBg,
+            border: Border.all(
+              color: isWhite
+                  ? const Color(0xFFCC0020).withValues(alpha: 0.20)
+                  : Colors.white.withValues(alpha: 0.12),
+              width: 1.2,
             ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: _saving ? null : _savePin,
-          icon: _saving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.shield_rounded, color: Colors.white, size: 22),
-          label: _saving
-              ? const SizedBox.shrink()
-              : Text(
-                  'Continue',
-                  style: GoogleFonts.sora(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+            boxShadow: isWhite
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
+                  ]
+                : null,
+          ),
+          child: Text(
+            key,
+            style: GoogleFonts.sora(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
           ),
         ),
       ),
-    ),
     );
   }
-}
 
-class _SetPinRaysPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.22);
-    final angles = [-160.0, -140.0, -120.0, 120.0, 140.0, 160.0];
-
-    for (final angleDeg in angles) {
-      final rad = angleDeg * pi / 180.0;
-      final length = size.width * 0.95;
-      final end = Offset(
-        center.dx + cos(rad) * length,
-        center.dy + sin(rad) * length,
-      );
-
-      final paint = Paint()
-        ..strokeWidth = 1.0
-        ..shader = ui.Gradient.linear(
-          center,
-          end,
-          [
-            const Color(0xFFCC0020).withOpacity(0.18),
-            Colors.transparent,
-          ],
-        );
-
-      canvas.drawLine(center, end, paint);
-    }
+  Widget _buildActionKey({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required bool isWhite,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(36),
+        splashColor: const Color(0xFFCC0020).withValues(alpha: 0.25),
+        child: Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isWhite
+                ? Colors.white.withValues(alpha: 0.65)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: isWhite ? EleghartColors.accentDark : Colors.white70,
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

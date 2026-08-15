@@ -12,6 +12,8 @@ import '../widgets/themed_background.dart';
 import 'create_goal_screen.dart';
 import 'goal_detail_screen.dart';
 
+import '../utils/data_sync.dart';
+
 class WealthDashboardScreen extends StatefulWidget {
   const WealthDashboardScreen({super.key});
 
@@ -32,6 +34,7 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1000));
     _load();
+    DataSyncNotifier.instance.addListener(_load);
   }
 
   Future<void> _load() async {
@@ -47,6 +50,7 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
 
   @override
   void dispose() {
+    DataSyncNotifier.instance.removeListener(_load);
     _animCtrl.dispose();
     super.dispose();
   }

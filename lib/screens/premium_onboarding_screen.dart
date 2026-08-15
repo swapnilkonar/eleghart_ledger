@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
+import '../widgets/themed_background.dart';
 import '../utils/app_theme.dart';
 import '../theme/eleghart_colors.dart';
 import 'onboarding_screen.dart';
@@ -104,10 +105,7 @@ class _PremiumOnboardingScreenState extends State<PremiumOnboardingScreen> {
             )
           else
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/background_theme_white.png',
-                fit: BoxFit.cover,
-              ),
+              child: ThemedBackground(),
             ),
 
           SafeArea(

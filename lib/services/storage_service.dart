@@ -6,6 +6,7 @@ import '../models/recurring_expense_model.dart';
 import '../models/emi_model.dart';
 import '../models/person_model.dart';
 import '../models/ledger_transaction_model.dart';
+import '../utils/data_sync.dart';
 import 'database_service.dart';
 
 class StorageService {
@@ -22,6 +23,7 @@ class StorageService {
   static Future<void> saveGlobalCategories(List<String> categories) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_globalCategoriesKey, categories);
+    DataSyncNotifier.notifyDataChanged();
   }
 
   static Future<Map<String, String>> loadCategoryImages() async {
@@ -34,36 +36,49 @@ class StorageService {
   static Future<void> saveCategoryImages(Map<String, String> images) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_categoryImagesKey, jsonEncode(images));
+    DataSyncNotifier.notifyDataChanged();
   }
 
   // ─── Data (delegated to SQLite) ───────────────────────────────────────────
 
   static Future<List<GroupModel>> loadGroups() => DatabaseService.loadGroups();
-  static Future<void> saveGroups(List<GroupModel> groups) =>
-      DatabaseService.saveGroups(groups);
+  static Future<void> saveGroups(List<GroupModel> groups) async {
+    await DatabaseService.saveGroups(groups);
+    DataSyncNotifier.notifyDataChanged();
+  }
 
   static Future<List<ExpenseModel>> loadExpenses() =>
       DatabaseService.loadExpenses();
-  static Future<void> saveExpenses(List<ExpenseModel> expenses) =>
-      DatabaseService.saveExpenses(expenses);
+  static Future<void> saveExpenses(List<ExpenseModel> expenses) async {
+    await DatabaseService.saveExpenses(expenses);
+    DataSyncNotifier.notifyDataChanged();
+  }
 
   static Future<List<RecurringExpenseModel>> loadRecurring() =>
       DatabaseService.loadRecurring();
-  static Future<void> saveRecurring(List<RecurringExpenseModel> list) =>
-      DatabaseService.saveRecurring(list);
+  static Future<void> saveRecurring(List<RecurringExpenseModel> list) async {
+    await DatabaseService.saveRecurring(list);
+    DataSyncNotifier.notifyDataChanged();
+  }
 
   static Future<List<EmiModel>> loadEmis() => DatabaseService.loadEmis();
-  static Future<void> saveEmis(List<EmiModel> list) =>
-      DatabaseService.saveEmis(list);
+  static Future<void> saveEmis(List<EmiModel> list) async {
+    await DatabaseService.saveEmis(list);
+    DataSyncNotifier.notifyDataChanged();
+  }
 
   static Future<List<PersonModel>> loadPersons() =>
       DatabaseService.loadPersons();
-  static Future<void> savePersons(List<PersonModel> list) =>
-      DatabaseService.savePersons(list);
+  static Future<void> savePersons(List<PersonModel> list) async {
+    await DatabaseService.savePersons(list);
+    DataSyncNotifier.notifyDataChanged();
+  }
 
   static Future<List<LedgerTransactionModel>> loadUdhaarTransactions() =>
       DatabaseService.loadUdhaarTransactions();
   static Future<void> saveUdhaarTransactions(
-          List<LedgerTransactionModel> list) =>
-      DatabaseService.saveUdhaarTransactions(list);
+      List<LedgerTransactionModel> list) async {
+    await DatabaseService.saveUdhaarTransactions(list);
+    DataSyncNotifier.notifyDataChanged();
+  }
 }

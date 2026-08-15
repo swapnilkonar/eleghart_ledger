@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/eleghart_colors.dart';
 import 'utils/app_theme.dart';
 import 'services/database_service.dart';
+import 'services/live_notification_service.dart';
 import 'services/recurring_engine.dart';
+import 'services/shared_intent_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_dashboard.dart';
@@ -16,6 +18,8 @@ void main() async {
   await AppThemeNotifier.initialize();
   await DatabaseService.migrateFromSharedPreferences();
   await RecurringEngine.run();
+  SharedIntentService.init();
+  await LiveNotificationService.init();
   runApp(const EleghartLedgerApp());
 }
 
@@ -25,6 +29,7 @@ class EleghartLedgerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: SharedIntentService.navigatorKey,
       title: 'Eleghart Ledger',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

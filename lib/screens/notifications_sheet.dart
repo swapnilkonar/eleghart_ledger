@@ -6,6 +6,7 @@ import '../models/expense_model.dart';
 import '../models/ledger_transaction_model.dart';
 import '../models/person_model.dart';
 import '../models/recurring_expense_model.dart';
+import '../services/live_notification_service.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
@@ -25,6 +26,7 @@ class NotificationsSheet extends StatefulWidget {
 
 class _NotificationsSheetState extends State<NotificationsSheet> {
   List<_NotifItem>? _items;
+  bool _notifEnabled = true;
 
   @override
   void initState() {
@@ -33,6 +35,7 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
   }
 
   Future<void> _load() async {
+    final notifEnabled = await LiveNotificationService.isNotificationsEnabled();
     final persons = await StorageService.loadPersons();
     final txns = await StorageService.loadUdhaarTransactions();
     final emis = await StorageService.loadEmis();
@@ -61,9 +64,10 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
         icon: Icons.arrow_downward_rounded,
         color: const Color(0xFF22C55E),
         title: '$name owes you',
-        sub: '₹${e.value.toStringAsFixed(0)} · Tap to view',
+        sub: '₹${e.value.toStringAsFixed(0)} · Tap to view or remind',
         route: _NotifRoute.udhaarPerson,
         person: person,
+        amount: e.value,
       ));
     }
 
@@ -151,7 +155,12 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
       ));
     }
 
-    if (mounted) setState(() => _items = items);
+    if (mounted) {
+      setState(() {
+        _items = items;
+        _notifEnabled = notifEnabled;
+      });
+    }
   }
 
   @override
@@ -189,11 +198,28 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
             Row(
               children: [
                 Text(
-                  'Notifications',
+                  'Live Alerts',
                   style: GoogleFonts.sora(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: textPrimary),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF22C55E).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF22C55E), shape: BoxShape.circle)),
+                      const SizedBox(width: 4),
+                      Text('LIVE', style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF22C55E))),
+                    ],
+                  ),
                 ),
                 if (items != null && items.isNotEmpty) ...[
                   const SizedBox(width: 8),
@@ -214,6 +240,25 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                   ),
                 ],
                 const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    _notifEnabled ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+                    color: _notifEnabled ? const Color(0xFFCC0020) : textSec,
+                    size: 20,
+                  ),
+                  tooltip: _notifEnabled ? 'Mute Notifications' : 'Enable Notifications',
+                  onPressed: () async {
+                    final next = !_notifEnabled;
+                    await LiveNotificationService.setNotificationsEnabled(next);
+                    if (mounted) {
+                      setState(() => _notifEnabled = next);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(next ? 'Push notifications enabled' : 'Push notifications muted')),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 4),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
@@ -356,8 +401,35 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.chevron_right_rounded,
-                color: item.color.withOpacity(0.5), size: 18),
+            if (item.person != null && item.amount != null && item.amount! > 0)
+              GestureDetector(
+                onTap: () {
+                  LiveNotificationService.sendWhatsAppReminder(
+                    item.person!.phone ?? '',
+                    item.person!.name,
+                    item.amount!,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF25D366).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366), size: 12),
+                      const SizedBox(width: 4),
+                      Text('Remind', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF25D366))),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Icon(Icons.chevron_right_rounded,
+                  color: item.color.withOpacity(0.5), size: 18),
           ],
         ),
       ),
@@ -374,6 +446,7 @@ class _NotifItem {
   final String sub;
   final _NotifRoute route;
   final PersonModel? person;
+  final double? amount;
 
   const _NotifItem({
     required this.icon,
@@ -382,5 +455,6 @@ class _NotifItem {
     required this.sub,
     required this.route,
     this.person,
+    this.amount,
   });
 }
