@@ -14,10 +14,15 @@ class UdhaarPdfExportService {
   static final _dateFormat = DateFormat('dd MMM yyyy');
   static final _nowFormat = DateFormat('dd MMM yyyy, hh:mm a');
 
-  static Future<Uint8List> _logoBytes() async =>
-      (await rootBundle.load('assets/images/eleghart_logo.png'))
+  static Future<Uint8List?> _logoBytes() async {
+    try {
+      return (await rootBundle.load('assets/images/eleghart_logo.png'))
           .buffer
           .asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
 
   // ─── Export person's full ledger ─────────────────────────────────────────
 
@@ -50,15 +55,23 @@ class UdhaarPdfExportService {
         pageTheme: pw.PageTheme(
           margin: const pw.EdgeInsets.all(24),
           theme: pw.ThemeData.withFont(base: pw.Font.helvetica()),
-          buildBackground: (_) => pw.Center(
-            child: pw.Opacity(
-              opacity: 0.08,
-              child: pw.Image(pw.MemoryImage(logo), width: 320),
-            ),
-          ),
+          buildBackground: logo != null
+              ? (_) => pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.10,
+                      child: pw.ClipOval(
+                        child: pw.Container(
+                          width: 250,
+                          height: 250,
+                          child: pw.Image(pw.MemoryImage(logo), fit: pw.BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                  )
+              : null,
         ),
         build: (_) => [
-          _personHeader(person, toCollect, toPay, net),
+          _personHeader(person, toCollect, toPay, net, logo),
           pw.SizedBox(height: 18),
           _sectionTitle('Transactions'),
           pw.SizedBox(height: 10),
@@ -105,15 +118,23 @@ class UdhaarPdfExportService {
         pageTheme: pw.PageTheme(
           margin: const pw.EdgeInsets.all(24),
           theme: pw.ThemeData.withFont(base: pw.Font.helvetica()),
-          buildBackground: (_) => pw.Center(
-            child: pw.Opacity(
-              opacity: 0.08,
-              child: pw.Image(pw.MemoryImage(logo), width: 320),
-            ),
-          ),
+          buildBackground: logo != null
+              ? (_) => pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.10,
+                      child: pw.ClipOval(
+                        child: pw.Container(
+                          width: 250,
+                          height: 250,
+                          child: pw.Image(pw.MemoryImage(logo), fit: pw.BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                  )
+              : null,
         ),
         build: (_) => [
-          _fullSummaryHeader(grandCollect, grandPay, grandCollect - grandPay),
+          _fullSummaryHeader(grandCollect, grandPay, grandCollect - grandPay, logo),
           pw.SizedBox(height: 18),
           _sectionTitle('Person Ledger Summary'),
           pw.SizedBox(height: 10),
@@ -132,6 +153,7 @@ class UdhaarPdfExportService {
     double toCollect,
     double toPay,
     double net,
+    Uint8List? logoBytes,
   ) {
     final netPos = net >= 0;
     return pw.Container(
@@ -147,69 +169,94 @@ class UdhaarPdfExportService {
           ],
         ),
       ),
-      child: pw.Column(
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(person.name,
-              style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.white)),
-          pw.SizedBox(height: 2),
-          pw.Text('Eleghart Ledger Report',
-              style: const pw.TextStyle(fontSize: 11, color: PdfColors.white)),
-          if (person.phone != null) ...[
-            pw.SizedBox(height: 2),
-            pw.Text(person.phone!,
-                style:
-                    const pw.TextStyle(fontSize: 11, color: PdfColors.white)),
-          ],
-          pw.SizedBox(height: 6),
-          pw.Text('Generated: ${_nowFormat.format(DateTime.now())}',
-              style: const pw.TextStyle(fontSize: 10, color: PdfColors.white)),
-          pw.SizedBox(height: 12),
-          pw.Row(children: [
-            pw.Text('Collection: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${toCollect.toStringAsFixed(0)}',
-                style:
-                    const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
-            pw.SizedBox(width: 16),
-            pw.Text('Payment: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${toPay.toStringAsFixed(0)}',
-                style:
-                    const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
-          ]),
-          pw.SizedBox(height: 4),
-          pw.Row(children: [
-            pw.Text('Net Position: ',
-                style: pw.TextStyle(
-                    fontSize: 13,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text(
-              '${netPos ? '+' : '-'} Rs. ${net.abs().toStringAsFixed(0)}',
-              style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  color:
-                      netPos ? PdfColors.green200 : PdfColors.red200),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(person.name,
+                    style: pw.TextStyle(
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white)),
+                pw.SizedBox(height: 2),
+                pw.Text('Eleghart Ledger Report',
+                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.white)),
+                if (person.phone != null) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(person.phone!,
+                      style:
+                          const pw.TextStyle(fontSize: 11, color: PdfColors.white)),
+                ],
+                pw.SizedBox(height: 6),
+                pw.Text('Generated: ${_nowFormat.format(DateTime.now())}',
+                    style: const pw.TextStyle(fontSize: 10, color: PdfColors.white)),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Text('Collection: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${toCollect.toStringAsFixed(0)}',
+                      style:
+                          const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
+                  pw.SizedBox(width: 16),
+                  pw.Text('Payment: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${toPay.toStringAsFixed(0)}',
+                      style:
+                          const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
+                ]),
+                pw.SizedBox(height: 4),
+                pw.Row(children: [
+                  pw.Text('Net Position: ',
+                      style: pw.TextStyle(
+                          fontSize: 13,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text(
+                    '${netPos ? '+' : '-'} Rs. ${net.abs().toStringAsFixed(0)}',
+                    style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                        color:
+                            netPos ? PdfColors.green200 : PdfColors.red200),
+                  ),
+                ]),
+              ],
             ),
-          ]),
+          ),
+          if (logoBytes != null)
+            pw.Container(
+              width: 48,
+              height: 48,
+              margin: const pw.EdgeInsets.only(left: 12),
+              decoration: const pw.BoxDecoration(
+                shape: pw.BoxShape.circle,
+                color: PdfColors.white,
+              ),
+              padding: const pw.EdgeInsets.all(5),
+              child: pw.ClipOval(
+                child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+              ),
+            ),
         ],
       ),
     );
   }
 
   static pw.Widget _fullSummaryHeader(
-      double grandCollect, double grandPay, double net) {
+    double grandCollect,
+    double grandPay,
+    double net,
+    Uint8List? logoBytes,
+  ) {
     final netPos = net >= 0;
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -224,55 +271,77 @@ class UdhaarPdfExportService {
           ],
         ),
       ),
-      child: pw.Column(
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text('Eleghart Ledger Report',
-              style: pw.TextStyle(
-                  fontSize: 20,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.white)),
-          pw.SizedBox(height: 6),
-          pw.Text('Udhaar - Full Summary',
-              style: const pw.TextStyle(fontSize: 14, color: PdfColors.white)),
-          pw.SizedBox(height: 6),
-          pw.Text('Generated: ${_nowFormat.format(DateTime.now())}',
-              style: const pw.TextStyle(fontSize: 10, color: PdfColors.white)),
-          pw.SizedBox(height: 12),
-          pw.Row(children: [
-            pw.Text('Collection: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${grandCollect.toStringAsFixed(0)}',
-                style:
-                    const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
-            pw.SizedBox(width: 16),
-            pw.Text('Payment: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${grandPay.toStringAsFixed(0)}',
-                style:
-                    const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
-          ]),
-          pw.SizedBox(height: 4),
-          pw.Row(children: [
-            pw.Text('Net Balance: ',
-                style: pw.TextStyle(
-                    fontSize: 13,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text(
-              '${netPos ? '+' : '-'} Rs. ${net.abs().toStringAsFixed(0)}',
-              style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  color: netPos ? PdfColors.green200 : PdfColors.red200),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Eleghart Ledger Report',
+                    style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white)),
+                pw.SizedBox(height: 6),
+                pw.Text('Udhaar - Full Summary',
+                    style: const pw.TextStyle(fontSize: 14, color: PdfColors.white)),
+                pw.SizedBox(height: 6),
+                pw.Text('Generated: ${_nowFormat.format(DateTime.now())}',
+                    style: const pw.TextStyle(fontSize: 10, color: PdfColors.white)),
+                pw.SizedBox(height: 12),
+                pw.Row(children: [
+                  pw.Text('Collection: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${grandCollect.toStringAsFixed(0)}',
+                      style:
+                          const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
+                  pw.SizedBox(width: 16),
+                  pw.Text('Payment: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${grandPay.toStringAsFixed(0)}',
+                      style:
+                          const pw.TextStyle(fontSize: 12, color: PdfColors.white)),
+                ]),
+                pw.SizedBox(height: 4),
+                pw.Row(children: [
+                  pw.Text('Net Balance: ',
+                      style: pw.TextStyle(
+                          fontSize: 13,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text(
+                    '${netPos ? '+' : '-'} Rs. ${net.abs().toStringAsFixed(0)}',
+                    style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                        color:
+                            netPos ? PdfColors.green200 : PdfColors.red200),
+                  ),
+                ]),
+              ],
             ),
-          ]),
+          ),
+          if (logoBytes != null)
+            pw.Container(
+              width: 48,
+              height: 48,
+              margin: const pw.EdgeInsets.only(left: 12),
+              decoration: const pw.BoxDecoration(
+                shape: pw.BoxShape.circle,
+                color: PdfColors.white,
+              ),
+              padding: const pw.EdgeInsets.all(5),
+              child: pw.ClipOval(
+                child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+              ),
+            ),
         ],
       ),
     );

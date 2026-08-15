@@ -12,8 +12,10 @@ import '../models/expense_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import 'add_expense_screen.dart';
+import 'categories_list_screen.dart';
 import '../utils/date_filter.dart';
 import '../widgets/date_filter_pill.dart';
+import '../utils/data_sync.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final GroupModel group;
@@ -25,31 +27,33 @@ class GroupDetailScreen extends StatefulWidget {
 }
 
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
-  final _categoryController = TextEditingController();
-
   late List<String> _categories;
+  String? _groupImagePath;
+  String _searchQuery = '';
+
   List<ExpenseModel> _expenses = [];
   bool _loadingExpenses = true;
-  Map<String, String> _categoryImages = {};
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
+  bool _dataChanged = false;
+
+  String _expenseFilter = 'all';
 
   final Map<String, Map<String, dynamic>> _memberStats = {};
-  bool _dataChanged = false;
+  Map<String, String> _categoryImages = {};
+  
   late String _groupName;
-  String? _groupImagePath;
-
-  // -------- NEW: FILTER + SEARCH STATE --------
-  String _expenseFilter = 'all'; // all | debit | credit
-  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _categories = [...widget.group.categories];
+    _categories = List.from(widget.group.categories);
     _groupName = widget.group.name;
     _groupImagePath = widget.group.imagePath;
     _loadExpenses();
     DateFilter.notifier.addListener(_onFilterChanged);
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DataSyncNotifier.instance.addListener(_loadExpenses);
   }
 
   void _onThemeChanged() => setState(() {});
@@ -63,7 +67,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   void dispose() {
     DateFilter.notifier.removeListener(_onFilterChanged);
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DataSyncNotifier.instance.removeListener(_loadExpenses);
     _categoryController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -78,6 +84,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Future<void> _loadExpenses() async {
     final catImages = await StorageService.loadCategoryImages();
+    final allGroups = await StorageService.loadGroups();
+    final updatedGroupIdx = allGroups.indexWhere((g) => g.id == widget.group.id);
+    if (updatedGroupIdx != -1) {
+      _categories = List.from(allGroups[updatedGroupIdx].categories);
+      _groupImagePath = allGroups[updatedGroupIdx].imagePath;
+    }
+
     if (mounted) setState(() => _categoryImages = catImages);
     final all = await StorageService.loadExpenses();
 
@@ -89,10 +102,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
     _buildMemberStats(groupExpenses);
 
-    setState(() {
-      _expenses = groupExpenses;
-      _loadingExpenses = false;
-    });
+    if (mounted) {
+      setState(() {
+        _expenses = groupExpenses;
+        _loadingExpenses = false;
+      });
+    }
   }
 
   // ---------------- MEMBER STATS (LEDGER AWARE) ----------------
@@ -108,7 +123,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           .toList();
 
       final total = related.fold<double>(0, (s, e) {
-        final share = e.categoryShare;
+        final share = e.shareForCategory(c);
         return e.type == 'credit' ? s + share : s - share;
       });
 
@@ -444,9 +459,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- SUMMARY HEADER ----------------
 
   Widget _buildHeader() {
-    final filtered = _expenses
+    final inRange = _expenses
         .where((e) => DateFilter.isInRange(e.date))
         .toList();
+    final filtered = inRange.isNotEmpty ? inRange : _expenses;
     double totalDebit = 0;
     double totalCredit = 0;
     for (final e in filtered) {
@@ -500,22 +516,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         borderRadius: BorderRadius.circular(19),
         child: Stack(
           children: [
-            // Mountain silhouette background
-            if (!AppThemeNotifier.isWhite)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Opacity(
-                  opacity: 0.18,
-                  child: Image.asset(
-                    'assets/images/background_theme_top_glow.png',
-                    height: 90,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -683,7 +683,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppThemeNotifier.isWhite
-                  ? const Color(0xFFFFF0F0)
+                  ? const Color(0xFFF4F6F9)
                   : const Color(0xFF1A0505),
               border: Border.all(
                 color: const Color(
@@ -905,9 +905,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- EXPENSE LIST ----------------
 
   Widget _buildExpenseList() {
+    final hasInRange = _expenses.any((e) => DateFilter.isInRange(e.date));
+
     final visibleExpenses = _expenses.where((e) {
-      if (!DateFilter.isInRange(e.date)) return false;
-      if (_expenseFilter != 'all' && e.type != _expenseFilter) return false;
+      if (hasInRange && !DateFilter.isInRange(e.date)) return false;
+      if (_expenseFilter.toLowerCase() != 'all' && e.type.toLowerCase() != _expenseFilter.toLowerCase()) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         if (!e.description.toLowerCase().contains(q) &&
@@ -1313,7 +1315,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- HELPERS ----------------
 
   Widget _filterChip(String value, String label) {
-    final selected = _expenseFilter == value;
+    final selected = _expenseFilter.toLowerCase() == value.toLowerCase();
     return GestureDetector(
       onTap: () => setState(() => _expenseFilter = value),
       child: AnimatedContainer(
@@ -1509,36 +1511,36 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             : const Color(0xFFFF3355);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: AppThemeNotifier.isWhite
                 ? Colors.white
-                : const Color(0xFF0E0505),
-            borderRadius: BorderRadius.circular(14),
+                : const Color(0xFF140306).withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: AppThemeNotifier.isWhite
-                  ? const Color(0xFFEEEEEE)
-                  : Colors.white.withOpacity(0.07),
-              width: 1,
+                  ? const Color(0xFFE2E8F0)
+                  : const Color(0xFFCC0020).withValues(alpha: 0.22),
+              width: 1.2,
             ),
-            boxShadow: AppThemeNotifier.isWhite
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFCC0020).withOpacity(0.08),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : [],
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFCC0020).withValues(
+                  alpha: AppThemeNotifier.isWhite ? 0.06 : 0.15,
+                ),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Row(
             children: [
               GestureDetector(
                 onTap: () => _pickCategoryImage(c),
-                child: _categoryAvatar(c, size: 36),
+                child: _categoryAvatar(c, size: 40),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1548,40 +1550,71 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.sora(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: AppThemeNotifier.isWhite
                             ? EleghartColors.accentDark
                             : Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '₹${total.abs().toStringAsFixed(0)} · Last: ${stats['lastDate']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.sora(fontSize: 11, color: color),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          '₹${total.abs().toStringAsFixed(0)}',
+                          style: GoogleFonts.sora(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                        ),
+                        Text(
+                          ' · Last: ${stats['lastDate']}',
+                          style: GoogleFonts.sora(
+                            fontSize: 11,
+                            color: AppThemeNotifier.isWhite
+                                ? EleghartColors.accentDark.withValues(alpha: 0.5)
+                                : Colors.white38,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
               GestureDetector(
                 onTap: () => _editCategory(c),
-                child: Icon(
-                  Icons.edit_rounded,
-                  size: 16,
-                  color: AppThemeNotifier.isWhite
-                      ? EleghartColors.accentDark.withOpacity(0.3)
-                      : Colors.white30,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark.withValues(alpha: 0.06)
+                        : Colors.white.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.edit_rounded,
+                    size: 15,
+                    color: AppThemeNotifier.isWhite
+                        ? EleghartColors.accentDark.withValues(alpha: 0.6)
+                        : Colors.white60,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => _deleteCategory(c),
-                child: const Icon(
-                  Icons.delete_rounded,
-                  size: 16,
-                  color: Color(0xFFFF3355),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3355).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_rounded,
+                    size: 15,
+                    color: Color(0xFFFF3355),
+                  ),
                 ),
               ),
             ],
@@ -1626,14 +1659,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           child: hasImg
               ? null
               : Center(
-                  child: Text(
-                    cat.isNotEmpty ? cat[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      fontSize: size * 0.38,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: RegExp(r'^\d+$').hasMatch(cat.trim())
+                      ? Icon(
+                          Icons.person_rounded,
+                          size: size * 0.45,
+                          color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                        )
+                      : Text(
+                          cat.isNotEmpty ? cat[0].toUpperCase() : '?',
+                          style: GoogleFonts.sora(
+                            fontSize: size * 0.38,
+                            fontWeight: FontWeight.w800,
+                            color: AppThemeNotifier.isWhite ? EleghartColors.accentDark : Colors.white,
+                          ),
+                        ),
                 ),
         ),
         Positioned(

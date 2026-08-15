@@ -56,6 +56,8 @@ dependencies:
   path: ^1.9.0
   crypto: ^3.0.3
   local_auth: ^2.3.0
+  url_launcher: ^6.2.5
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
@@ -129,5 +131,5 @@ flutter_launcher_icons:
   ios: true
   image_path: assets/icons/eleghart_icon.png
   remove_alpha_ios: true
-  adaptive_icon_background: "#E6E8EC"
+  adaptive_icon_background: "#0F0204"
   adaptive_icon_foreground: assets/icons/eleghart_icon.png

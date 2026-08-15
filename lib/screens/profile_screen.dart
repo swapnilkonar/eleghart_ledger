@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/live_notification_service.dart';
+import '../services/pin_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -22,6 +24,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _avatar;
   late String _currentUserName;
 
+  bool _isBiometricAvailable = false;
+  bool _isBiometricEnabled = false;
+  bool _isNotifEnabled = true;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +45,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name = prefs.getString('user_name');
     if (name != null && name.isNotEmpty) {
       setState(() => _currentUserName = name);
+    }
+
+    final bioAvail = await PinService.isBiometricAvailable();
+    final bioEnabled = await PinService.isBiometricEnabled();
+    final notifEnabled = await LiveNotificationService.isNotificationsEnabled();
+    if (mounted) {
+      setState(() {
+        _isBiometricAvailable = bioAvail;
+        _isBiometricEnabled = bioEnabled;
+        _isNotifEnabled = notifEnabled;
+      });
+    }
+  }
+
+  Future<void> _toggleNotif(bool value) async {
+    await LiveNotificationService.setNotificationsEnabled(value);
+    if (mounted) {
+      setState(() => _isNotifEnabled = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'Push notifications enabled.' : 'Push notifications muted.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      if (!_isBiometricAvailable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric authentication is not supported or enrolled on this device.'),
+          ),
+        );
+        return;
+      }
+      final authenticated = await PinService.authenticateWithBiometric();
+      if (authenticated) {
+        await PinService.setBiometricEnabled(true);
+        if (mounted) {
+          setState(() => _isBiometricEnabled = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric login enabled successfully!'),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric verification canceled or failed.'),
+            ),
+          );
+        }
+      }
+    } else {
+      await PinService.setBiometricEnabled(false);
+      if (mounted) {
+        setState(() => _isBiometricEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric login disabled.'),
+          ),
+        );
+      }
     }
   }
 
@@ -258,30 +330,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _MenuItem(
                             icon: Icons.fingerprint_rounded,
                             title: 'Biometric Login',
-                            subtitle: 'Use fingerprint or face to unlock',
+                            subtitle: _isBiometricAvailable
+                                ? 'Use fingerprint or face to unlock app'
+                                : 'Not available on this device',
                             trailing: Switch(
-                              value: true,
-                              onChanged: (v) {},
+                              value: _isBiometricEnabled,
+                              onChanged: _isBiometricAvailable ? _toggleBiometric : null,
                               activeColor: const Color(0xFFCC0020),
                             ),
                           ),
                           _MenuItem(
-                            icon: Icons.lock_clock_rounded,
-                            title: 'Auto Lock',
-                            subtitle: 'Lock the app automatically',
-                            trailingText: '5 min',
-                            onTap: () {},
-                          ),
-                        ]),
-                        const SizedBox(height: 24),
-                        _buildSectionTitle('More'),
-                        const SizedBox(height: 12),
-                        _buildMenuCard([
-                          _MenuItem(
-                            icon: Icons.logout_rounded,
-                            title: 'Logout',
-                            subtitle: 'Sign out from your account',
-                            onTap: () {},
+                            icon: Icons.notifications_active_rounded,
+                            title: 'Push Notifications',
+                            subtitle: _isNotifEnabled
+                                ? 'Receive EMI, bill due & debt alerts'
+                                : 'Push notifications muted',
+                            trailing: Switch(
+                              value: _isNotifEnabled,
+                              onChanged: _toggleNotif,
+                              activeColor: const Color(0xFFCC0020),
+                            ),
                           ),
                         ]),
                         const SizedBox(height: 40),

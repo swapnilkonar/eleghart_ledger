@@ -7,12 +7,18 @@ class ExpenseModel {
   final DateTime date;
   final String? imagePath;
 
-  /// NEW: transaction type → 'debit' | 'credit'
+  /// Transaction type → 'debit' | 'credit'
   final String type;
 
-  /// Optional custom distribution: member/category → amount.
+  /// Custom distribution: member/category → amount owed.
   /// null = equal split (default, backward-compatible).
   final Map<String, double>? distribution;
+
+  /// Multi-payer breakdown: member → amount paid (e.g. {"Swapnil": 1000.0, "Rahul": 500.0})
+  final Map<String, double>? paidBy;
+
+  /// Split method → 'equal' | 'exact' | 'percentage' | 'shares'
+  final String splitType;
 
   ExpenseModel({
     required this.id,
@@ -22,10 +28,10 @@ class ExpenseModel {
     required this.categories,
     required this.date,
     this.imagePath,
-
-    /// Default = debit to keep old behavior unchanged
     this.type = 'debit',
     this.distribution,
+    this.paidBy,
+    this.splitType = 'equal',
   });
 
   Map<String, dynamic> toJson() => {
@@ -36,10 +42,10 @@ class ExpenseModel {
         'categories': categories,
         'date': date.toIso8601String(),
         'imagePath': imagePath,
-
-        /// NEW: persist transaction type
         'type': type,
         'distribution': distribution,
+        'paidBy': paidBy,
+        'splitType': splitType,
       };
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -48,16 +54,21 @@ class ExpenseModel {
       groupId: json['groupId'],
       amount: (json['amount'] as num).toDouble(),
       description: json['description'],
-      categories: List<String>.from(json['categories']),
+      categories: List<String>.from(json['categories'] ?? []),
       date: DateTime.parse(json['date']),
       imagePath: json['imagePath'],
-
-      /// NEW: backward-compatible fallback
-      /// Old expenses won’t have `type` → treat as debit
       type: json['type'] ?? 'debit',
+      splitType: json['splitType'] ?? 'equal',
       distribution: json['distribution'] != null
           ? Map<String, double>.from(
               (json['distribution'] as Map).map(
+                (k, v) => MapEntry(k as String, (v as num).toDouble()),
+              ),
+            )
+          : null,
+      paidBy: json['paidBy'] != null
+          ? Map<String, double>.from(
+              (json['paidBy'] as Map).map(
                 (k, v) => MapEntry(k as String, (v as num).toDouble()),
               ),
             )
@@ -74,6 +85,8 @@ class ExpenseModel {
     String? imagePath,
     String? type,
     Object? distribution = _sentinel,
+    Object? paidBy = _sentinel,
+    String? splitType,
   }) {
     return ExpenseModel(
       id: id,
@@ -84,28 +97,50 @@ class ExpenseModel {
       date: date ?? this.date,
       imagePath: imagePath ?? this.imagePath,
       type: type ?? this.type,
+      splitType: splitType ?? this.splitType,
       distribution: distribution == _sentinel
           ? this.distribution
           : distribution as Map<String, double>?,
+      paidBy: paidBy == _sentinel ? this.paidBy : paidBy as Map<String, double>?,
     );
   }
 
   static const _sentinel = Object();
 
-  /// Optional helper getters (useful for UI + PDF later)
   bool get isDebit => type == 'debit';
   bool get isCredit => type == 'credit';
 
-  /// Filters out system tags so amounts are only split among real categories
   List<String> get validCategories {
     final valid = categories.where((cat) {
       final lower = cat.toLowerCase().trim();
       return lower != 'emi' && lower != 'recurring';
     }).toList();
-    // If it only had system tags, bucket it to 'Uncategorized' to avoid division by zero
     return valid.isEmpty ? ['Uncategorized'] : valid;
   }
 
-  /// The amount divided by the number of valid (non-system) categories
   double get categoryShare => amount / validCategories.length;
+
+  double shareForCategory(String category) {
+    if (distribution != null && distribution!.containsKey(category)) {
+      return distribution![category]!;
+    }
+    return categoryShare;
+  }
+
+  /// Get non-null paidBy map (defaults to creator/first category if null)
+  Map<String, double> get validPaidBy {
+    if (paidBy != null && paidBy!.isNotEmpty) {
+      return paidBy!;
+    }
+    // Fallback: Primary payer from categories or 'You'
+    final mainPayer = categories.isNotEmpty ? categories.first : 'You';
+    return {mainPayer: amount};
+  }
+
+  /// Primary payer display name
+  String get primaryPayer {
+    final pMap = validPaidBy;
+    if (pMap.length == 1) return pMap.keys.first;
+    return '${pMap.keys.first} +${pMap.length - 1}';
+  }
 }

@@ -12,6 +12,17 @@ import '../models/group_model.dart';
 import '../models/expense_model.dart';
 
 class PdfExportService {
+  static Future<pw.MemoryImage?> _loadLogoImage() async {
+    try {
+      final bytes = (await rootBundle.load('assets/images/eleghart_logo.png'))
+          .buffer
+          .asUint8List();
+      return pw.MemoryImage(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<File> exportGroupReport({
     required GroupModel group,
     required List<ExpenseModel> expenses,
@@ -19,12 +30,8 @@ class PdfExportService {
     required DateTime to,
   }) async {
     final pdf = pw.Document();
+    final logo = await _loadLogoImage();
 
-    // ---- Load watermark logo ----
-    final Uint8List logoBytes =
-        (await rootBundle.load('assets/images/eleghart_logo.png'))
-            .buffer
-            .asUint8List();
 
     // ---- Filter by date range ----
     final filtered = expenses.where((e) {
@@ -49,10 +56,17 @@ class PdfExportService {
     final Map<String, double> memberTotals = {};
 
     for (final e in filtered) {
-      final share = e.categoryShare;
-      for (final m in e.validCategories) {
-        final signedShare = e.type == 'credit' ? share : -share;
-        memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
+      if (e.distribution != null) {
+        e.distribution!.forEach((m, distShare) {
+          final signedShare = e.type == 'credit' ? distShare : -distShare;
+          memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
+        });
+      } else {
+        final share = e.categoryShare;
+        for (final m in e.validCategories) {
+          final signedShare = e.type == 'credit' ? share : -share;
+          memberTotals[m] = (memberTotals[m] ?? 0) + signedShare;
+        }
       }
     }
 
@@ -66,15 +80,20 @@ class PdfExportService {
           theme: pw.ThemeData.withFont(
             base: pw.Font.helvetica(),
           ),
-          buildBackground: (context) => pw.Center(
-            child: pw.Opacity(
-              opacity: 0.08,
-              child: pw.Image(
-                pw.MemoryImage(logoBytes),
-                width: 320,
-              ),
-            ),
-          ),
+          buildBackground: logo != null
+              ? (_) => pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.07,
+                      child: pw.ClipOval(
+                        child: pw.Container(
+                          width: 250,
+                          height: 250,
+                          child: pw.Image(logo, fit: pw.BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                  )
+              : null,
         ),
         build: (context) => [
           _header(
@@ -84,6 +103,7 @@ class PdfExportService {
             totalDebit,
             totalCredit,
             netBalance,
+            logo,
           ),
           pw.SizedBox(height: 18),
 
@@ -122,11 +142,9 @@ class PdfExportService {
     required DateTime to,
   }) async {
     final pdf = pw.Document();
+    final logo = await _loadLogoImage();
 
-    final Uint8List logoBytes =
-        (await rootBundle.load('assets/images/eleghart_logo.png'))
-            .buffer
-            .asUint8List();
+
 
     // Pre-filter by date
     final filtered = expenses.where((e) {
@@ -137,7 +155,7 @@ class PdfExportService {
     double totalDebit = 0;
     double totalCredit = 0;
     for (final e in filtered) {
-      final share = e.amount / e.validCategories.length;
+      final share = e.shareForCategory(categoryName);
       if (e.type == 'credit') totalCredit += share;
       else totalDebit += share;
     }
@@ -160,19 +178,27 @@ class PdfExportService {
         pageTheme: pw.PageTheme(
           margin: const pw.EdgeInsets.all(24),
           theme: pw.ThemeData.withFont(base: pw.Font.helvetica()),
-          buildBackground: (context) => pw.Center(
-            child: pw.Opacity(
-              opacity: 0.08,
-              child: pw.Image(pw.MemoryImage(logoBytes), width: 320),
-            ),
-          ),
+          buildBackground: logo != null
+              ? (_) => pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.07,
+                      child: pw.ClipOval(
+                        child: pw.Container(
+                          width: 250,
+                          height: 250,
+                          child: pw.Image(logo, fit: pw.BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                  )
+              : null,
         ),
         build: (context) {
           final widgets = <pw.Widget>[];
 
           // ---- Overall header ----
           widgets.add(_categoryHeader(
-            categoryName, from, to, totalDebit, totalCredit, netBalance,
+            categoryName, from, to, totalDebit, totalCredit, netBalance, logo,
           ));
           widgets.add(pw.SizedBox(height: 22));
 
@@ -182,7 +208,7 @@ class PdfExportService {
             final gExpenses = entry.value;
             double gDebit = 0, gCredit = 0;
             for (final e in gExpenses) {
-              final share = e.amount / e.validCategories.length;
+              final share = e.shareForCategory(categoryName);
               if (e.type == 'credit') gCredit += share;
               else gDebit += share;
             }
@@ -233,7 +259,7 @@ class PdfExportService {
                   _tableRow(['Date', 'Type', 'Description', 'Members', 'Amount'],
                       isHeader: true),
                   ...gExpenses.map((e) {
-                    final share = e.amount / e.validCategories.length;
+                    final share = e.shareForCategory(categoryName);
                     final isCredit = e.type == 'credit';
                     return _tableRow([
                       DateFormat('dd MMM yyyy').format(e.date),
@@ -276,6 +302,7 @@ class PdfExportService {
     double totalDebit,
     double totalCredit,
     double netBalance,
+    pw.MemoryImage? logo,
   ) {
     final netPositive = netBalance >= 0;
     return pw.Container(
@@ -291,58 +318,79 @@ class PdfExportService {
           ],
         ),
       ),
-      child: pw.Column(
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text('Eleghart Ledger — Category Report',
-              style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.white)),
-          pw.SizedBox(height: 4),
-          pw.Text(categoryName,
-              style: const pw.TextStyle(fontSize: 14, color: PdfColors.white)),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            'From ${DateFormat('dd MMM yyyy').format(from)}  to  ${DateFormat('dd MMM yyyy').format(to)}',
-            style: const pw.TextStyle(fontSize: 10, color: PdfColors.white),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Eleghart Ledger - Category Report',
+                    style: pw.TextStyle(
+                        fontSize: 17,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white)),
+                pw.SizedBox(height: 4),
+                pw.Text(categoryName,
+                    style: const pw.TextStyle(fontSize: 13, color: PdfColors.white)),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'From ${DateFormat('dd MMM yyyy').format(from)}  to  ${DateFormat('dd MMM yyyy').format(to)}',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.white),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Row(children: [
+                  pw.Text('Total Debit: ',
+                      style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
+                      style: const pw.TextStyle(
+                          fontSize: 11, color: PdfColors.white)),
+                  pw.SizedBox(width: 16),
+                  pw.Text('Total Credit: ',
+                      style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
+                      style: const pw.TextStyle(
+                          fontSize: 11, color: PdfColors.white)),
+                ]),
+                pw.SizedBox(height: 4),
+                pw.Row(children: [
+                  pw.Text('Net Balance: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text(
+                    '${netPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: netPositive ? PdfColors.green200 : PdfColors.red200,
+                    ),
+                  ),
+                ]),
+              ],
+            ),
           ),
-          pw.SizedBox(height: 12),
-          pw.Row(children: [
-            pw.Text('Total Debit: ',
-                style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
-                style: const pw.TextStyle(
-                    fontSize: 11, color: PdfColors.white)),
-            pw.SizedBox(width: 16),
-            pw.Text('Total Credit: ',
-                style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
-                style: const pw.TextStyle(
-                    fontSize: 11, color: PdfColors.white)),
-          ]),
-          pw.SizedBox(height: 4),
-          pw.Row(children: [
-            pw.Text('Net Balance: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text(
-              '${netPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
-              style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                color: netPositive ? PdfColors.green200 : PdfColors.red200,
+          if (logo != null)
+            pw.Container(
+              width: 44,
+              height: 44,
+              margin: const pw.EdgeInsets.only(left: 12),
+              decoration: const pw.BoxDecoration(
+                shape: pw.BoxShape.circle,
+                color: PdfColors.white,
+              ),
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.ClipOval(
+                child: pw.Image(logo, fit: pw.BoxFit.contain),
               ),
             ),
-          ]),
         ],
       ),
     );
@@ -357,6 +405,7 @@ class PdfExportService {
     double totalDebit,
     double totalCredit,
     double netBalance,
+    pw.MemoryImage? logo,
   ) {
     final netIsPositive = netBalance >= 0;
 
@@ -364,84 +413,101 @@ class PdfExportService {
       padding: const pw.EdgeInsets.all(16),
       decoration: pw.BoxDecoration(
         borderRadius: pw.BorderRadius.circular(14),
-
-        // Eleghart reddish gradient
         gradient: const pw.LinearGradient(
           begin: pw.Alignment.topLeft,
           end: pw.Alignment.bottomRight,
           colors: [
-            PdfColor.fromInt(0xFF8B0000), // deep red
-            PdfColor.fromInt(0xFFB11226), // eleghart red
+            PdfColor.fromInt(0xFF8B0000),
+            PdfColor.fromInt(0xFFB11226),
           ],
         ),
       ),
-      child: pw.Column(
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            'Eleghart Ledger Report',
-            style: pw.TextStyle(
-              fontSize: 20,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.white,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            groupName,
-            style: const pw.TextStyle(
-              fontSize: 14,
-              color: PdfColors.white,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            'From ${DateFormat('dd MMM yyyy').format(from)}  to  ${DateFormat('dd MMM yyyy').format(to)}',
-            style: const pw.TextStyle(
-              fontSize: 11,
-              color: PdfColors.white,
-            ),
-          ),
-          pw.SizedBox(height: 12),
-
-          // ---- Totals ----
-          pw.Row(children: [
-            pw.Text('Total Debit: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Eleghart Ledger Report',
+                  style: pw.TextStyle(
+                    fontSize: 18,
                     fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
-                style: const pw.TextStyle(
-                    fontSize: 12, color: PdfColors.white)),
-          ]),
-          pw.SizedBox(height: 4),
-          pw.Row(children: [
-            pw.Text('Total Credit: ',
-                style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
-                style: const pw.TextStyle(
-                    fontSize: 12, color: PdfColors.white)),
-          ]),
-          pw.SizedBox(height: 6),
-          pw.Row(children: [
-            pw.Text('Net Balance: ',
-                style: pw.TextStyle(
+                    color: PdfColors.white,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  groupName,
+                  style: const pw.TextStyle(
                     fontSize: 13,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white)),
-            pw.Text(
-              '${netIsPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
-              style: pw.TextStyle(
-                fontSize: 13,
-                fontWeight: pw.FontWeight.bold,
-                color: netIsPositive ? PdfColors.green200 : PdfColors.red200,
+                    color: PdfColors.white,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'From ${DateFormat('dd MMM yyyy').format(from)}  to  ${DateFormat('dd MMM yyyy').format(to)}',
+                  style: const pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.white,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Row(children: [
+                  pw.Text('Total Debit: ',
+                      style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${totalDebit.toStringAsFixed(0)}',
+                      style: const pw.TextStyle(
+                          fontSize: 11, color: PdfColors.white)),
+                ]),
+                pw.SizedBox(height: 3),
+                pw.Row(children: [
+                  pw.Text('Total Credit: ',
+                      style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text('Rs. ${totalCredit.toStringAsFixed(0)}',
+                      style: const pw.TextStyle(
+                          fontSize: 11, color: PdfColors.white)),
+                ]),
+                pw.SizedBox(height: 4),
+                pw.Row(children: [
+                  pw.Text('Net Balance: ',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.Text(
+                    '${netIsPositive ? '+' : '-'} Rs. ${netBalance.abs().toStringAsFixed(0)}',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: netIsPositive ? PdfColors.green200 : PdfColors.red200,
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+          if (logo != null)
+            pw.Container(
+              width: 44,
+              height: 44,
+              margin: const pw.EdgeInsets.only(left: 12),
+              decoration: const pw.BoxDecoration(
+                shape: pw.BoxShape.circle,
+                color: PdfColors.white,
+              ),
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.ClipOval(
+                child: pw.Image(logo, fit: pw.BoxFit.contain),
               ),
             ),
-          ]),
         ],
       ),
     );

@@ -22,6 +22,7 @@ import 'insights_screen.dart';
 import 'udhaar_home_screen.dart';
 import 'global_search_sheet.dart';
 import 'wealth_dashboard_screen.dart';
+import 'splitwise_home_screen.dart';
 import '../models/wealth_models.dart';
 import '../services/wealth_repository.dart';
 import '../services/wealth_service.dart';
@@ -30,6 +31,12 @@ import '../models/person_model.dart';
 import '../models/ledger_transaction_model.dart';
 import '../models/emi_model.dart';
 import '../models/recurring_expense_model.dart';
+
+import 'export_pdf_screen.dart';
+import '../widgets/date_filter_pill.dart';
+import '../utils/date_filter.dart';
+import '../utils/data_sync.dart';
+import '../services/shared_intent_service.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String userName;
@@ -42,6 +49,7 @@ class HomeDashboard extends StatefulWidget {
 
 class _HomeDashboardState extends State<HomeDashboard> {
   List<GroupModel> _groups = [];
+  List<ExpenseModel> _allExpenses = [];
   List<ExpenseModel> _expenses = [];
   bool _loading = true;
 
@@ -71,13 +79,27 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _loadProfile();
     _loadDashboardData();
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DataSyncNotifier.instance.addListener(_loadDashboardData);
+    DateFilter.notifier.addListener(_onDateFilterChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SharedIntentService.onAppUnlocked();
+    });
   }
 
   void _onThemeChanged() => setState(() {});
 
+  void _onDateFilterChanged() {
+    if (!mounted) return;
+    _recalculateSummary(_groups, _allExpenses);
+    setState(() {});
+  }
+
   @override
   void dispose() {
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DataSyncNotifier.instance.removeListener(_loadDashboardData);
+    DateFilter.notifier.removeListener(_onDateFilterChanged);
     super.dispose();
   }
 
@@ -110,12 +132,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
       topGoal = wealthGoals.isNotEmpty ? wealthGoals.first : null;
     } catch (_) {}
 
+    _allExpenses = expenses;
     _recalculateSummary(groups, expenses);
 
     if (mounted) {
       setState(() {
         _groups = groups;
-        _expenses = expenses;
         _notifCount = _computeNotifCount(persons, txns, emis, recurrings);
         _topGoal = topGoal;
         _loading = false;
@@ -176,21 +198,24 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   void _recalculateSummary(
     List<GroupModel> groups,
-    List<ExpenseModel> expenses,
+    List<ExpenseModel> allExpenses,
   ) {
-    if (expenses.isEmpty) {
+    final filtered = allExpenses.where((e) => DateFilter.isInRange(e.date)).toList();
+
+    if (filtered.isEmpty) {
       _totalDebit = 0;
       _totalCredit = 0;
       _netBalance = 0;
       _lastExpenseDate = '-';
       _totalExpensesCount = 0;
+      _expenses = [];
       return;
     }
 
     double debit = 0;
     double credit = 0;
 
-    for (final e in expenses) {
+    for (final e in filtered) {
       if (e.type == 'credit') {
         credit += e.amount;
       } else {
@@ -202,9 +227,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _totalCredit = credit;
     _netBalance = credit - debit;
 
-    _totalExpensesCount = expenses.length;
+    _totalExpensesCount = filtered.length;
+    _expenses = filtered;
 
-    final last = expenses
+    final last = filtered
         .map((e) => e.date)
         .reduce((a, b) => a.isAfter(b) ? a : b);
 
@@ -297,28 +323,43 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return AppBar(
       backgroundColor: AppThemeNotifier.isWhite ? Colors.white.withOpacity(0.95) : Colors.black.withOpacity(0.6),
       elevation: 0,
-      titleSpacing: 20,
-      title: RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: 'Eleghart ',
-              style: GoogleFonts.sora(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppThemeNotifier.isWhite ? EleghartColors.textPrimary : Colors.white,
-              ),
+      titleSpacing: 16,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.asset(
+              'assets/images/eleghart_logo.png',
+              height: 28,
+              width: 28,
+              fit: BoxFit.contain,
             ),
-            TextSpan(
-              text: 'Ledger',
-              style: GoogleFonts.sora(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFCC0020),
-              ),
+          ),
+          const SizedBox(width: 8),
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Eleghart ',
+                  style: GoogleFonts.sora(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppThemeNotifier.isWhite ? EleghartColors.textPrimary : Colors.white,
+                  ),
+                ),
+                TextSpan(
+                  text: 'Ledger',
+                  style: GoogleFonts.sora(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFCC0020),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       actions: [
         IconButton(
@@ -355,21 +396,26 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ),
           ],
         ),
-        Padding(
-          padding: const EdgeInsets.only(right: 14),
-          child: CircleAvatar(
-            radius: 18,
-            backgroundColor: AppThemeNotifier.isWhite ? const Color(0xFFFFD6D6) : const Color(0xFF1A0A0A),
-            backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-            child: _avatar == null
-                ? Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Image.asset(
-                      'assets/icons/eleghart_icon.png',
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                : null,
+        GestureDetector(
+          onTap: () => _switchTab(4),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: AppThemeNotifier.isWhite
+                  ? const Color(0xFFE2E8F0)
+                  : const Color(0xFF1A0A0A),
+              backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
+              child: _avatar == null
+                  ? Icon(
+                      Icons.person_rounded,
+                      color: AppThemeNotifier.isWhite
+                          ? EleghartColors.accentDark
+                          : Colors.white70,
+                      size: 20,
+                    )
+                  : null,
+            ),
           ),
         ),
       ],
@@ -377,48 +423,91 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 
   Widget _buildBottomNav() {
-    return BottomAppBar(
-      color: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF0D0D0D),
-      elevation: 8,
-      child: SizedBox(
-        height: 60,
-        child: Row(
-          children: [
-            _navItem(0, Icons.home_rounded, 'Home'),
-            _navItem(1, Icons.receipt_long_rounded, 'Expenses'),
-            _navItem(2, Icons.groups_rounded, 'Groups'),
-            _navItem(3, Icons.bar_chart_rounded, 'Insights'),
-            _navItem(4, Icons.person_rounded, 'Profile'),
-          ],
+    final isWhite = AppThemeNotifier.isWhite;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      height: 66,
+      decoration: BoxDecoration(
+        color: isWhite
+            ? Colors.white.withValues(alpha: 0.94)
+            : const Color(0xFF140306).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(
+          color: isWhite
+              ? const Color(0xFFCC0020).withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.12),
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFCC0020).withValues(alpha: isWhite ? 0.08 : 0.22),
+            blurRadius: 20,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _navItem(0, Icons.home_rounded, 'Home'),
+          _navItem(1, Icons.receipt_long_rounded, 'Expenses'),
+          _navItem(2, Icons.groups_rounded, 'Groups'),
+          _navItem(3, Icons.bar_chart_rounded, 'Insights'),
+          _navItem(4, Icons.person_rounded, 'Profile'),
+        ],
       ),
     );
   }
 
   Widget _navItem(int index, IconData icon, String label) {
     final isActive = _currentTab == index;
+    final isWhite = AppThemeNotifier.isWhite;
+
     return Expanded(
       child: GestureDetector(
         onTap: () => _switchTab(index),
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
-              size: 22,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: GoogleFonts.sora(
-                fontSize: 10,
-                color: isActive ? const Color(0xFFCC0020) : (AppThemeNotifier.isWhite ? EleghartColors.accentDark.withOpacity(0.4) : Colors.white38),
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? const Color(0xFFCC0020).withValues(alpha: isWhite ? 0.12 : 0.22)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  icon,
+                  color: isActive
+                      ? const Color(0xFFCC0020)
+                      : (isWhite
+                          ? EleghartColors.accentDark.withValues(alpha: 0.45)
+                          : Colors.white38),
+                  size: 22,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: GoogleFonts.sora(
+                  fontSize: 10,
+                  color: isActive
+                      ? const Color(0xFFCC0020)
+                      : (isWhite
+                          ? EleghartColors.accentDark.withValues(alpha: 0.50)
+                          : Colors.white38),
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -470,205 +559,466 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final border =
         isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.08);
 
+    final recentExpenses = _expenses.take(4).toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$greeting, $_userName 👋',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.sora(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Your financial spaces',
-            style: GoogleFonts.sora(
-              fontSize: 13,
-              color: textSec,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Summary Card ──────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                    color: const Color(0xFFCC0020).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6))
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Total Expenses',
-                    style: GoogleFonts.sora(
-                        fontSize: 12, color: Colors.white70)),
-                const SizedBox(height: 4),
-                Text(
-                  '₹${_totalDebit >= 100000 ? (_totalDebit / 100000).toStringAsFixed(1) + 'L' : _totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
-                  style: GoogleFonts.sora(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white),
+          // ── Greeting & Date Filter ────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$greeting,',
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textSec,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$_userName 👋',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.sora(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Flexible(child: _summaryPill('↑ Income',
-                      '₹${_totalCredit >= 1000 ? (_totalCredit / 1000).toStringAsFixed(1) + 'K' : _totalCredit.toStringAsFixed(0)}',
-                      const Color(0xFF22C55E))),
-                  const SizedBox(width: 10),
-                  Flexible(child: _summaryPill('↓ Spent',
-                      '₹${_totalDebit >= 1000 ? (_totalDebit / 1000).toStringAsFixed(1) + 'K' : _totalDebit.toStringAsFixed(0)}',
-                      Colors.white70)),
-                  const SizedBox(width: 10),
-                  Flexible(child: _summaryPill('${_totalExpensesCount} Items', '', Colors.white54)),
-                ]),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              const DateFilterPill(),
+            ],
           ),
+          const SizedBox(height: 20),
+
+          // ── Hero Summary Card ──────────────────────────────────────
+          _buildHeroSummaryCard(isWhite),
 
           const SizedBox(height: 24),
 
-          // ── Quick Actions ─────────────────────────────────────
-          Text('Quick Actions',
-              style: GoogleFonts.sora(
-                  fontSize: 14,
+          // ── Quick Hub ─────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Quick Hub',
+                style: GoogleFonts.sora(
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: textPrimary)),
+                  color: textPrimary,
+                ),
+              ),
+              Text(
+                'Shortcut Tools',
+                style: GoogleFonts.sora(fontSize: 11, color: textSec),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: _quickActionCard(
-                icon: Icons.add_circle_outline_rounded,
-                label: 'Add Expense',
-                color: const Color(0xFFCC0020),
-                cardBg: cardBg,
-                border: border,
-                textPrimary: textPrimary,
-                textSec: textSec,
-                onTap: () => _switchTab(1),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _quickActionCard(
-                icon: Icons.repeat_rounded,
-                label: 'Recurring',
-                color: const Color(0xFF6366F1),
-                cardBg: cardBg,
-                border: border,
-                textPrimary: textPrimary,
-                textSec: textSec,
-                onTap: () async {
-                  await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) =>
-                              const RecurringExpenseListScreen()));
-                  _loadDashboardData();
-                  _groupsKey.currentState?.reload();
-                  _expenseListKey.currentState?.reload();
-                  _insightsKey.currentState?.reload();
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _quickActionCard(
-                icon: Icons.credit_card_outlined,
-                label: 'EMI',
-                color: const Color(0xFF0EA5E9),
-                cardBg: cardBg,
-                border: border,
-                textPrimary: textPrimary,
-                textSec: textSec,
-                onTap: () async {
-                  await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const EmiListScreen()));
-                  _loadDashboardData();
-                  _groupsKey.currentState?.reload();
-                  _expenseListKey.currentState?.reload();
-                  _insightsKey.currentState?.reload();
-                },
-              ),
-            ),
-          ]),
 
+          // Grid of 6 quick action cards
+          Row(
+            children: [
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: '+ Expense',
+                  color: const Color(0xFFCC0020),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () => _switchTab(1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.handshake_outlined,
+                  label: 'Udhaar',
+                  color: const Color(0xFFE97C00),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const UdhaarHomeScreen(),
+                      ),
+                    );
+                    _loadDashboardData();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.repeat_rounded,
+                  label: 'Recurring',
+                  color: const Color(0xFF6366F1),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RecurringExpenseListScreen(),
+                      ),
+                    );
+                    _loadDashboardData();
+                  },
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: _quickActionCard(
-                icon: Icons.handshake_outlined,
-                label: 'Udhaar',
-                color: const Color(0xFFE97C00),
-                cardBg: cardBg,
-                border: border,
-                textPrimary: textPrimary,
-                textSec: textSec,
-                onTap: () async {
-                  await Navigator.push(
+          Row(
+            children: [
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.credit_card_outlined,
+                  label: 'EMIs',
+                  color: const Color(0xFF0EA5E9),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const EmiListScreen()),
+                    );
+                    _loadDashboardData();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.track_changes_rounded,
+                  label: 'Wealth',
+                  color: const Color(0xFF10B981),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const UdhaarHomeScreen()));
-                },
+                        builder: (_) => const WealthDashboardScreen(),
+                      ),
+                    );
+                    _loadDashboardData();
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _quickActionCard(
-                icon: Icons.track_changes_rounded,
-                label: 'Wealth',
-                color: const Color(0xFFCC0020),
-                cardBg: cardBg,
-                border: border,
-                textPrimary: textPrimary,
-                textSec: textSec,
-                onTap: () async {
-                  await Navigator.push(
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.call_split_rounded,
+                  label: 'Splitwise',
+                  color: const Color(0xFF10B981),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) =>
-                              const WealthDashboardScreen()));
-                  _loadDashboardData();
-                },
+                        builder: (_) => const SplitwiseHomeScreen(),
+                      ),
+                    );
+                    _loadDashboardData();
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: SizedBox.shrink()),
-          ]),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _quickActionCard(
+                  icon: Icons.picture_as_pdf_rounded,
+                  label: 'Export PDF',
+                  color: const Color(0xFFEC4899),
+                  cardBg: cardBg,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSec: textSec,
+                  onTap: () async {
+                    if (_groups.isNotEmpty) {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ExportPdfScreen(
+                            group: _groups.first,
+                            allExpenses: _expenses,
+                          ),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please create a group first to export PDF report.'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
           // ── Wealth Snapshot Card ───────────────────────
           _buildWealthSnapshot(cardBg, border, textPrimary, textSec),
 
           const SizedBox(height: 24),
 
-          // ── Recent Activity placeholder ────────────────────────
-          Text('Recent Activity',
+          // ── Recent Activity Section ───────────────────────
+          _buildRecentActivitySection(recentExpenses, cardBg, border, textPrimary, textSec, isWhite),
+
+          const SizedBox(height: 24),
+
+          // ── Your Financial Groups Showcase ─────────────────
+          if (_groups.isNotEmpty)
+            _buildGroupsShowcase(cardBg, border, textPrimary, textSec, isWhite),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroSummaryCard(bool isWhite) {
+    final netIsPositive = _netBalance >= 0;
+    final totalFlow = _totalDebit + _totalCredit;
+    final spentRatio = totalFlow > 0 ? (_totalDebit / totalFlow).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isWhite
+              ? [const Color(0xFF8B0010), const Color(0xFFCC0020)]
+              : [const Color(0xFF5A000A), const Color(0xFF990018)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFCC0020).withOpacity(isWhite ? 0.25 : 0.4),
+            blurRadius: 22,
+            spreadRadius: 1,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Net Balance',
+                style: GoogleFonts.sora(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (netIsPositive ? Colors.greenAccent : Colors.redAccent)
+                      .withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: netIsPositive ? Colors.greenAccent : Colors.redAccent,
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  netIsPositive ? '▲ Positive' : '▼ Negative',
+                  style: GoogleFonts.sora(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: netIsPositive ? Colors.greenAccent : Colors.redAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${netIsPositive ? '₹' : '-₹'}${_fmtAmount(_netBalance.abs())}',
+            style: GoogleFonts.sora(
+              fontSize: 34,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _heroMetricItem(
+                  label: 'Income (Credit)',
+                  value: '₹${_fmtAmount(_totalCredit)}',
+                  icon: Icons.south_west_rounded,
+                  accentColor: const Color(0xFF22C55E),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 36,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                color: Colors.white.withOpacity(0.15),
+              ),
+              Expanded(
+                child: _heroMetricItem(
+                  label: 'Spent (Debit)',
+                  value: '₹${_fmtAmount(_totalDebit)}',
+                  icon: Icons.north_east_rounded,
+                  accentColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: spentRatio,
+              minHeight: 6,
+              backgroundColor: Colors.white.withOpacity(0.18),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${_groups.length} groups  •  $_totalExpensesCount transactions',
+                style: GoogleFonts.sora(fontSize: 11, color: Colors.white60),
+              ),
+              Text(
+                'Last: $_lastExpenseDate',
+                style: GoogleFonts.sora(fontSize: 11, color: Colors.white60),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtAmount(double v) {
+    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
+
+  Widget _heroMetricItem({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: accentColor.withOpacity(0.2),
+          ),
+          child: Icon(icon, color: accentColor, size: 14),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.sora(fontSize: 10, color: Colors.white60),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.sora(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentActivitySection(
+    List<ExpenseModel> recent,
+    Color cardBg,
+    Color border,
+    Color textPrimary,
+    Color textSec,
+    bool isWhite,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recent Transactions',
               style: GoogleFonts.sora(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: textPrimary)),
-          const SizedBox(height: 12),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _switchTab(1),
+              child: Text(
+                'View All →',
+                style: GoogleFonts.sora(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFCC0020),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (recent.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -679,24 +1029,214 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
             child: Column(
               children: [
-                Icon(Icons.bar_chart_rounded,
-                    size: 40,
-                    color: textSec.withOpacity(0.4)),
-                const SizedBox(height: 12),
-                Text('Dashboard & Insights',
-                    style: GoogleFonts.sora(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: textPrimary)),
+                const Icon(
+                  Icons.receipt_long_rounded,
+                  size: 40,
+                  color: Color(0xFFCC0020),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'No transactions recorded yet',
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('Coming soon',
-                    style: GoogleFonts.sora(
-                        fontSize: 12, color: textSec)),
+                Text(
+                  'Add your first expense to see live activity here',
+                  style: GoogleFonts.sora(fontSize: 11, color: textSec),
+                ),
               ],
             ),
+          )
+        else
+          Column(
+            children: recent.map((e) {
+              final isCredit = e.type == 'credit';
+              final typeColor = isCredit
+                  ? const Color(0xFF00CC66)
+                  : const Color(0xFFFF3355);
+
+              return GestureDetector(
+                onTap: () => _switchTab(1),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border),
+                    boxShadow: isWhite
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFFCC0020).withOpacity(0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            )
+                          ]
+                        : [],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isCredit ? Icons.add_rounded : Icons.remove_rounded,
+                          color: typeColor,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              e.description.isEmpty ? 'Expense' : e.description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.sora(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${e.categories.join(', ')} · ${e.date.toString().split(' ')[0]}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.sora(
+                                fontSize: 11,
+                                color: textSec,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${isCredit ? '+' : '-'}₹${e.amount.toStringAsFixed(0)}',
+                        style: GoogleFonts.sora(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: typeColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
-        ],
-      ),
+      ],
+    );
+  }
+
+  Widget _buildGroupsShowcase(
+    Color cardBg,
+    Color border,
+    Color textPrimary,
+    Color textSec,
+    bool isWhite,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Your Groups',
+              style: GoogleFonts.sora(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _switchTab(2),
+              child: Text(
+                'View All →',
+                style: GoogleFonts.sora(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFCC0020),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _groups.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) {
+              final group = _groups[i];
+              return GestureDetector(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => GroupDetailScreen(group: group),
+                    ),
+                  );
+                  _loadDashboardData();
+                },
+                child: Container(
+                  width: 160,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border),
+                    boxShadow: isWhite
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFFCC0020).withOpacity(0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            )
+                          ]
+                        : [],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${group.categories.length} categories',
+                        style: GoogleFonts.sora(fontSize: 11, color: textSec),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

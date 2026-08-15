@@ -144,6 +144,9 @@ Bottom sheet has:
   - Save Credit / Save Debit button (color matches toggle)
 Contribution list: ↑ green circle = credit (+), ↓ red circle = debit (−)
 PopScope: hardware/gesture back always pops with latest _goal
+AI Integration:
+  - Displays an "AI Wealth Coach" section with messages from `WealthService.coachMessage(_goal)`.
+
 ```
 
 ### CreateGoalScreen

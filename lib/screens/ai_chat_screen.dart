@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/expense_model.dart';
 import '../models/group_model.dart';
@@ -10,6 +11,7 @@ import '../models/person_model.dart';
 import '../models/ledger_transaction_model.dart';
 import '../services/gemma_service.dart';
 import '../services/storage_service.dart';
+import '../services/gemini_ai_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/themed_background.dart';
@@ -62,38 +64,37 @@ class _AiChatScreenState extends State<AiChatScreen> {
       _messages.add({"role": "ai", "text": "..."});
     });
 
-    // 1. On-device Gemma AI (primary)
+    // 1. Google Gemini API (Primary free LLM model)
+    try {
+      final sysPrompt = GeminiAiService.buildSystemContext(
+        expenses: widget.expenses,
+        groups: widget.groups,
+        udhaarPersons: _udhaarPersons,
+        udhaarTxns: _udhaarTransactions,
+      );
+      final geminiRes = await GeminiAiService.generateContent(
+        systemInstruction: sysPrompt,
+        userPrompt: text,
+      );
+      if (geminiRes.isNotEmpty && mounted) {
+        _streamResponse(geminiRes);
+        return;
+      }
+    } catch (_) {}
+
+    // 2. On-device Gemma AI
     if (_gemmaReady && GemmaService.isAvailable) {
       try {
         final response = await GemmaService.respond(
           systemInstruction: _buildSystemInstruction(),
           userMessage: text,
         );
-        if (mounted) _streamResponse(response.isEmpty ? _generateLocalResponse(text) : response);
+        if (mounted) {
+          _streamResponse(response.isEmpty ? _generateLocalResponse(text) : response);
+        }
         return;
-      } catch (_) {
-        // Fall through to HTTP backend
-      }
+      } catch (_) {}
     }
-
-    // 2. FastAPI backend (optional)
-    final contextData = {
-      "total_groups": widget.groups.length,
-      "total_expenses": widget.expenses.length,
-      "recent_expenses": widget.expenses.take(15).map((e) => "${e.date.toIso8601String().split('T')[0]} - ${e.description}: ₹${e.amount} [${e.categories.first}]").toList(),
-    };
-    try {
-      final res = await http.post(
-        Uri.parse(_backendUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"query": text, "ledger_context": contextData}),
-      ).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body);
-        _streamResponse(data['reply'] ?? "I received an empty response.");
-        return;
-      }
-    } catch (_) {}
 
     // 3. Rule-based local engine (always works offline)
     if (mounted) _streamResponse(_generateLocalResponse(text));
@@ -152,7 +153,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       Map<String, double> catTotals = {};
       for (var e in targetExpenses) {
         for (var c in e.validCategories) {
-          catTotals[c] = (catTotals[c] ?? 0) + e.categoryShare;
+          catTotals[c] = (catTotals[c] ?? 0) + e.shareForCategory(c);
         }
       }
       if (catTotals.isEmpty) return "You haven't categorized your expenses yet $monthStr.";
@@ -178,7 +179,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       Map<String, double> catTotals = {};
       for (var e in targetExpenses) {
         for (var c in e.validCategories) {
-          catTotals[c] = (catTotals[c] ?? 0) + e.categoryShare;
+          catTotals[c] = (catTotals[c] ?? 0) + e.shareForCategory(c);
         }
       }
       if (catTotals.isEmpty) return "Track more categorized expenses so I can find savings opportunities!";
@@ -400,26 +401,29 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       const SizedBox(width: 8),
                       CircleAvatar(backgroundColor: const Color(0xFFCC0020).withOpacity(0.15), radius: 18, child: Padding(padding: const EdgeInsets.all(6), child: Image.asset('assets/icons/eleghart_icon.png'))),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Eleghart AI', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(width: 8, height: 8, decoration: BoxDecoration(color: _gemmaReady ? const Color(0xFF00CC66) : Colors.orange, shape: BoxShape.circle)),
-                              const SizedBox(width: 6),
-                              Text(_gemmaReady ? 'Gemma AI • On-device' : 'Local Engine', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                              Text('Eleghart AI', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+                              Row(
+                                children: [
+                                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
+                                  const SizedBox(width: 6),
+                                  Text('Gemini 2.5 Flash CFO', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                                ],
+                              ),
                             ],
                           ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.key_rounded, color: Color(0xFFCC0020), size: 22),
+                            tooltip: 'Configure Free Gemini API Key',
+                            onPressed: () => _showApiKeyDialog(isWhite),
+                          ),
                         ],
-                      )
-                    ],
-                  ),
-                ),
+                      ),
+                    ),
                 Container(height: 1, color: isWhite ? const Color(0xFFEEEEEE) : Colors.white.withOpacity(0.1)),
-
-                // ── Gemma Download Banner ──
-                if (!_gemmaReady) _buildGemmaBanner(isWhite),
 
                 // ── Chat List ──
                 Expanded(
@@ -499,116 +503,168 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
-  Widget _buildGemmaBanner(bool isWhite) {
-    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
-    final textSec = isWhite ? EleghartColors.accentDark.withOpacity(0.55) : Colors.white54;
+  Future<void> _launchWebUrl(String urlString) async {
+    final uri = Uri.parse(urlString);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isWhite ? Colors.white : const Color(0xFF1A0505),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFCC0020).withOpacity(0.30),
+  void _showApiKeyDialog(bool isWhite) async {
+    final keyCtrl = TextEditingController(text: await GeminiAiService.getApiKey() ?? '');
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            const Icon(Icons.key_rounded, color: Color(0xFFCC0020), size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Add AI Key (ChatGPT / Gemini)',
+              style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white),
+            ),
+          ],
         ),
-      ),
-      child: _isDownloading
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Unlock full AI CFO intelligence for 100% free by adding your API key:',
+                style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black54 : Colors.white54, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+
+              // Guide Box 1: ChatGPT Key
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isWhite ? const Color(0xFFF1F5F9) : const Color(0xFF220C0C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFFCC0020)),
+                    Row(
+                      children: [
+                        const Icon(Icons.bolt_rounded, color: Color(0xFF10A37F), size: 16),
+                        const SizedBox(width: 6),
+                        Text('Option A: ChatGPT API Key', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Text('Downloading Gemma AI...',
-                        style: GoogleFonts.sora(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary)),
-                    const Spacer(),
-                    Text('$_downloadProgress%',
-                        style: GoogleFonts.sora(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFFCC0020))),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      children: [
+                        Text('1. Go to ', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                        GestureDetector(
+                          onTap: () => _launchWebUrl('https://platform.openai.com/api-keys'),
+                          child: Text(
+                            'platform.openai.com/api-keys',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF2563EB),
+                              decoration: TextDecoration.underline,
+                              decorationColor: const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text('2. Log in & click "Create new secret key"\n3. Paste key starting with sk-...', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
                   ],
                 ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: _downloadProgress / 100,
-                    backgroundColor: const Color(0xFFCC0020).withOpacity(0.15),
-                    color: const Color(0xFFCC0020),
-                    minHeight: 5,
-                  ),
+              ),
+              const SizedBox(height: 10),
+
+              // Guide Box 2: Gemini Key
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isWhite ? const Color(0xFFF1F5F9) : const Color(0xFF220C0C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.2)),
                 ),
-                const SizedBox(height: 6),
-                Text('${(_downloadProgress * 12 / 100).toStringAsFixed(1)} / 1.2 GB  •  Do not close the app',
-                    style: GoogleFonts.sora(fontSize: 10, color: textSec)),
-              ],
-            )
-          : Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCC0020).withOpacity(0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.psychology_rounded,
-                      color: Color(0xFFCC0020), size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Upgrade to Gemma AI',
-                          style: GoogleFonts.sora(
-                              fontSize: 13,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_awesome_rounded, color: Color(0xFF1A73E8), size: 16),
+                        const SizedBox(width: 6),
+                        Text('Option B: Google Gemini Key', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      children: [
+                        Text('1. Go to ', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                        GestureDetector(
+                          onTap: () => _launchWebUrl('https://aistudio.google.com'),
+                          child: Text(
+                            'aistudio.google.com',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: textPrimary)),
-                      Text(
-                        _downloadError ??
-                            'On-device LLM • ~1.2 GB • No internet after download',
-                        style: GoogleFonts.sora(
-                            fontSize: 11,
-                            color: _downloadError != null
-                                ? const Color(0xFFCC0020)
-                                : textSec),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _isDownloading ? null : _downloadGemma,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCC0020),
-                      borderRadius: BorderRadius.circular(10),
+                              color: const Color(0xFF2563EB),
+                              decoration: TextDecoration.underline,
+                              decorationColor: const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      _downloadError != null ? 'Retry' : 'Download',
-                      style: GoogleFonts.sora(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white),
-                    ),
-                  ),
+                    Text('2. Sign in & tap "Get API Key"\n3. Paste key starting with AIzaSy...', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
+                  ],
                 ),
-              ],
+              ),
+              const SizedBox(height: 14),
+
+              TextField(
+                controller: keyCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Paste sk-... or AIzaSy... API Key',
+                  hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
+                  filled: true,
+                  fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF2B0E0E),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+                style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFCC0020),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
+            onPressed: () async {
+              await GeminiAiService.saveApiKey(keyCtrl.text);
+              if (mounted) {
+                Navigator.pop(context);
+                final keyText = keyCtrl.text.trim();
+                final modelName = keyText.startsWith('sk-') ? 'ChatGPT' : 'Gemini';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$modelName API Key saved successfully!')),
+                );
+              }
+            },
+            child: Text('Save Key', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }

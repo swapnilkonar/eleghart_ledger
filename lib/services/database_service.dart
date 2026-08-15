@@ -13,7 +13,7 @@ import '../models/recurring_expense_model.dart';
 
 class DatabaseService {
   static Database? _db;
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
   static const _migrationKey = 'db_migrated_v1';
 
   static Future<Database> get database async {
@@ -23,18 +23,32 @@ class DatabaseService {
 
   static Future<Database> _open() async {
     final dbPath = join(await getDatabasesPath(), 'eleghart_ledger.db');
-    return openDatabase(
+    final db = await openDatabase(
       dbPath,
       version: _dbVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    await _ensureColumns(db);
+    return db;
+  }
+
+  static Future<void> _ensureColumns(Database db) async {
+    try {
+      await db.execute('ALTER TABLE expenses ADD COLUMN paid_by TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE expenses ADD COLUMN split_type TEXT');
+    } catch (_) {}
   }
 
   static Future<void> _onUpgrade(
       Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createWealthTables(db);
+    }
+    if (oldVersion < 3) {
+      await _ensureColumns(db);
     }
   }
 
@@ -57,7 +71,9 @@ class DatabaseService {
         date TEXT NOT NULL,
         image_path TEXT,
         type TEXT NOT NULL DEFAULT 'debit',
-        distribution TEXT
+        distribution TEXT,
+        paid_by TEXT,
+        split_type TEXT
       )
     ''');
     await db.execute('''
@@ -308,6 +324,7 @@ class DatabaseService {
         'name': g.name,
         'image_path': g.imagePath,
         'categories': jsonEncode(g.categories),
+        'members': jsonEncode(g.members),
       };
 
   static GroupModel _mapToGroup(Map<String, dynamic> m) => GroupModel(
@@ -316,6 +333,9 @@ class DatabaseService {
         imagePath: m['image_path'] as String?,
         categories:
             List<String>.from(jsonDecode(m['categories'] as String)),
+        members: m['members'] != null
+            ? List<String>.from(jsonDecode(m['members'] as String))
+            : const ['You'],
       );
 
   static Map<String, dynamic> _expenseToMap(ExpenseModel e) => {
@@ -329,6 +349,8 @@ class DatabaseService {
         'type': e.type,
         'distribution':
             e.distribution != null ? jsonEncode(e.distribution) : null,
+        'paid_by': e.paidBy != null ? jsonEncode(e.paidBy) : null,
+        'split_type': e.splitType,
       };
 
   static ExpenseModel _mapToExpense(Map<String, dynamic> m) => ExpenseModel(
@@ -341,9 +363,15 @@ class DatabaseService {
         date: DateTime.parse(m['date'] as String),
         imagePath: m['image_path'] as String?,
         type: m['type'] as String? ?? 'debit',
+        splitType: m['split_type'] as String? ?? 'equal',
         distribution: m['distribution'] != null
             ? Map<String, double>.from(
                 (jsonDecode(m['distribution'] as String) as Map)
+                    .map((k, v) => MapEntry(k as String, (v as num).toDouble())))
+            : null,
+        paidBy: m['paid_by'] != null
+            ? Map<String, double>.from(
+                (jsonDecode(m['paid_by'] as String) as Map)
                     .map((k, v) => MapEntry(k as String, (v as num).toDouble())))
             : null,
       );
