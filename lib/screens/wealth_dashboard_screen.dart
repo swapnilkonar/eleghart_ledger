@@ -455,6 +455,8 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                       ),
                       Text(
                         '${WealthService.formatAmount(g.currentAmount)} / ${WealthService.formatAmountFull(g.targetAmount)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.sora(
                             fontSize: 12, color: textSec),
                       ),
@@ -670,9 +672,13 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'Create Goals 10x Faster with AI',
-                        style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+                      Flexible(
+                        child: Text(
+                          'Create Goals 10x Faster with AI',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Container(
