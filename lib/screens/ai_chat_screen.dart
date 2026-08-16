@@ -611,7 +611,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       children: [
                         const Icon(Icons.flash_on_rounded, color: Color(0xFF10B981), size: 16),
                         const SizedBox(width: 6),
-                        Text('Option A: Groq LLaMA 3.3 (Recommended 100% Free)', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: isWhite ? const Color(0xFF065F46) : const Color(0xFF6EE7B7))),
+                        Expanded(
+                          child: Text(
+                            'Option A: Groq LLaMA 3.3 (Recommended 100% Free)',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? const Color(0xFF065F46) : const Color(0xFF6EE7B7),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -654,7 +663,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       children: [
                         const Icon(Icons.auto_awesome_rounded, color: Color(0xFF1A73E8), size: 16),
                         const SizedBox(width: 6),
-                        Text('Option B: Google Gemini Key (100% Free)', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                        Expanded(
+                          child: Text(
+                            'Option B: Google Gemini Key (100% Free)',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? EleghartColors.accentDark : Colors.white,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -697,7 +715,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       children: [
                         const Icon(Icons.bolt_rounded, color: Color(0xFF10A37F), size: 16),
                         const SizedBox(width: 6),
-                        Text('Option C: ChatGPT API Key', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                        Expanded(
+                          child: Text(
+                            'Option C: ChatGPT API Key',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? EleghartColors.accentDark : Colors.white,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
