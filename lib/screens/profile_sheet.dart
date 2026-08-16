@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/image_picker_helper.dart';
 import '../utils/responsive.dart';
 
 class ProfileSheet extends StatefulWidget {
@@ -42,30 +43,23 @@ class _ProfileSheetState extends State<ProfileSheet> {
     _nameController.text = prefs.getString('user_name') ?? '';
     _storedPin = prefs.getString('user_pin');
 
-    final avatarPath = prefs.getString('user_avatar_path');
-    if (avatarPath != null && File(avatarPath).existsSync()) {
-      _avatar = File(avatarPath);
+    final lostFile = await ImagePickerHelper.checkLostData();
+    if (lostFile != null) {
+      _avatar = File(lostFile.path);
+    } else {
+      final avatarPath = prefs.getString('user_avatar_path');
+      if (avatarPath != null && File(avatarPath).existsSync()) {
+        _avatar = File(avatarPath);
+      }
     }
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickAvatar(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 75,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
-
-      if (picked == null) return;
-
-      if (mounted) setState(() => _avatar = File(picked.path));
-    } catch (e) {
-      debugPrint("Error picking avatar image in sheet: $e");
-    }
+    final picked = await ImagePickerHelper.pickImage(source: source);
+    if (picked == null) return;
+    if (mounted) setState(() => _avatar = File(picked.path));
   }
 
   // 🔹 NEW: bottom sheet chooser

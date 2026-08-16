@@ -131,5 +131,5 @@ flutter_launcher_icons:
   ios: true
   image_path: assets/icons/eleghart_icon.png
   remove_alpha_ios: true
-  adaptive_icon_background: "#0F0204"
+  adaptive_icon_background: "#F4F3F0"
   adaptive_icon_foreground: assets/icons/eleghart_icon.png

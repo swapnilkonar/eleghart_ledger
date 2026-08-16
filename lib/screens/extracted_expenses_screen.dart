@@ -141,6 +141,7 @@ class _ExtractedExpensesScreenState extends State<ExtractedExpensesScreen> {
   Future<GroupModel?> _pickGroup() =>
       showModalBottomSheet<GroupModel>(
         context: context,
+        isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (_) => _GroupPickerSheet(groups: _groups),
       );
@@ -762,14 +763,15 @@ class _GroupPickerSheet extends StatelessWidget {
     final textSecondary =
         isWhite ? EleghartColors.accentDark.withOpacity(0.5) : Colors.white54;
 
-    return Container(
-      decoration: BoxDecoration(
-          color: bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+            color: bg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Container(
               width: 36,
               height: 4,
@@ -783,34 +785,37 @@ class _GroupPickerSheet extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: textPrimary)),
           const SizedBox(height: 12),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.4),
-            child: ListView(
-              shrinkWrap: true,
-              children: groups
-                  .map((g) => ListTile(
-                        leading: CircleAvatar(
-                          radius: 18,
-                          backgroundColor:
-                              const Color(0xFFCC0020).withOpacity(0.12),
-                          backgroundImage: g.imagePath != null &&
-                                  File(g.imagePath!).existsSync()
-                              ? FileImage(File(g.imagePath!))
-                              : null,
-                          child: g.imagePath == null
-                              ? const Icon(Icons.group,
-                                  color: Color(0xFFCC0020), size: 18)
-                              : null,
-                        ),
-                        title: Text(g.name,
-                            style: GoogleFonts.sora(color: textPrimary)),
-                        onTap: () => Navigator.pop(context, g),
-                      ))
-                  .toList(),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.5),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: groups
+                      .map((g) => ListTile(
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundColor:
+                                  const Color(0xFFCC0020).withOpacity(0.12),
+                              backgroundImage: g.imagePath != null &&
+                                      File(g.imagePath!).existsSync()
+                                  ? FileImage(File(g.imagePath!))
+                                  : null,
+                              child: g.imagePath == null
+                                  ? const Icon(Icons.group,
+                                      color: Color(0xFFCC0020), size: 18)
+                                  : null,
+                            ),
+                            title: Text(g.name,
+                                style: GoogleFonts.sora(color: textPrimary)),
+                            onTap: () => Navigator.pop(context, g),
+                          ))
+                      .toList(),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -13,6 +13,8 @@ import 'screens/home_dashboard.dart';
 import 'screens/set_pin_screen.dart';
 import 'screens/pin_unlock_screen.dart';
 
+import 'utils/image_picker_helper.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppThemeNotifier.initialize();
@@ -75,6 +77,7 @@ class AppEntryGate extends StatefulWidget {
 class _AppEntryGateState extends State<AppEntryGate> {
   String? _userName;
   String? _userPin;
+  bool _isLostDataReturn = false;
   bool _loading = true;
 
   @override
@@ -87,6 +90,13 @@ class _AppEntryGateState extends State<AppEntryGate> {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('user_name');
     final pin = prefs.getString('user_pin_hash') ?? prefs.getString('user_pin');
+
+    // Check if process was killed by Android OS during ImagePicker
+    final lostFile = await ImagePickerHelper.checkLostData();
+    if (lostFile != null) {
+      _isLostDataReturn = true;
+      SharedIntentService.isUnlocked = true;
+    }
 
     setState(() {
       _userName = name;
@@ -111,6 +121,11 @@ class _AppEntryGateState extends State<AppEntryGate> {
     // 2️⃣ Name exists but PIN not set yet
     if (_userPin == null || _userPin!.isEmpty) {
       return SetPinScreen(userName: _userName!);
+    }
+
+    // 2.5️⃣ Returning from ImagePicker process recovery → bypass PIN unlock
+    if (_isLostDataReturn) {
+      return HomeDashboard(userName: _userName ?? 'User');
     }
 
     // 3️⃣ Normal launch → require PIN unlock ✅

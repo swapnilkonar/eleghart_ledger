@@ -70,67 +70,75 @@ class _ExpensesScreenState extends State<ExpensesScreen>
     final isWhite = AppThemeNotifier.isWhite;
     final selectedGroup = await showModalBottomSheet<GroupModel>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: isWhite ? Colors.white : const Color(0xFF120404),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: isWhite
-                    ? const Color(0xFFCC0020).withOpacity(0.25)
-                    : Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: isWhite
+                      ? const Color(0xFFCC0020).withOpacity(0.25)
+                      : Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Select a Group',
-              style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: isWhite ? EleghartColors.accentDark : Colors.white,
+              const SizedBox(height: 16),
+              Text(
+                'Select a Group',
+                style: GoogleFonts.sora(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isWhite ? EleghartColors.accentDark : Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              const SizedBox(height: 16),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.55,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _groups.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final g = _groups[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFFCC0020).withOpacity(0.12),
+                          backgroundImage: g.imagePath != null &&
+                                  File(g.imagePath!).existsSync()
+                              ? FileImage(File(g.imagePath!))
+                              : null,
+                          child: g.imagePath == null
+                              ? const Icon(Icons.group,
+                                  color: Color(0xFFCC0020), size: 18)
+                              : null,
+                        ),
+                        title: Text(g.name,
+                            style: GoogleFonts.sora(
+                                color: isWhite
+                                    ? EleghartColors.accentDark
+                                    : Colors.white)),
+                        onTap: () => Navigator.pop(context, g),
+                      );
+                    },
+                  ),
+                ),
               ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _groups.length,
-                itemBuilder: (context, index) {
-                  final g = _groups[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: const Color(0xFFCC0020).withOpacity(0.12),
-                      backgroundImage: g.imagePath != null &&
-                              File(g.imagePath!).existsSync()
-                          ? FileImage(File(g.imagePath!))
-                          : null,
-                      child: g.imagePath == null
-                          ? const Icon(Icons.group,
-                              color: Color(0xFFCC0020), size: 18)
-                          : null,
-                    ),
-                    title: Text(g.name,
-                        style: GoogleFonts.sora(
-                            color: isWhite
-                                ? EleghartColors.accentDark
-                                : Colors.white)),
-                    onTap: () => Navigator.pop(context, g),
-                  );
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -424,6 +432,105 @@ class _ExpensesScreenState extends State<ExpensesScreen>
 
   // ─── AI extraction (on-device, no API key) ───────────────────────────────
 
+  Future<void> _showExtractionFailedDialog({
+    required File imageFile,
+    required VoidCallback onTryAgain,
+  }) async {
+    final isWhite = AppThemeNotifier.isWhite;
+    final bg = isWhite ? Colors.white : const Color(0xFF160606);
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final textSec = isWhite ? Colors.black54 : Colors.white54;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCC0020).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: Color(0xFFCC0020),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Could Not Read Receipt',
+                style: GoogleFonts.sora(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'AI could not automatically extract details from this document. You can add the expense details manually.',
+                style: GoogleFonts.sora(fontSize: 13, color: textSec, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              // Button 1: Add Expense Manually
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  final g = _groups.isNotEmpty
+                      ? _groups.first
+                      : GroupModel(
+                          id: 'default',
+                          name: 'General',
+                          members: ['You'],
+                          categories: ['General'],
+                        );
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AddExpenseScreen(
+                        group: g,
+                        categories: g.categories.isNotEmpty ? g.categories : ['General'],
+                        initialImage: imageFile,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.edit_note_rounded, color: Colors.white),
+                label: Text('✍️ Add Expense Manually', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFCC0020),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Button 2: Try Again
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  onTryAgain();
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 18, color: Color(0xFFCC0020)),
+                label: Text('Try Again', style: GoogleFonts.sora(color: const Color(0xFFCC0020), fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _runAI(File file, String fileName, {required bool isPdf}) async {
     setState(() {
       _processing = true;
@@ -432,7 +539,7 @@ class _ExpensesScreenState extends State<ExpensesScreen>
     });
     _progressCtrl.repeat();
 
-    List<ExtractedItem> items;
+    List<ExtractedItem> items = [];
     try {
       setState(() => _statusText = 'Extracting expenses...');
       if (isPdf) {
@@ -441,28 +548,24 @@ class _ExpensesScreenState extends State<ExpensesScreen>
         items = await AIExtractionService.extractFromImage(imageFile: file);
       }
     } catch (e) {
+      debugPrint("AI extraction error: $e");
+    } finally {
       _progressCtrl.stop();
-      if (!mounted) return;
-      setState(() {
-        _processing = false;
-        _statusText = 'Ready to extract expenses';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().split('\n').first)),
-      );
-      return;
+      if (mounted) {
+        setState(() {
+          _processing = false;
+          _statusText = 'Ready to extract expenses';
+        });
+      }
     }
 
-    _progressCtrl.stop();
     if (!mounted) return;
-    setState(() {
-      _processing = false;
-      _statusText = 'Ready to extract expenses';
-    });
 
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No expenses found in document')));
+      _showExtractionFailedDialog(
+        imageFile: file,
+        onTryAgain: _pickGallery,
+      );
       return;
     }
 

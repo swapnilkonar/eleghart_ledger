@@ -342,13 +342,15 @@ class SharedIntentService {
 
     await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: isWhite ? Colors.white : const Color(0xFF160606),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -445,6 +447,7 @@ class SharedIntentService {
           ],
         ),
       ),
+    ),
     );
 
     return selected;
