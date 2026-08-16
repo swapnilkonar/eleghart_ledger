@@ -80,8 +80,17 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
       ),
     );
     if (result != null) {
-      final img = await ImagePicker().pickImage(source: result, imageQuality: 75);
-      if (img != null) setState(() => _photoPath = img.path);
+      try {
+        final img = await ImagePicker().pickImage(
+          source: result,
+          imageQuality: 75,
+          maxWidth: 1024,
+          maxHeight: 1024,
+        );
+        if (img != null && mounted) setState(() => _photoPath = img.path);
+      } catch (e) {
+        debugPrint("Error picking person image: $e");
+      }
     }
   }
 

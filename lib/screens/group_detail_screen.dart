@@ -869,12 +869,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       return;
     }
     if (action == null) return;
-    final source = action == 'camera'
-        ? ImageSource.camera
-        : ImageSource.gallery;
-    final picked = await picker.pickImage(source: source, imageQuality: 75);
-    if (picked == null) return;
-    await _saveGroupEdits(newImagePath: picked.path);
+    try {
+      final source = action == 'camera'
+          ? ImageSource.camera
+          : ImageSource.gallery;
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (picked == null) return;
+      await _saveGroupEdits(newImagePath: picked.path);
+    } catch (e) {
+      debugPrint("Error picking group image: $e");
+    }
   }
 
   Future<void> _saveGroupEdits({
@@ -1786,17 +1795,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
     if (action == null) return;
 
-    final source = action == 'camera'
-        ? ImageSource.camera
-        : ImageSource.gallery;
-    final picked = await picker.pickImage(source: source, imageQuality: 75);
-    if (picked == null) return;
+    try {
+      final source = action == 'camera'
+          ? ImageSource.camera
+          : ImageSource.gallery;
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (picked == null) return;
 
-    _categoryImages[categoryName] = picked.path;
-    await StorageService.saveCategoryImages(_categoryImages);
-    PaintingBinding.instance.imageCache.clear();
-    PaintingBinding.instance.imageCache.clearLiveImages();
-    setState(() {});
+      _categoryImages[categoryName] = picked.path;
+      await StorageService.saveCategoryImages(_categoryImages);
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint("Error picking category image: $e");
+    }
   }
 
   Widget _sectionTitle(String text) {

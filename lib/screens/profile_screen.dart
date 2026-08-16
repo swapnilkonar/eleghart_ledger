@@ -165,12 +165,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (action == null) return;
 
-    final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
-    final picked = await picker.pickImage(source: source, imageQuality: 80);
-    if (picked == null) return;
+    try {
+      final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (picked == null) return;
 
-    await prefs.setString('user_avatar_path', picked.path);
-    setState(() => _avatar = File(picked.path));
+      await prefs.setString('user_avatar_path', picked.path);
+      if (mounted) setState(() => _avatar = File(picked.path));
+    } catch (e) {
+      debugPrint("Error picking avatar image: $e");
+    }
   }
 
   Future<void> _editName() async {

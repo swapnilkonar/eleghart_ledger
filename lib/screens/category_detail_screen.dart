@@ -262,14 +262,23 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       return;
     }
     if (action == null) return;
-    final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
-    final picked = await picker.pickImage(source: source, imageQuality: 75);
-    if (picked == null) return;
-    _categoryImages[_categoryName] = picked.path;
-    await StorageService.saveCategoryImages(_categoryImages);
-    PaintingBinding.instance.imageCache.clear();
-    PaintingBinding.instance.imageCache.clearLiveImages();
-    setState(() { _dataChanged = true; });
+    try {
+      final source = action == 'camera' ? ImageSource.camera : ImageSource.gallery;
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (picked == null) return;
+      _categoryImages[_categoryName] = picked.path;
+      await StorageService.saveCategoryImages(_categoryImages);
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      if (mounted) setState(() { _dataChanged = true; });
+    } catch (e) {
+      debugPrint("Error picking category detail image: $e");
+    }
   }
 
   Future<void> _exportPdf() async {

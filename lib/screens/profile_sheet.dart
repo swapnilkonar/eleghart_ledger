@@ -50,15 +50,22 @@ class _ProfileSheetState extends State<ProfileSheet> {
     setState(() {});
   }
 
-  // 🔹 UPDATED: generic picker
   Future<void> _pickAvatar(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked =
-        await picker.pickImage(source: source, imageQuality: 80);
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
 
-    if (picked == null) return;
+      if (picked == null) return;
 
-    setState(() => _avatar = File(picked.path));
+      if (mounted) setState(() => _avatar = File(picked.path));
+    } catch (e) {
+      debugPrint("Error picking avatar image in sheet: $e");
+    }
   }
 
   // 🔹 NEW: bottom sheet chooser

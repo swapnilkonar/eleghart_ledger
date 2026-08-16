@@ -159,15 +159,31 @@ class _ExpensesScreenState extends State<ExpensesScreen>
   // ─── file picking ─────────────────────────────────────────────────────────
 
   Future<void> _pickCamera() async {
-    final file = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 90);
-    if (file != null && mounted) _runAI(File(file.path), file.name, isPdf: false);
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (file != null && mounted) _runAI(File(file.path), file.name, isPdf: false);
+    } catch (e) {
+      debugPrint("Error picking camera image: $e");
+    }
   }
 
   Future<void> _pickGallery() async {
-    final file = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 90);
-    if (file != null && mounted) _runAI(File(file.path), file.name, isPdf: false);
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (file != null && mounted) _runAI(File(file.path), file.name, isPdf: false);
+    } catch (e) {
+      debugPrint("Error picking gallery image: $e");
+    }
   }
 
   Future<void> _pickPdf() async {
