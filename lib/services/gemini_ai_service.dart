@@ -227,6 +227,9 @@ class GeminiAiService {
     return buffer.toString();
   }
 
+  static const String quotaErrorPrefix = "[QUOTA_EXCEEDED]";
+  static const String authErrorPrefix = "[AUTH_FAILED]";
+
   /// Call OpenAI ChatGPT (gpt-4o-mini) or Google Gemini API depending on key format
   static Future<String> generateContent({
     required String systemInstruction,
@@ -246,7 +249,57 @@ class GeminiAiService {
 
     final apiKeyClean = apiKey.trim();
 
-    // 1. OpenAI ChatGPT API Key (starts with 'sk-')
+    // 1. Groq Cloud LLaMA 3.3 API Key (starts with 'gsk_') - 100% FREE 14,400 requests/day
+    if (apiKeyClean.startsWith('gsk_')) {
+      final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+      try {
+        final response = await http
+            .post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $apiKeyClean',
+              },
+              body: jsonEncode({
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                  {"role": "system", "content": systemInstruction},
+                  {"role": "user", "content": userPrompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 800,
+              }),
+            )
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final choices = data['choices'] as List?;
+          if (choices != null && choices.isNotEmpty) {
+            final content = choices.first['message']?['content'] as String?;
+            if (content != null && content.trim().isNotEmpty) {
+              final trimmed = content.trim();
+              if (isCodeOrNonFinancialResponse(trimmed)) {
+                return offTopicGenericMessage;
+              }
+              return trimmed;
+            }
+          }
+        } else {
+          if (response.statusCode == 401) {
+            return "$authErrorPrefix 401 Unauthorized Groq API Key.";
+          } else if (response.statusCode == 429) {
+            return "$quotaErrorPrefix 429 Groq Rate Limit Exceeded.";
+          } else {
+            return "Groq API Error (${response.statusCode}): Unable to fetch response from Groq.";
+          }
+        }
+      } catch (_) {
+        return "Network connection error while calling Groq LLaMA 3.3 API.";
+      }
+    }
+
+    // 2. OpenAI ChatGPT API Key (starts with 'sk-')
     if (apiKeyClean.startsWith('sk-')) {
       final url = Uri.parse('https://api.openai.com/v1/chat/completions');
       try {
@@ -267,7 +320,7 @@ class GeminiAiService {
                 "max_tokens": 800,
               }),
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -282,8 +335,18 @@ class GeminiAiService {
               return trimmed;
             }
           }
+        } else {
+          if (response.statusCode == 401) {
+            return "$authErrorPrefix 401 Unauthorized API Key.";
+          } else if (response.statusCode == 429) {
+            return "$quotaErrorPrefix 429 Rate Limit / Quota Exceeded.";
+          } else {
+            return "ChatGPT API Error (${response.statusCode}): Unable to fetch response from OpenAI.";
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        return "Network connection error while calling ChatGPT API.";
+      }
     }
 
     // 2. Google Gemini API Key
@@ -319,7 +382,7 @@ class GeminiAiService {
                 }
               }),
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -339,10 +402,10 @@ class GeminiAiService {
           }
         }
       } catch (_) {
-        // Fall through
+        // Fall through to next model
       }
     }
 
-    return "";
+    return "Gemini API Error: Unable to fetch response with your saved key. Please check your Gemini API Key.";
   }
 }

@@ -52,8 +52,27 @@ class _AiChatScreenState extends State<AiChatScreen> {
     "Can I save money?"
   ];
 
-  // FastAPI backend (optional — used when Gemma is not ready)
   final String _backendUrl = "http://10.0.2.2:8000/api/chat";
+
+  String? _savedApiKey;
+
+  String get _aiSubtitle {
+    if (_savedApiKey != null && _savedApiKey!.trim().isNotEmpty) {
+      final k = _savedApiKey!.trim();
+      if (k.startsWith('gsk_')) {
+        return 'Your Personal CFO • Groq LLaMA 3.3 (Free)';
+      } else if (k.startsWith('sk-')) {
+        return 'Your Personal CFO • ChatGPT AI';
+      }
+      return 'Your Personal CFO • Gemini AI';
+    }
+    return 'Your Personal CFO';
+  }
+
+  Future<void> _loadApiKey() async {
+    final key = await GeminiAiService.getApiKey();
+    if (mounted) setState(() => _savedApiKey = key);
+  }
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isTyping) return;
@@ -70,25 +89,49 @@ class _AiChatScreenState extends State<AiChatScreen> {
       return;
     }
 
-    // 1. Google Gemini / ChatGPT API Key (Primary LLM model)
-    try {
-      final sysPrompt = GeminiAiService.buildSystemContext(
-        expenses: widget.expenses,
-        groups: widget.groups,
-        udhaarPersons: _udhaarPersons,
-        udhaarTxns: _udhaarTransactions,
-      );
-      final geminiRes = await GeminiAiService.generateContent(
-        systemInstruction: sysPrompt,
-        userPrompt: text,
-      );
-      if (geminiRes.isNotEmpty && mounted) {
-        _streamResponse(geminiRes);
-        return;
-      }
-    } catch (_) {}
+    // 1. Check if user has an API Key saved (ChatGPT or Gemini)
+    final apiKey = await GeminiAiService.getApiKey();
 
-    // 2. On-device Gemma AI
+    if (apiKey != null && apiKey.trim().isNotEmpty) {
+      try {
+        final sysPrompt = GeminiAiService.buildSystemContext(
+          expenses: widget.expenses,
+          groups: widget.groups,
+          udhaarPersons: _udhaarPersons,
+          udhaarTxns: _udhaarTransactions,
+        );
+        final geminiRes = await GeminiAiService.generateContent(
+          systemInstruction: sysPrompt,
+          userPrompt: text,
+          apiKeyOverride: apiKey,
+        );
+        if (mounted) {
+          if (geminiRes.startsWith(GeminiAiService.quotaErrorPrefix)) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse("⚡ Note: Your API key reached OpenAI/Gemini quota limits (Error 429). Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
+            return;
+          } else if (geminiRes.startsWith(GeminiAiService.authErrorPrefix)) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse("🔑 Note: API Key authentication error (401). Please verify your key. Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
+            return;
+          } else if (geminiRes.isEmpty) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse(localAnswer);
+            return;
+          }
+
+          _streamResponse(geminiRes);
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          _streamResponse("API Connection Error: Unable to reach AI service. Please check your API key and internet connection.");
+          return;
+        }
+      }
+    }
+
+    // 2. On-device Gemma AI (when no API key is provided)
     if (_gemmaReady && GemmaService.isAvailable) {
       try {
         final response = await GemmaService.respond(
@@ -102,7 +145,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       } catch (_) {}
     }
 
-    // 3. Rule-based local engine (always works offline)
+    // 3. Rule-based local engine (fallback when no API key)
     if (mounted) _streamResponse(_generateLocalResponse(text));
   }
 
@@ -292,6 +335,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadApiKey();
     _initGemma();
     _loadUdhaarData();
   }
@@ -419,7 +463,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                                 children: [
                                   Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
                                   const SizedBox(width: 6),
-                                  Text('Gemini 2.5 Flash CFO', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                                  Text(_aiSubtitle, style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
                                 ],
                               ),
                             ],
@@ -533,9 +577,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
           children: [
             const Icon(Icons.key_rounded, color: Color(0xFFCC0020), size: 22),
             const SizedBox(width: 8),
-            Text(
-              'Add AI Key (ChatGPT / Gemini)',
-              style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white),
+            Expanded(
+              child: Text(
+                'Add Free AI Key (Groq / Gemini)',
+                style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white),
+              ),
             ),
           ],
         ),
@@ -545,27 +591,36 @@ class _AiChatScreenState extends State<AiChatScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Unlock full AI CFO intelligence for 100% free by adding your API key:',
+                'Unlock 100% Free AI CFO intelligence (no credit card needed):',
                 style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black54 : Colors.white54, height: 1.4),
               ),
               const SizedBox(height: 12),
 
-              // Guide Box 1: ChatGPT Key
+              // Guide Box 1: Groq Key (RECOMMENDED 100% FREE)
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isWhite ? const Color(0xFFF1F5F9) : const Color(0xFF220C0C),
+                  color: isWhite ? const Color(0xFFF0FDF4) : const Color(0xFF0C2417),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.2)),
+                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.bolt_rounded, color: Color(0xFF10A37F), size: 16),
+                        const Icon(Icons.flash_on_rounded, color: Color(0xFF10B981), size: 16),
                         const SizedBox(width: 6),
-                        Text('Option A: ChatGPT API Key', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                        Expanded(
+                          child: Text(
+                            'Option A: Groq LLaMA 3.3 (Recommended 100% Free)',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? const Color(0xFF065F46) : const Color(0xFF6EE7B7),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -573,21 +628,21 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       children: [
                         Text('1. Go to ', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
                         GestureDetector(
-                          onTap: () => _launchWebUrl('https://platform.openai.com/api-keys'),
+                          onTap: () => _launchWebUrl('https://console.groq.com/keys'),
                           child: Text(
-                            'platform.openai.com/api-keys',
+                            'console.groq.com/keys',
                             style: GoogleFonts.sora(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: const Color(0xFF2563EB),
+                              color: const Color(0xFF10B981),
                               decoration: TextDecoration.underline,
-                              decorationColor: const Color(0xFF2563EB),
+                              decorationColor: const Color(0xFF10B981),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    Text('2. Log in & click "Create new secret key"\n3. Paste key starting with sk-...', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
+                    Text('2. Sign in with Google & click "Create API Key"\n3. Paste key starting with gsk_... (14,400 free requests/day)', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
                   ],
                 ),
               ),
@@ -608,7 +663,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       children: [
                         const Icon(Icons.auto_awesome_rounded, color: Color(0xFF1A73E8), size: 16),
                         const SizedBox(width: 6),
-                        Text('Option B: Google Gemini Key', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                        Expanded(
+                          child: Text(
+                            'Option B: Google Gemini Key (100% Free)',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? EleghartColors.accentDark : Colors.white,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -630,7 +694,59 @@ class _AiChatScreenState extends State<AiChatScreen> {
                         ),
                       ],
                     ),
-                    Text('2. Sign in & tap "Get API Key"\n3. Paste key starting with AIzaSy...', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
+                    Text('2. Sign in & tap "Get API Key"\n3. Paste key starting with AIzaSy... (1,500 free requests/day)', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Guide Box 3: ChatGPT Key
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isWhite ? const Color(0xFFF1F5F9) : const Color(0xFF220C0C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.bolt_rounded, color: Color(0xFF10A37F), size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Option C: ChatGPT API Key',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isWhite ? EleghartColors.accentDark : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      children: [
+                        Text('1. Go to ', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                        GestureDetector(
+                          onTap: () => _launchWebUrl('https://platform.openai.com/api-keys'),
+                          child: Text(
+                            'platform.openai.com/api-keys',
+                            style: GoogleFonts.sora(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF2563EB),
+                              decoration: TextDecoration.underline,
+                              decorationColor: const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text('2. Log in & paste key starting with sk-...', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54, height: 1.3)),
                   ],
                 ),
               ),
@@ -639,7 +755,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
               TextField(
                 controller: keyCtrl,
                 decoration: InputDecoration(
-                  hintText: 'Paste sk-... or AIzaSy... API Key',
+                  hintText: 'Paste gsk_..., AIzaSy..., or sk-... API Key',
                   hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
                   filled: true,
                   fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF2B0E0E),
@@ -662,12 +778,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
             ),
             onPressed: () async {
               await GeminiAiService.saveApiKey(keyCtrl.text);
+              await _loadApiKey();
               if (mounted) {
                 Navigator.pop(context);
                 final keyText = keyCtrl.text.trim();
-                final modelName = keyText.startsWith('sk-') ? 'ChatGPT' : 'Gemini';
+                final modelName = keyText.startsWith('gsk_') ? 'Groq LLaMA 3.3 (Free)' : (keyText.startsWith('sk-') ? 'ChatGPT' : 'Gemini');
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$modelName API Key saved successfully!')),
+                  SnackBar(content: Text('$modelName API Key saved successfully! All chats will now use your key.')),
                 );
               }
             },

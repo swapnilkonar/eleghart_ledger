@@ -17,7 +17,10 @@ class AIExtractionService {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final inputImage = InputImage.fromFile(imageFile);
-      final result = await recognizer.processImage(inputImage);
+      final result = await recognizer.processImage(inputImage).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Extraction timed out. Image might be unreadable.'),
+          );
       if (result.text.trim().isEmpty) {
         throw Exception('No text found in image. Try a clearer photo.');
       }

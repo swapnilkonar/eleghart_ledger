@@ -92,13 +92,24 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     if (source == null) return;
 
-    final picked = await picker.pickImage(source: source, imageQuality: 75);
+    try {
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
 
-    if (picked == null) return;
+      if (picked == null) return;
 
-    setState(() {
-      _imageFile = File(picked.path);
-    });
+      if (mounted) {
+        setState(() {
+          _imageFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking group image: $e");
+    }
   }
 
   // ---------------- SAVE / UPDATE GROUP ----------------

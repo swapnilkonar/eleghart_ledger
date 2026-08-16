@@ -119,6 +119,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // ---------------- LOAD DASHBOARD DATA ----------------
 
   Future<void> _loadDashboardData() async {
+    await _loadProfile();
     await RecurringEngine.run();
     final groups = await StorageService.loadGroups();
     final expenses = await StorageService.loadExpenses();
@@ -403,10 +404,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: AppThemeNotifier.isWhite
-                  ? const Color(0xFFE2E8F0)
-                  : const Color(0xFF1A0A0A),
-              backgroundImage: _avatar != null ? FileImage(_avatar!) : null,
-              child: _avatar == null
+                  ? const Color(0xFFCC0020).withOpacity(0.12)
+                  : const Color(0xFFCC0020).withOpacity(0.25),
+              backgroundImage:
+                  _avatar != null && _avatar!.existsSync() ? FileImage(_avatar!) : null,
+              child: (_avatar == null || !_avatar!.existsSync())
                   ? Icon(
                       Icons.person_rounded,
                       color: AppThemeNotifier.isWhite

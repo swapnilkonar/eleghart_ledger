@@ -211,9 +211,16 @@ class InsightsScreenState extends State<InsightsScreen> {
         userPrompt: "Provide a 2-sentence executive summary of my financial health for ${DateFilter.label} with 1 key recommendation.",
       );
 
-      if (result.isNotEmpty && mounted) {
+      if (result.isNotEmpty &&
+          !result.startsWith(GeminiAiService.quotaErrorPrefix) &&
+          !result.startsWith(GeminiAiService.authErrorPrefix) &&
+          mounted) {
         setState(() {
           _aiExecutiveSummary = result;
+        });
+      } else if (mounted) {
+        setState(() {
+          _aiExecutiveSummary = _generateLocalCfoSummary();
         });
       }
     } catch (_) {}

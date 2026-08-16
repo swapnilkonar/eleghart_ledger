@@ -134,9 +134,17 @@ class _AddUdhaarTransactionScreenState
       ),
     );
     if (source == null) return;
-    final img = await ImagePicker()
-        .pickImage(source: source, imageQuality: 75);
-    if (img != null) setState(() => _attachmentPath = img.path);
+    try {
+      final img = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (img != null && mounted) setState(() => _attachmentPath = img.path);
+    } catch (e) {
+      debugPrint("Error picking attachment image: $e");
+    }
   }
 
   Future<void> _save() async {

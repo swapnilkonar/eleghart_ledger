@@ -34,8 +34,11 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
+        val action = intent.action
+        if (Intent.ACTION_SEND == action || Intent.ACTION_SEND_MULTIPLE == action) {
+            setIntent(intent)
+            handleIntent(intent)
+        }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -59,6 +62,10 @@ class MainActivity : FlutterFragmentActivity() {
                         methodChannel?.invokeMethod("onImageShared", filePath)
                     }
                 }
+
+                // Clear intent action so returning from ImagePicker doesn't re-trigger shared intent!
+                intent.action = null
+                intent.removeExtra(Intent.EXTRA_STREAM)
             }
         }
     }

@@ -100,13 +100,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     final selected = await showModalBottomSheet<GroupModel>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: isWhite ? Colors.white : const Color(0xFF160606),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -173,6 +175,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ],
         ),
       ),
+    ),
     );
 
     if (selected != null) {
@@ -225,10 +228,19 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     if (source == null) return;
 
-    final picked = await picker.pickImage(source: source, imageQuality: 75);
-    if (picked == null) return;
+    try {
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (picked == null) return;
 
-    setState(() => _image = File(picked.path));
+      if (mounted) setState(() => _image = File(picked.path));
+    } catch (e) {
+      debugPrint("Error picking expense image: $e");
+    }
   }
 
   // ---------------- DATE PICKER ----------------
