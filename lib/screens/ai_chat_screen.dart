@@ -455,20 +455,28 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       const SizedBox(width: 8),
                       CircleAvatar(backgroundColor: const Color(0xFFCC0020).withOpacity(0.15), radius: 18, child: Padding(padding: const EdgeInsets.all(6), child: Image.asset('assets/icons/eleghart_icon.png'))),
                       const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Eleghart AI', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
-                              Row(
-                                children: [
-                                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
-                                  const SizedBox(width: 6),
-                                  Text(_aiSubtitle, style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
-                                ],
-                              ),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Eleghart AI', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+                                Row(
+                                  children: [
+                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _aiSubtitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          const Spacer(),
                           IconButton(
                             icon: const Icon(Icons.key_rounded, color: Color(0xFFCC0020), size: 22),
                             tooltip: 'Configure Free Gemini API Key',
