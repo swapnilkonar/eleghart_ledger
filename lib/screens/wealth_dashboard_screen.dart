@@ -13,6 +13,7 @@ import 'create_goal_screen.dart';
 import 'goal_detail_screen.dart';
 
 import '../utils/data_sync.dart';
+import '../widgets/ai_wealth_sheet.dart';
 
 class WealthDashboardScreen extends StatefulWidget {
   const WealthDashboardScreen({super.key});
@@ -53,6 +54,18 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
     DataSyncNotifier.instance.removeListener(_load);
     _animCtrl.dispose();
     super.dispose();
+  }
+
+  void _showAiSheet() async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AIWealthSheet(goals: _goals),
+    );
+    if (updated == true) {
+      _load();
+    }
   }
 
   double get _totalTarget =>
@@ -133,6 +146,11 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                                     fontSize: 11, color: textSec)),
                           ],
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFCC0020), size: 22),
+                        tooltip: 'Eleghart AI Wealth Architect',
+                        onPressed: _showAiSheet,
                       ),
                     ],
                   ),
