@@ -64,7 +64,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
       _messages.add({"role": "ai", "text": "..."});
     });
 
-    // 1. Google Gemini API (Primary free LLM model)
+    // 0. Off-topic & Coding Query Guardrail
+    if (GeminiAiService.isOffTopicQuery(text)) {
+      if (mounted) _streamResponse(GeminiAiService.offTopicGenericMessage);
+      return;
+    }
+
+    // 1. Google Gemini / ChatGPT API Key (Primary LLM model)
     try {
       final sysPrompt = GeminiAiService.buildSystemContext(
         expenses: widget.expenses,
@@ -115,6 +121,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   String _generateLocalResponse(String query) {
+    if (GeminiAiService.isOffTopicQuery(query)) {
+      return GeminiAiService.offTopicGenericMessage;
+    }
+
     final q = query.toLowerCase();
     final now = DateTime.now();
     

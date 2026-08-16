@@ -14,6 +14,72 @@ import '../utils/date_filter.dart';
 class GeminiAiService {
   static const String _prefApiKey = 'ai_cfo_api_key';
 
+  static const String offTopicGenericMessage =
+      "I am your Eleghart Ledger AI Assistant focused exclusively on your personal finances, expenses, budgets, EMIs, and group balances. I cannot assist with non-financial questions outside your Eleghart Ledger data.";
+
+  /// Checks if a query is non-financial (coding, general trivia, recipes, science, non-finance tasks)
+  static bool isOffTopicQuery(String prompt) {
+    final lower = prompt.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+
+    final financialIntent = [
+      'expense', 'spending', 'spent', 'budget', 'income', 'credit', 'debit',
+      'rupee', '₹', 'rs', 'cost', 'emi', 'recurring', 'udhaar', 'debt',
+      'group', 'category', 'wealth', 'save', 'savings', 'ledger', 'balance',
+      'transaction', 'money', 'cfo', 'insights', 'financial', 'how much',
+    ];
+
+    // Coding & Software Development terms
+    final codingKeywords = [
+      'write code', 'write a python', 'write python', 'write javascript', 'write java',
+      'write c++', 'write html', 'write css', 'write flutter', 'write dart', 'write sql',
+      'how to code', 'coding', 'script to', 'function to', 'algorithm', 'debug this code',
+      'compiler', 'github', 'programming language', 'code for', 'python code',
+      'java code', 'c++ code', 'html code', 'css code', 'react code', 'flutter code',
+      'create a website', 'build an app', 'write a program', 'write a script',
+      'leetcode', 'syntax', 'refactor code', 'unit test', 'framework', 'install package',
+      'import module', 'void main', 'public static void', 'def ',
+    ];
+
+    for (final kw in codingKeywords) {
+      if (lower.contains(kw)) {
+        bool hasFinancialIntent = financialIntent.any((fi) => lower.contains(fi));
+        if (!hasFinancialIntent) return true;
+      }
+    }
+
+    // General non-financial trivia / tasks
+    final nonFinancialKeywords = [
+      'recipe for', 'cook a ', 'who won the ', 'who is the president', 'capital of ',
+      'tell me a joke', 'write an essay', 'write a poem', 'write a story',
+      'weather today', 'movie recommendation', 'solve this math equation',
+      'quantum physics', 'who is stephen hawking', 'translate this text',
+      'write a letter to my boss', 'who directed ', 'astrology', 'horoscope',
+    ];
+
+    for (final kw in nonFinancialKeywords) {
+      if (lower.contains(kw)) return true;
+    }
+
+    return false;
+  }
+
+  /// Checks if LLM generated software code blocks or non-financial content
+  static bool isCodeOrNonFinancialResponse(String text) {
+    if (text.contains('```python') ||
+        text.contains('```javascript') ||
+        text.contains('```dart') ||
+        text.contains('```java') ||
+        text.contains('```html') ||
+        text.contains('```cpp') ||
+        text.contains('```c++') ||
+        text.contains('```css') ||
+        text.contains('```code')) {
+      return true;
+    }
+    return false;
+  }
+
   static Future<String?> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_prefApiKey) ?? prefs.getString('gemini_api_key');
@@ -39,6 +105,10 @@ class GeminiAiService {
 
     buffer.writeln("You are Eleghart AI, an elite personal Chief Financial Officer (CFO) and wealth management expert built into the Eleghart Ledger mobile application.");
     buffer.writeln("Analyze the user's financial ledger below and deliver concise, intelligent, actionable, and encouraging insights.");
+    buffer.writeln("STRICT DOMAIN BOUNDARY & SCOPE RESTRICTION:");
+    buffer.writeln("1. You MUST ONLY answer questions regarding the user's financial transactions, expenses, income, budgets, category spending, EMIs, recurring bills, debts (udhaar), wealth goals, or personal financial management.");
+    buffer.writeln("2. If the user asks ANY question that is NOT related to personal finance or their Eleghart Ledger data (such as writing code, programming, recipes, general trivia, weather, entertainment, creative writing, science, etc.), you MUST decline and output EXACTLY this message:");
+    buffer.writeln("\"$offTopicGenericMessage\"");
     buffer.writeln("Rules:");
     buffer.writeln("1. Format currency as ₹ (Indian Rupees).");
     buffer.writeln("2. Be direct, clear, and professional yet friendly.");
@@ -163,6 +233,11 @@ class GeminiAiService {
     required String userPrompt,
     String? apiKeyOverride,
   }) async {
+    // 0. Pre-validation for off-topic non-financial queries
+    if (isOffTopicQuery(userPrompt)) {
+      return offTopicGenericMessage;
+    }
+
     final apiKey = apiKeyOverride ?? await getApiKey();
 
     if (apiKey == null || apiKey.trim().isEmpty) {
@@ -200,7 +275,11 @@ class GeminiAiService {
           if (choices != null && choices.isNotEmpty) {
             final content = choices.first['message']?['content'] as String?;
             if (content != null && content.trim().isNotEmpty) {
-              return content.trim();
+              final trimmed = content.trim();
+              if (isCodeOrNonFinancialResponse(trimmed)) {
+                return offTopicGenericMessage;
+              }
+              return trimmed;
             }
           }
         }
@@ -250,7 +329,11 @@ class GeminiAiService {
             if (parts != null && parts.isNotEmpty) {
               final text = parts.first['text'] as String?;
               if (text != null && text.trim().isNotEmpty) {
-                return text.trim();
+                final trimmed = text.trim();
+                if (isCodeOrNonFinancialResponse(trimmed)) {
+                  return offTopicGenericMessage;
+                }
+                return trimmed;
               }
             }
           }
