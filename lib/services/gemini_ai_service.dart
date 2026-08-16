@@ -227,6 +227,9 @@ class GeminiAiService {
     return buffer.toString();
   }
 
+  static const String quotaErrorPrefix = "[QUOTA_EXCEEDED]";
+  static const String authErrorPrefix = "[AUTH_FAILED]";
+
   /// Call OpenAI ChatGPT (gpt-4o-mini) or Google Gemini API depending on key format
   static Future<String> generateContent({
     required String systemInstruction,
@@ -284,15 +287,15 @@ class GeminiAiService {
           }
         } else {
           if (response.statusCode == 401) {
-            return "ChatGPT API Key error (401 Unauthorized): Please check that your API key is correct and active on platform.openai.com.";
+            return "$authErrorPrefix 401 Unauthorized API Key.";
           } else if (response.statusCode == 429) {
-            return "ChatGPT API Quota/Rate Limit error (429): Please check your OpenAI account billing and quota limits.";
+            return "$quotaErrorPrefix 429 Rate Limit / Quota Exceeded.";
           } else {
-            return "ChatGPT API Error (${response.statusCode}): Unable to fetch response from OpenAI. Please try again.";
+            return "ChatGPT API Error (${response.statusCode}): Unable to fetch response from OpenAI.";
           }
         }
       } catch (_) {
-        return "Network connection error while calling ChatGPT API. Please check your internet connection.";
+        return "Network connection error while calling ChatGPT API.";
       }
     }
 

@@ -103,9 +103,21 @@ class _AiChatScreenState extends State<AiChatScreen> {
           apiKeyOverride: apiKey,
         );
         if (mounted) {
-          _streamResponse(geminiRes.isEmpty
-              ? "Unable to fetch response with your saved API key. Please check your key in settings."
-              : geminiRes);
+          if (geminiRes.startsWith(GeminiAiService.quotaErrorPrefix)) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse("⚡ Note: Your API key reached OpenAI/Gemini quota limits (Error 429). Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
+            return;
+          } else if (geminiRes.startsWith(GeminiAiService.authErrorPrefix)) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse("🔑 Note: API Key authentication error (401). Please verify your key. Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
+            return;
+          } else if (geminiRes.isEmpty) {
+            final localAnswer = _generateLocalResponse(text);
+            _streamResponse(localAnswer);
+            return;
+          }
+
+          _streamResponse(geminiRes);
           return;
         }
       } catch (e) {
