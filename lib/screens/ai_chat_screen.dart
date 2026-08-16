@@ -52,8 +52,24 @@ class _AiChatScreenState extends State<AiChatScreen> {
     "Can I save money?"
   ];
 
-  // FastAPI backend (optional — used when Gemma is not ready)
   final String _backendUrl = "http://10.0.2.2:8000/api/chat";
+
+  String? _savedApiKey;
+
+  String get _aiSubtitle {
+    if (_savedApiKey != null && _savedApiKey!.trim().isNotEmpty) {
+      if (_savedApiKey!.trim().startsWith('sk-')) {
+        return 'Your Personal CFO • ChatGPT AI';
+      }
+      return 'Your Personal CFO • Gemini AI';
+    }
+    return 'Your Personal CFO';
+  }
+
+  Future<void> _loadApiKey() async {
+    final key = await GeminiAiService.getApiKey();
+    if (mounted) setState(() => _savedApiKey = key);
+  }
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isTyping) return;
@@ -70,25 +86,37 @@ class _AiChatScreenState extends State<AiChatScreen> {
       return;
     }
 
-    // 1. Google Gemini / ChatGPT API Key (Primary LLM model)
-    try {
-      final sysPrompt = GeminiAiService.buildSystemContext(
-        expenses: widget.expenses,
-        groups: widget.groups,
-        udhaarPersons: _udhaarPersons,
-        udhaarTxns: _udhaarTransactions,
-      );
-      final geminiRes = await GeminiAiService.generateContent(
-        systemInstruction: sysPrompt,
-        userPrompt: text,
-      );
-      if (geminiRes.isNotEmpty && mounted) {
-        _streamResponse(geminiRes);
-        return;
-      }
-    } catch (_) {}
+    // 1. Check if user has an API Key saved (ChatGPT or Gemini)
+    final apiKey = await GeminiAiService.getApiKey();
 
-    // 2. On-device Gemma AI
+    if (apiKey != null && apiKey.trim().isNotEmpty) {
+      try {
+        final sysPrompt = GeminiAiService.buildSystemContext(
+          expenses: widget.expenses,
+          groups: widget.groups,
+          udhaarPersons: _udhaarPersons,
+          udhaarTxns: _udhaarTransactions,
+        );
+        final geminiRes = await GeminiAiService.generateContent(
+          systemInstruction: sysPrompt,
+          userPrompt: text,
+          apiKeyOverride: apiKey,
+        );
+        if (mounted) {
+          _streamResponse(geminiRes.isEmpty
+              ? "Unable to fetch response with your saved API key. Please check your key in settings."
+              : geminiRes);
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          _streamResponse("API Connection Error: Unable to reach AI service. Please check your API key and internet connection.");
+          return;
+        }
+      }
+    }
+
+    // 2. On-device Gemma AI (when no API key is provided)
     if (_gemmaReady && GemmaService.isAvailable) {
       try {
         final response = await GemmaService.respond(
@@ -102,7 +130,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       } catch (_) {}
     }
 
-    // 3. Rule-based local engine (always works offline)
+    // 3. Rule-based local engine (fallback when no API key)
     if (mounted) _streamResponse(_generateLocalResponse(text));
   }
 
@@ -292,6 +320,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadApiKey();
     _initGemma();
     _loadUdhaarData();
   }
@@ -419,7 +448,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                                 children: [
                                   Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF00CC66), shape: BoxShape.circle)),
                                   const SizedBox(width: 6),
-                                  Text('Gemini 2.5 Flash CFO', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+                                  Text(_aiSubtitle, style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
                                 ],
                               ),
                             ],
@@ -533,9 +562,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
           children: [
             const Icon(Icons.key_rounded, color: Color(0xFFCC0020), size: 22),
             const SizedBox(width: 8),
-            Text(
-              'Add AI Key (ChatGPT / Gemini)',
-              style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white),
+            Expanded(
+              child: Text(
+                'Add AI Key (ChatGPT / Gemini)',
+                style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white),
+              ),
             ),
           ],
         ),
@@ -662,12 +693,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
             ),
             onPressed: () async {
               await GeminiAiService.saveApiKey(keyCtrl.text);
+              await _loadApiKey();
               if (mounted) {
                 Navigator.pop(context);
                 final keyText = keyCtrl.text.trim();
                 final modelName = keyText.startsWith('sk-') ? 'ChatGPT' : 'Gemini';
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$modelName API Key saved successfully!')),
+                  SnackBar(content: Text('$modelName API Key saved successfully! All chats will now use your key.')),
                 );
               }
             },

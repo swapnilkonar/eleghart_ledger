@@ -267,7 +267,7 @@ class GeminiAiService {
                 "max_tokens": 800,
               }),
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -282,8 +282,18 @@ class GeminiAiService {
               return trimmed;
             }
           }
+        } else {
+          if (response.statusCode == 401) {
+            return "ChatGPT API Key error (401 Unauthorized): Please check that your API key is correct and active on platform.openai.com.";
+          } else if (response.statusCode == 429) {
+            return "ChatGPT API Quota/Rate Limit error (429): Please check your OpenAI account billing and quota limits.";
+          } else {
+            return "ChatGPT API Error (${response.statusCode}): Unable to fetch response from OpenAI. Please try again.";
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        return "Network connection error while calling ChatGPT API. Please check your internet connection.";
+      }
     }
 
     // 2. Google Gemini API Key
@@ -319,7 +329,7 @@ class GeminiAiService {
                 }
               }),
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -339,10 +349,10 @@ class GeminiAiService {
           }
         }
       } catch (_) {
-        // Fall through
+        // Fall through to next model
       }
     }
 
-    return "";
+    return "Gemini API Error: Unable to fetch response with your saved key. Please check your Gemini API Key.";
   }
 }
