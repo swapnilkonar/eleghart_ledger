@@ -59,6 +59,10 @@ class MainActivity : FlutterFragmentActivity() {
                         methodChannel?.invokeMethod("onImageShared", filePath)
                     }
                 }
+
+                // Clear intent action so returning from ImagePicker doesn't re-trigger shared intent!
+                intent.action = null
+                intent.removeExtra(Intent.EXTRA_STREAM)
             }
         }
     }
