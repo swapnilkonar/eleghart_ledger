@@ -147,10 +147,40 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFCC0020), size: 22),
-                        tooltip: 'Eleghart AI Wealth Architect',
-                        onPressed: _showAiSheet,
+                      InkWell(
+                        onTap: _showAiSheet,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFCC0020).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 15),
+                              const SizedBox(width: 5),
+                              Text(
+                                'AI Assistant',
+                                style: GoogleFonts.sora(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -170,6 +200,10 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                       children: [
                         // ── Hero Summary Card ─────────────────────
                         _buildHeroCard(),
+                        const SizedBox(height: 16),
+
+                        // ── AI Co-Pilot Banner Card ───────────────
+                        _buildAiBanner(cardBg, border, textPrimary, textSec),
                         const SizedBox(height: 24),
 
                         // ── Goals Section ─────────────────────────
@@ -600,11 +634,77 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
     );
   }
 
+  Widget _buildAiBanner(Color cardBg, Color border, Color textPrimary, Color textSec) {
+    return InkWell(
+      onTap: _showAiSheet,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFCC0020).withOpacity(0.12),
+              const Color(0xFFCC0020).withOpacity(0.04),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.3), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: const BoxDecoration(
+                color: Color(0xFFCC0020),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Create Goals 10x Faster with AI',
+                        style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00CC66),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text('NEW', style: GoogleFonts.sora(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Type e.g. "Save ₹5 Lakhs for Car in 2 yrs" & AI sets it up!',
+                    style: GoogleFonts.sora(fontSize: 11, color: textSec),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFCC0020), size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(Color cardBg, Color border, Color textPrimary,
       Color textSec) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -612,25 +712,59 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
       ),
       child: Column(children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 56,
+          height: 56,
           decoration: BoxDecoration(
             color: const Color(0xFFCC0020).withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: const Icon(Icons.track_changes_rounded,
-              color: Color(0xFFCC0020), size: 30),
+              color: Color(0xFFCC0020), size: 28),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Text('No Goals Yet',
             style: GoogleFonts.sora(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: textPrimary)),
         const SizedBox(height: 6),
-        Text('Tap + to set your first financial goal',
-            style: GoogleFonts.sora(fontSize: 13, color: textSec),
+        Text('Type your goal to AI or set it up manually',
+            style: GoogleFonts.sora(fontSize: 12, color: textSec),
             textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _showAiSheet,
+              icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
+              label: Text('✨ Create with AI', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFCC0020),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await Navigator.push<WealthGoal>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreateGoalScreen()),
+                );
+                _load();
+              },
+              icon: Icon(Icons.add_rounded, color: textPrimary, size: 16),
+              label: Text('+ Manual', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: border),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ]),
     );
   }
