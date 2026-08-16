@@ -147,41 +147,6 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                           ],
                         ),
                       ),
-                      InkWell(
-                        onTap: _showAiSheet,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF7A0010), Color(0xFFCC0020)],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFCC0020).withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 15),
-                              const SizedBox(width: 5),
-                              Text(
-                                'AI Assistant',
-                                style: GoogleFonts.sora(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -455,6 +420,8 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                       ),
                       Text(
                         '${WealthService.formatAmount(g.currentAmount)} / ${WealthService.formatAmountFull(g.targetAmount)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.sora(
                             fontSize: 12, color: textSec),
                       ),
@@ -670,9 +637,13 @@ class _WealthDashboardScreenState extends State<WealthDashboardScreen>
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'Create Goals 10x Faster with AI',
-                        style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+                      Flexible(
+                        child: Text(
+                          'Create Goals 10x Faster with AI',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Container(
