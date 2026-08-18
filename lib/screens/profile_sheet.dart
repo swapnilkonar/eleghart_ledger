@@ -59,7 +59,8 @@ class _ProfileSheetState extends State<ProfileSheet> {
   Future<void> _pickAvatar(ImageSource source) async {
     final picked = await ImagePickerHelper.pickImage(source: source);
     if (picked == null) return;
-    if (mounted) setState(() => _avatar = File(picked.path));
+    final savedPath = await ImagePickerHelper.savePersistentPath(picked.path, 'avatar');
+    if (mounted) setState(() => _avatar = File(savedPath));
   }
 
   // 🔹 NEW: bottom sheet chooser
@@ -162,9 +163,11 @@ class _ProfileSheetState extends State<ProfileSheet> {
     }
 
     if (_avatar != null) {
-      await prefs.setString('user_avatar_path', _avatar!.path);
+      final savedPath = await ImagePickerHelper.savePersistentPath(_avatar!.path, 'avatar');
+      await prefs.setString('user_avatar_path', savedPath);
     }
 
+    DataSyncNotifier.notifyDataChanged();
     widget.onUpdated();
 
     if (!mounted) return;

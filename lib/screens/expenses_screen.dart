@@ -16,6 +16,7 @@ import '../services/pdf_export_service.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/data_sync.dart';
 import 'add_expense_screen.dart';
 import 'export_pdf_screen.dart';
 import 'extracted_expenses_screen.dart';
@@ -47,6 +48,7 @@ class _ExpensesScreenState extends State<ExpensesScreen>
   void initState() {
     super.initState();
     AppThemeNotifier.instance.addListener(_onThemeChanged);
+    DataSyncNotifier.instance.addListener(_loadGroups);
     _loadGroups();
     _progressCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1500))
@@ -160,6 +162,7 @@ class _ExpensesScreenState extends State<ExpensesScreen>
   void dispose() {
     _toastTimer?.cancel();
     AppThemeNotifier.instance.removeListener(_onThemeChanged);
+    DataSyncNotifier.instance.removeListener(_loadGroups);
     _progressCtrl.dispose();
     super.dispose();
   }
