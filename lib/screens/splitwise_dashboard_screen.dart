@@ -104,7 +104,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
     );
     Clipboard.setData(ClipboardData(text: summary));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Eleghart Split summary copied to clipboard! Ready to paste into WhatsApp.')),
+      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
     );
   }
 
@@ -137,7 +137,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Eleghart Split', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
+                          Text('Splitz', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
                           Text(_activeGroup?.name ?? 'Select Group', style: GoogleFonts.sora(fontSize: 12, color: textSec)),
                         ],
                       ),

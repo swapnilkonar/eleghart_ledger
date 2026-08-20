@@ -314,7 +314,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
     );
     Clipboard.setData(ClipboardData(text: summary));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Eleghart Split summary copied to clipboard! Ready to paste into WhatsApp.')),
+      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
     );
   }
 

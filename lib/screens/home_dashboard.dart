@@ -736,7 +736,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               Expanded(
                 child: _quickActionCard(
                   icon: Icons.call_split_rounded,
-                  label: 'Eleghart Split',
+                  label: 'Splitz',
                   color: const Color(0xFF10B981),
                   cardBg: cardBg,
                   border: border,

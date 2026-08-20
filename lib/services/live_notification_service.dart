@@ -161,7 +161,7 @@ class LiveNotificationService {
       if (totalOwedToYou > 50) {
         await showNotification(
           id: 500,
-          title: '⚖️ Eleghart Split Settlement Alert',
+          title: '⚖️ Splitz Settlement Alert',
           body: 'Group members owe you ₹${totalOwedToYou.toStringAsFixed(0)} total across split groups.',
         );
       }
