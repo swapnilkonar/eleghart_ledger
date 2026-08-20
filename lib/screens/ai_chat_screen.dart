@@ -71,7 +71,23 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   Future<void> _loadApiKey() async {
     final key = await GeminiAiService.getApiKey();
-    if (mounted) setState(() => _savedApiKey = key);
+    if (mounted) {
+      setState(() {
+        _savedApiKey = key;
+        if (key != null && key.trim().isNotEmpty) {
+          final cleanKey = key.trim();
+          if (cleanKey.startsWith('gsk_')) {
+            _messages[0]["text"] = "👋 Welcome back! Connected to Groq LLaMA Cloud AI (Free 14,400 req/day). Ask me anything about your expenses, budgets, EMIs, or wealth goals!";
+          } else if (cleanKey.startsWith('sk-')) {
+            _messages[0]["text"] = "👋 Welcome back! Connected to ChatGPT AI. Ask me anything about your personal ledger & financial health!";
+          } else {
+            _messages[0]["text"] = "👋 Welcome back! Connected to Google Gemini AI. How can I help analyze your financial health today?";
+          }
+        } else {
+          _messages[0]["text"] = "👋 Hi! I am Eleghart AI, your personal financial CFO. Ask me anything about your spending, or tap Settings to connect your free Groq AI key.";
+        }
+      });
+    }
   }
 
   Future<void> _sendMessage(String text) async {
