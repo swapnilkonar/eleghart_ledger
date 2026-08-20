@@ -249,110 +249,117 @@ class GeminiAiService {
 
     final apiKeyClean = apiKey.trim();
 
-    // 1. Groq Cloud LLaMA 3.3 API Key (starts with 'gsk_') - 100% FREE 14,400 requests/day
+    // 1. Groq Cloud LLaMA API Key (starts with 'gsk_') - 100% FREE 14,400 requests/day
     if (apiKeyClean.startsWith('gsk_')) {
-      final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
-      try {
-        final response = await http
-            .post(
-              url,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $apiKeyClean',
-              },
-              body: jsonEncode({
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                  {"role": "system", "content": systemInstruction},
-                  {"role": "user", "content": userPrompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 800,
-              }),
-            )
-            .timeout(const Duration(seconds: 15));
+      final groqModels = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it",
+      ];
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final choices = data['choices'] as List?;
-          if (choices != null && choices.isNotEmpty) {
-            final content = choices.first['message']?['content'] as String?;
-            if (content != null && content.trim().isNotEmpty) {
-              final trimmed = content.trim();
-              if (isCodeOrNonFinancialResponse(trimmed)) {
-                return offTopicGenericMessage;
+      for (final model in groqModels) {
+        final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+        try {
+          final response = await http
+              .post(
+                url,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer $apiKeyClean',
+                },
+                body: jsonEncode({
+                  "model": model,
+                  "messages": [
+                    {"role": "system", "content": systemInstruction},
+                    {"role": "user", "content": userPrompt}
+                  ],
+                  "temperature": 0.3,
+                  "max_tokens": 800,
+                }),
+              )
+              .timeout(const Duration(seconds: 15));
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final choices = data['choices'] as List?;
+            if (choices != null && choices.isNotEmpty) {
+              final content = choices.first['message']?['content'] as String?;
+              if (content != null && content.trim().isNotEmpty) {
+                final trimmed = content.trim();
+                if (isCodeOrNonFinancialResponse(trimmed)) {
+                  return offTopicGenericMessage;
+                }
+                return trimmed;
               }
-              return trimmed;
             }
-          }
-        } else {
-          if (response.statusCode == 401) {
-            return "$authErrorPrefix 401 Unauthorized Groq API Key.";
+          } else if (response.statusCode == 401) {
+            return "$authErrorPrefix Invalid API Key. Please verify your Groq API key in Settings.";
           } else if (response.statusCode == 429) {
-            return "$quotaErrorPrefix 429 Groq Rate Limit Exceeded.";
-          } else {
-            return "Groq API Error (${response.statusCode}): Unable to fetch response from Groq.";
+            return "$quotaErrorPrefix Rate Limit Reached. Groq servers are experiencing high traffic. Please try again shortly.";
           }
+          // If status code is 400 or 404, loop tries next model gracefully!
+        } catch (_) {
+          // Fallback to next model on timeout/network issue
         }
-      } catch (_) {
-        return "Network connection error while calling Groq LLaMA 3.3 API.";
       }
+      return "Groq Service Unavailable: Unable to generate AI response. Please check your Groq API Key in Settings or try again shortly.";
     }
 
     // 2. OpenAI ChatGPT API Key (starts with 'sk-')
     if (apiKeyClean.startsWith('sk-')) {
-      final url = Uri.parse('https://api.openai.com/v1/chat/completions');
-      try {
-        final response = await http
-            .post(
-              url,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $apiKeyClean',
-              },
-              body: jsonEncode({
-                "model": "gpt-4o-mini",
-                "messages": [
-                  {"role": "system", "content": systemInstruction},
-                  {"role": "user", "content": userPrompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 800,
-              }),
-            )
-            .timeout(const Duration(seconds: 15));
+      final openAiModels = ["gpt-4o-mini", "gpt-3.5-turbo"];
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final choices = data['choices'] as List?;
-          if (choices != null && choices.isNotEmpty) {
-            final content = choices.first['message']?['content'] as String?;
-            if (content != null && content.trim().isNotEmpty) {
-              final trimmed = content.trim();
-              if (isCodeOrNonFinancialResponse(trimmed)) {
-                return offTopicGenericMessage;
+      for (final model in openAiModels) {
+        final url = Uri.parse('https://api.openai.com/v1/chat/completions');
+        try {
+          final response = await http
+              .post(
+                url,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer $apiKeyClean',
+                },
+                body: jsonEncode({
+                  "model": model,
+                  "messages": [
+                    {"role": "system", "content": systemInstruction},
+                    {"role": "user", "content": userPrompt}
+                  ],
+                  "temperature": 0.3,
+                  "max_tokens": 800,
+                }),
+              )
+              .timeout(const Duration(seconds: 15));
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final choices = data['choices'] as List?;
+            if (choices != null && choices.isNotEmpty) {
+              final content = choices.first['message']?['content'] as String?;
+              if (content != null && content.trim().isNotEmpty) {
+                final trimmed = content.trim();
+                if (isCodeOrNonFinancialResponse(trimmed)) {
+                  return offTopicGenericMessage;
+                }
+                return trimmed;
               }
-              return trimmed;
             }
-          }
-        } else {
-          if (response.statusCode == 401) {
-            return "$authErrorPrefix 401 Unauthorized API Key.";
+          } else if (response.statusCode == 401) {
+            return "$authErrorPrefix Invalid API Key. Please verify your OpenAI API key in Settings.";
           } else if (response.statusCode == 429) {
-            return "$quotaErrorPrefix 429 Rate Limit / Quota Exceeded.";
-          } else {
-            return "ChatGPT API Error (${response.statusCode}): Unable to fetch response from OpenAI.";
+            return "$quotaErrorPrefix Rate Limit / Quota Exceeded. Please check your OpenAI billing plan or try again shortly.";
           }
-        }
-      } catch (_) {
-        return "Network connection error while calling ChatGPT API.";
+        } catch (_) {}
       }
+      return "ChatGPT Service Unavailable: Unable to generate AI response. Please check your OpenAI key in Settings or try again shortly.";
     }
 
-    // 2. Google Gemini API Key
-    final models = ["gemini-2.5-flash", "gemini-1.5-flash"];
+    // 3. Google Gemini API Key
+    final geminiModels = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
 
-    for (final model in models) {
+    for (final model in geminiModels) {
       final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKeyClean',
       );
@@ -400,12 +407,16 @@ class GeminiAiService {
               }
             }
           }
+        } else if (response.statusCode == 400 || response.statusCode == 401) {
+          return "$authErrorPrefix Invalid Gemini API Key. Please verify your key in Settings.";
+        } else if (response.statusCode == 429) {
+          return "$quotaErrorPrefix Gemini Rate Limit Exceeded. Please try again shortly.";
         }
       } catch (_) {
         // Fall through to next model
       }
     }
 
-    return "Gemini API Error: Unable to fetch response with your saved key. Please check your Gemini API Key.";
+    return "Gemini Service Unavailable: Unable to generate AI response. Please check your Gemini API Key in Settings.";
   }
 }
