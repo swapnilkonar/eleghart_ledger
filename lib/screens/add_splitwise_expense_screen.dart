@@ -11,8 +11,13 @@ import '../widgets/themed_background.dart';
 
 class AddSplitwiseExpenseScreen extends StatefulWidget {
   final SplitwiseGroupModel group;
+  final SplitwiseExpenseModel? existingExpense;
 
-  const AddSplitwiseExpenseScreen({super.key, required this.group});
+  const AddSplitwiseExpenseScreen({
+    super.key,
+    required this.group,
+    this.existingExpense,
+  });
 
   @override
   State<AddSplitwiseExpenseScreen> createState() => _AddSplitwiseExpenseScreenState();
@@ -22,7 +27,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   final _amountCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
 
-  final DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = DateTime.now();
   String _splitType = 'equal'; // 'equal', 'exact', 'percentage', 'shares'
 
   bool _isMultiPayer = false;
@@ -48,6 +53,33 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
       _exactCtrls[m] = TextEditingController(text: '0');
       _pctCtrls[m] = TextEditingController(text: '0');
       _sharesCtrls[m] = TextEditingController(text: '1');
+    }
+
+    if (widget.existingExpense != null) {
+      final e = widget.existingExpense!;
+      _titleCtrl.text = e.title;
+      _amountCtrl.text = e.amount.toStringAsFixed(e.amount.truncateToDouble() == e.amount ? 0 : 2);
+      _splitType = e.splitType;
+      _selectedDate = e.date;
+
+      if (e.paidBy.length > 1) {
+        _isMultiPayer = true;
+        for (final entry in e.paidBy.entries) {
+          if (_paidCtrls.containsKey(entry.key)) {
+            _paidCtrls[entry.key]!.text = entry.value.toStringAsFixed(0);
+          }
+        }
+      } else if (e.paidBy.isNotEmpty) {
+        _singlePayer = e.paidBy.keys.first;
+      }
+
+      if (_splitType == 'exact') {
+        for (final entry in e.distribution.entries) {
+          if (_exactCtrls.containsKey(entry.key)) {
+            _exactCtrls[entry.key]!.text = entry.value.toStringAsFixed(0);
+          }
+        }
+      }
     }
   }
 
@@ -174,8 +206,8 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
     final dist = _calculateDistribution();
     final paidBy = _calculatePaidBy();
 
-    final newExpense = SplitwiseExpenseModel(
-      id: const Uuid().v4(),
+    final expense = SplitwiseExpenseModel(
+      id: widget.existingExpense?.id ?? const Uuid().v4(),
       splitwiseGroupId: widget.group.id,
       title: title.isEmpty ? 'Bill' : title,
       amount: total,
@@ -185,7 +217,11 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
       distribution: dist,
     );
 
-    await SplitwiseStorageService.addExpense(newExpense);
+    if (widget.existingExpense != null) {
+      await SplitwiseStorageService.updateExpense(expense);
+    } else {
+      await SplitwiseStorageService.addExpense(expense);
+    }
     DataSyncNotifier.notifyDataChanged();
 
     if (mounted) {
@@ -216,7 +252,10 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                         onPressed: () => Navigator.pop(context),
                       ),
                       const SizedBox(width: 8),
-                      Text('Add Splitwise Bill', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
+                      Text(
+                        widget.existingExpense != null ? 'Edit Split Expense' : 'Add Split Expense',
+                        style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary),
+                      ),
                       const Spacer(),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(

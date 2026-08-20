@@ -134,6 +134,177 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
     );
   }
 
+  void _renameMemberDialog(bool isWhite, String oldName) {
+    final ctrl = TextEditingController(text: oldName);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Rename Member', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+        content: TextField(
+          controller: ctrl,
+          style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white),
+          decoration: InputDecoration(
+            hintText: 'New Member Name',
+            hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
+            filled: true,
+            fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              final newName = ctrl.text.trim();
+              if (newName.isNotEmpty && newName != oldName) {
+                await SplitwiseStorageService.renameMemberInGroup(
+                  groupId: _group.id,
+                  oldName: oldName,
+                  newName: newName,
+                );
+                DataSyncNotifier.notifyDataChanged();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _loadData();
+                }
+              }
+            },
+            child: Text('Rename', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeMemberDialog(bool isWhite, String memberName) {
+    if (_group.members.length <= 1) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Remove $memberName?', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+        content: Text('Are you sure you want to remove $memberName from ${_group.name}?', style: GoogleFonts.sora(fontSize: 13, color: isWhite ? Colors.black87 : Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              final updatedMembers = List<String>.from(_group.members)..remove(memberName);
+              final updatedGroup = _group.copyWith(members: updatedMembers);
+              await SplitwiseStorageService.updateGroup(updatedGroup);
+              DataSyncNotifier.notifyDataChanged();
+              if (mounted) {
+                Navigator.pop(context);
+                _loadData();
+              }
+            },
+            child: Text('Remove', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editGroupDialog(bool isWhite) {
+    final nameCtrl = TextEditingController(text: _group.name);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Edit Group Name', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+        content: TextField(
+          controller: nameCtrl,
+          style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Group Name',
+            hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
+            filled: true,
+            fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              final newName = nameCtrl.text.trim();
+              if (newName.isNotEmpty) {
+                final updated = _group.copyWith(name: newName);
+                await SplitwiseStorageService.updateGroup(updated);
+                DataSyncNotifier.notifyDataChanged();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _loadData();
+                }
+              }
+            },
+            child: Text('Save', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteGroupDialog(bool isWhite) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Group?', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+        content: Text('Are you sure you want to delete "${_group.name}" and all its shared bills? This action cannot be undone.', style: GoogleFonts.sora(fontSize: 13, color: isWhite ? Colors.black87 : Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              await SplitwiseStorageService.deleteGroup(_group.id);
+              DataSyncNotifier.notifyDataChanged();
+              if (mounted) {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              }
+            },
+            child: Text('Delete Group', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteExpenseDialog(bool isWhite, SplitwiseExpenseModel expense) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Bill?', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+        content: Text('Delete "${expense.title}" (₹${expense.amount.toStringAsFixed(0)})?', style: GoogleFonts.sora(fontSize: 13, color: isWhite ? Colors.black87 : Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              await SplitwiseStorageService.deleteExpense(expense.id);
+              DataSyncNotifier.notifyDataChanged();
+              if (mounted) {
+                Navigator.pop(context);
+                _loadData();
+              }
+            },
+            child: Text('Delete Bill', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _shareWhatsAppSummary() {
     final summary = SplitwiseService.generateWhatsAppSummary(
       group: _group,
@@ -143,7 +314,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
     );
     Clipboard.setData(ClipboardData(text: summary));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Splitwise summary copied to clipboard! Ready to paste into WhatsApp.')),
+      const SnackBar(content: Text('Eleghart Split summary copied to clipboard! Ready to paste into WhatsApp.')),
     );
   }
 
@@ -195,6 +366,36 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                         icon: const Icon(Icons.share_rounded, color: Color(0xFFCC0020), size: 20),
                         tooltip: 'Share WhatsApp Summary',
                         onPressed: _shareWhatsAppSummary,
+                      ),
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert_rounded, color: textPrimary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        onSelected: (val) {
+                          if (val == 'edit') _editGroupDialog(isWhite);
+                          if (val == 'delete') _deleteGroupDialog(isWhite);
+                        },
+                        itemBuilder: (ctx) => [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.edit_rounded, color: Color(0xFFCC0020), size: 18),
+                                const SizedBox(width: 10),
+                                Text('Edit Group Name', style: GoogleFonts.sora(fontSize: 13, color: textPrimary)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 18),
+                                const SizedBox(width: 10),
+                                Text('Delete Group', style: GoogleFonts.sora(fontSize: 13, color: const Color(0xFFEF4444))),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -435,12 +636,29 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text('₹${e.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 18),
-                        onPressed: () async {
-                          await SplitwiseStorageService.deleteExpense(e.id);
-                          _loadData();
-                        },
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: Color(0xFFCC0020), size: 18),
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AddSplitwiseExpenseScreen(
+                                    group: _group,
+                                    existingExpense: e,
+                                  ),
+                                ),
+                              );
+                              _loadData();
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 18),
+                            onPressed: () => _deleteExpenseDialog(isWhite, e),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -601,10 +819,27 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
               const Spacer(),
               if (m == 'You' || m == 'Swapnil')
                 Container(
+                  margin: const EdgeInsets.only(right: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(color: const Color(0xFFCC0020).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                   child: Text('Admin', style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFFCC0020))),
                 ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_rounded, color: Color(0xFFCC0020), size: 18),
+                    tooltip: 'Rename Member',
+                    onPressed: () => _renameMemberDialog(isWhite, m),
+                  ),
+                  if (_group.members.length > 1)
+                    IconButton(
+                      icon: const Icon(Icons.person_remove_rounded, color: Colors.grey, size: 18),
+                      tooltip: 'Remove Member',
+                      onPressed: () => _removeMemberDialog(isWhite, m),
+                    ),
+                ],
+              ),
             ],
           ),
         );
