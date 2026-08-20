@@ -237,6 +237,11 @@ class GeminiAiService {
     required String userPrompt,
     String? apiKeyOverride,
   }) async {
+    final trimmedPrompt = userPrompt.trim().toLowerCase();
+    if (trimmedPrompt == "hi" || trimmedPrompt == "hello" || trimmedPrompt == "hey" || trimmedPrompt == "help" || trimmedPrompt == "greetings") {
+      return "Hello! 👋 I am your Eleghart AI CFO. Ask me anything about your spending, top categories, budgets, EMIs, or wealth goals!";
+    }
+
     // 0. Pre-validation for off-topic non-financial queries
     if (isOffTopicQuery(userPrompt)) {
       return offTopicGenericMessage;
