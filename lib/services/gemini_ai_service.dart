@@ -87,7 +87,8 @@ class GeminiAiService {
 
   static Future<void> saveApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefApiKey, key.trim());
+    final cleanKey = key.trim().replaceAll(RegExp(r'\s+'), '');
+    await prefs.setString(_prefApiKey, cleanKey);
   }
 
   /// Build comprehensive system context prompt with all app financial data
@@ -247,7 +248,7 @@ class GeminiAiService {
       return "";
     }
 
-    final apiKeyClean = apiKey.trim();
+    final apiKeyClean = apiKey.trim().replaceAll(RegExp(r'\s+'), '');
 
     // 1. Groq Cloud LLaMA API Key (starts with 'gsk_') - 100% FREE 14,400 requests/day
     if (apiKeyClean.startsWith('gsk_')) {

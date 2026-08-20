@@ -214,6 +214,9 @@ class InsightsScreenState extends State<InsightsScreen> {
       if (result.isNotEmpty &&
           !result.startsWith(GeminiAiService.quotaErrorPrefix) &&
           !result.startsWith(GeminiAiService.authErrorPrefix) &&
+          !result.contains("Service Unavailable") &&
+          !result.contains("API Error") &&
+          !result.contains("Invalid API Key") &&
           mounted) {
         setState(() {
           _aiExecutiveSummary = result;

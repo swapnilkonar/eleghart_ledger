@@ -110,9 +110,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
             final localAnswer = _generateLocalResponse(text);
             _streamResponse("⚡ Note: AI Rate Limit reached. Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
             return;
-          } else if (geminiRes.startsWith(GeminiAiService.authErrorPrefix)) {
+          } else if (geminiRes.startsWith(GeminiAiService.authErrorPrefix) ||
+                     geminiRes.contains("Service Unavailable") ||
+                     geminiRes.contains("Invalid API Key") ||
+                     geminiRes.contains("API Error")) {
             final localAnswer = _generateLocalResponse(text);
-            _streamResponse("🔑 Note: API Key issue detected. Please check your API Key in Settings. Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
+            _streamResponse("🔑 Note: API Key issue detected. Answering with Eleghart Smart Local CFO:\n\n$localAnswer");
             return;
           } else if (geminiRes.isEmpty) {
             final localAnswer = _generateLocalResponse(text);
