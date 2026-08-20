@@ -253,11 +253,13 @@ class GeminiAiService {
     // 1. Groq Cloud LLaMA API Key (starts with 'gsk_') - 100% FREE 14,400 requests/day
     if (apiKeyClean.startsWith('gsk_')) {
       final groqModels = [
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b",
+        "groq/compound",
+        "groq/compound-mini",
+        "openai/gpt-oss-120b",
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "llama3-70b-8192",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it",
       ];
 
       for (final model in groqModels) {
