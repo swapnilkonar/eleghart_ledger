@@ -368,6 +368,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                         onPressed: _shareWhatsAppSummary,
                       ),
                       PopupMenuButton<String>(
+                        color: isWhite ? Colors.white : const Color(0xFF1E0B0B),
                         icon: Icon(Icons.more_vert_rounded, color: textPrimary),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         onSelected: (val) {
@@ -381,7 +382,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                               children: [
                                 const Icon(Icons.edit_rounded, color: Color(0xFFCC0020), size: 18),
                                 const SizedBox(width: 10),
-                                Text('Edit Group Name', style: GoogleFonts.sora(fontSize: 13, color: textPrimary)),
+                                Text('Edit Group Name', style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white)),
                               ],
                             ),
                           ),

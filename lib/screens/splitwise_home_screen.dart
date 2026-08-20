@@ -86,7 +86,7 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('New Splitwise Group', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
+                    Text('New Eleghart Split Group', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
                     IconButton(icon: Icon(Icons.close_rounded, color: textPrimary), onPressed: () => Navigator.pop(ctx)),
                   ],
                 ),
@@ -217,7 +217,7 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Offline Splitwise', style: GoogleFonts.sora(fontSize: 20, fontWeight: FontWeight.w800, color: textPrimary)),
+                          Text('Eleghart Split', style: GoogleFonts.sora(fontSize: 20, fontWeight: FontWeight.w800, color: textPrimary)),
                           Text('Independent Bill Splitting Engine', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
                         ],
                       ),
@@ -245,7 +245,7 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Splitwise Groups (${_groups.length})', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+                            Text('Eleghart Split Groups (${_groups.length})', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
                             TextButton.icon(
                               onPressed: () => _showCreateGroupModal(isWhite),
                               icon: const Icon(Icons.add_rounded, color: Color(0xFFCC0020), size: 16),
@@ -339,9 +339,9 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
         children: [
           const Icon(Icons.groups_rounded, color: Color(0xFFCC0020), size: 44),
           const SizedBox(height: 12),
-          Text('No Splitwise Groups Yet', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+          Text('No Eleghart Split Groups Yet', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
           const SizedBox(height: 6),
-          Text('Create a Splitwise group for trips, flatmates, or dining to split bills offline.', style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black45 : Colors.white54), textAlign: TextAlign.center),
+          Text('Create an Eleghart Split group for trips, flatmates, or dining to split bills offline.', style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black45 : Colors.white54), textAlign: TextAlign.center),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFCC0020), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

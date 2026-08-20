@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
@@ -327,7 +328,8 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
               Expanded(
                 child: TextField(
                   controller: _amountCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                   onChanged: (_) => setState(() {}),
                   style: GoogleFonts.sora(fontSize: 32, fontWeight: FontWeight.w800, color: textPrimary),
                   decoration: InputDecoration(
