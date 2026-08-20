@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../models/expense_model.dart';
-import '../models/group_model.dart';
+import '../models/splitwise_models.dart';
 import '../services/splitwise_service.dart';
-import '../services/storage_service.dart';
+import '../services/splitwise_storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../utils/data_sync.dart';
 import '../widgets/themed_background.dart';
-import 'add_split_expense_screen.dart';
+import 'add_splitwise_expense_screen.dart';
 
 class SplitwiseDashboardScreen extends StatefulWidget {
-  final GroupModel? initialGroup;
+  final SplitwiseGroupModel? initialGroup;
 
   const SplitwiseDashboardScreen({super.key, this.initialGroup});
 
@@ -23,9 +22,8 @@ class SplitwiseDashboardScreen extends StatefulWidget {
 
 class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
   bool _loading = true;
-  List<GroupModel> _groups = [];
-  GroupModel? _activeGroup;
-  List<ExpenseModel> _allExpenses = [];
+  List<SplitwiseGroupModel> _groups = [];
+  SplitwiseGroupModel? _activeGroup;
 
   List<MemberBalance> _balances = [];
   List<SplitTransfer> _transfers = [];
@@ -45,10 +43,10 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    final groups = await StorageService.loadGroups();
-    final expenses = await StorageService.loadExpenses();
+    final groups = await SplitwiseStorageService.loadGroups();
+    final expenses = await SplitwiseStorageService.loadExpenses();
 
-    GroupModel? selectedGroup;
+    SplitwiseGroupModel? selectedGroup;
     if (widget.initialGroup != null) {
       selectedGroup = groups.where((g) => g.id == widget.initialGroup!.id).firstOrNull ?? widget.initialGroup;
     } else if (_activeGroup != null) {
@@ -57,7 +55,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
     selectedGroup ??= groups.isNotEmpty ? groups.first : null;
 
     if (selectedGroup != null) {
-      final grpExpenses = expenses.where((e) => e.groupId == selectedGroup!.id && e.isDebit).toList();
+      final grpExpenses = expenses.where((e) => e.splitwiseGroupId == selectedGroup!.id).toList();
       _totalGroupExpenses = grpExpenses.fold(0.0, (sum, e) => sum + e.amount);
       _balances = SplitwiseService.calculateMemberBalances(selectedGroup, grpExpenses);
       _transfers = SplitwiseService.simplifyDebts(_balances);
@@ -67,7 +65,6 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
       setState(() {
         _groups = groups;
         _activeGroup = selectedGroup;
-        _allExpenses = expenses;
         _loading = false;
       });
     }
@@ -76,22 +73,18 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
   void _recordSettlement(SplitTransfer transfer) async {
     if (_activeGroup == null) return;
 
-    final settlementExpense = ExpenseModel(
+    final settlementExpense = SplitwiseExpenseModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      groupId: _activeGroup!.id,
+      splitwiseGroupId: _activeGroup!.id,
+      title: 'Settlement: ${transfer.fromMember} ➔ ${transfer.toMember}',
       amount: transfer.amount,
-      description: 'Settlement: ${transfer.fromMember} ➔ ${transfer.toMember}',
-      categories: ['Settlement'],
       date: DateTime.now(),
-      type: 'debit',
       splitType: 'exact',
       paidBy: {transfer.fromMember: transfer.amount},
       distribution: {transfer.toMember: transfer.amount},
     );
 
-    final expenses = await StorageService.loadExpenses();
-    expenses.insert(0, settlementExpense);
-    await StorageService.saveExpenses(expenses);
+    await SplitwiseStorageService.addExpense(settlementExpense);
     DataSyncNotifier.notifyDataChanged();
 
     if (mounted) {
@@ -111,7 +104,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
     );
     Clipboard.setData(ClipboardData(text: summary));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Splitwise summary copied to clipboard! Ready to paste into WhatsApp.')),
+      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
     );
   }
 
@@ -144,7 +137,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Offline Splitwise', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
+                          Text('Splitz', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
                           Text(_activeGroup?.name ?? 'Select Group', style: GoogleFonts.sora(fontSize: 12, color: textSec)),
                         ],
                       ),
@@ -188,7 +181,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
                                   label: Text('+ Add Split', style: GoogleFonts.sora(color: Colors.white, fontWeight: FontWeight.w700)),
                                   onPressed: () => Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (_) => AddSplitExpenseScreen(group: _activeGroup!)),
+                                    MaterialPageRoute(builder: (_) => AddSplitwiseExpenseScreen(group: _activeGroup!)),
                                   ),
                                 ),
                               ),
@@ -240,12 +233,12 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
         border: Border.all(color: isWhite ? const Color(0xFFEEEEEE) : const Color(0xFFCC0020).withOpacity(0.2)),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<GroupModel>(
+        child: DropdownButton<SplitwiseGroupModel>(
           value: _activeGroup,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFCC0020)),
           items: _groups.map((g) {
-            return DropdownMenuItem<GroupModel>(
+            return DropdownMenuItem<SplitwiseGroupModel>(
               value: g,
               child: Text(g.name, style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
             );

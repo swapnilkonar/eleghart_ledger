@@ -154,7 +154,7 @@ class SplitwiseService {
       }
     }
     buffer.writeln("");
-    buffer.writeln("Sent via Eleghart Splitwise 📱");
+    buffer.writeln("Sent via Splitz 📱");
     return buffer.toString();
   }
 }

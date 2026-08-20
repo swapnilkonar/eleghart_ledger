@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../models/group_model.dart';
 import '../services/storage_service.dart';
 import '../theme/eleghart_colors.dart';
+import '../utils/image_picker_helper.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   final GroupModel? existingGroup; // 👈 edit support
@@ -128,6 +129,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     setState(() => _saving = true);
 
+    String? persistentImagePath;
+    if (_imageFile != null) {
+      persistentImagePath = await ImagePickerHelper.savePersistentPath(_imageFile!.path, 'group');
+    }
+
     final groups = await StorageService.loadGroups();
 
     if (isEditMode) {
@@ -138,7 +144,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         groups[index] = GroupModel(
           id: widget.existingGroup!.id,
           name: name,
-          imagePath: _imageFile?.path,
+          imagePath: persistentImagePath ?? widget.existingGroup!.imagePath,
           categories: _selectedCategory != null
               ? [_selectedCategory!]
               : widget.existingGroup!.categories,
@@ -149,7 +155,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       final newGroup = GroupModel(
         id: const Uuid().v4(),
         name: name,
-        imagePath: _imageFile?.path,
+        imagePath: persistentImagePath,
         categories: _selectedCategory != null ? [_selectedCategory!] : [],
       );
 

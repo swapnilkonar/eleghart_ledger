@@ -8,6 +8,7 @@ import '../services/live_notification_service.dart';
 import '../services/pin_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/data_sync.dart';
 import '../utils/image_picker_helper.dart';
 import '../widgets/themed_background.dart';
 import 'set_pin_screen.dart';
@@ -43,8 +44,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Check if MainActivity was recreated during image picking
     final lostFile = await ImagePickerHelper.checkLostData();
     if (lostFile != null) {
-      await prefs.setString('user_avatar_path', lostFile.path);
-      setState(() => _avatar = File(lostFile.path));
+      final savedPath = await ImagePickerHelper.savePersistentPath(lostFile.path, 'avatar');
+      await prefs.setString('user_avatar_path', savedPath);
+      setState(() => _avatar = File(savedPath));
+      DataSyncNotifier.notifyDataChanged();
     } else {
       final avatarPath = prefs.getString('user_avatar_path');
       if (avatarPath != null && File(avatarPath).existsSync()) {
@@ -169,6 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (action == 'remove') {
       await prefs.remove('user_avatar_path');
       setState(() => _avatar = null);
+      DataSyncNotifier.notifyDataChanged();
       return;
     }
 
@@ -178,8 +182,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picked = await ImagePickerHelper.pickImage(source: source);
     if (picked == null) return;
 
-    await prefs.setString('user_avatar_path', picked.path);
-    if (mounted) setState(() => _avatar = File(picked.path));
+    final savedPath = await ImagePickerHelper.savePersistentPath(picked.path, 'avatar');
+    await prefs.setString('user_avatar_path', savedPath);
+    if (mounted) setState(() => _avatar = File(savedPath));
+    DataSyncNotifier.notifyDataChanged();
   }
 
   Future<void> _editName() async {

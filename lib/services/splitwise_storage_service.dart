@@ -72,10 +72,84 @@ class SplitwiseStorageService {
     await saveExpenses(list);
   }
 
+  static Future<void> updateExpense(SplitwiseExpenseModel expense) async {
+    final list = await loadExpenses();
+    final idx = list.indexWhere((e) => e.id == expense.id);
+    if (idx != -1) {
+      list[idx] = expense;
+      await saveExpenses(list);
+    }
+  }
+
   static Future<void> deleteExpense(String expenseId) async {
     final list = await loadExpenses();
     list.removeWhere((e) => e.id == expenseId);
     await saveExpenses(list);
+  }
+
+  /// Renames a member across the group model and all associated bill expenses
+  static Future<void> renameMemberInGroup({
+    required String groupId,
+    required String oldName,
+    required String newName,
+  }) async {
+    final cleanNewName = newName.trim();
+    if (cleanNewName.isEmpty || oldName == cleanNewName) return;
+
+    // 1. Update Group Members list
+    final groups = await loadGroups();
+    final groupIdx = groups.indexWhere((g) => g.id == groupId);
+    if (groupIdx != -1) {
+      final members = List<String>.from(groups[groupIdx].members);
+      final mIdx = members.indexOf(oldName);
+      if (mIdx != -1) {
+        members[mIdx] = cleanNewName;
+        groups[groupIdx] = groups[groupIdx].copyWith(members: members);
+        await saveGroups(groups);
+      }
+    }
+
+    // 2. Update Expenses paidBy and distribution maps
+    final expenses = await loadExpenses();
+    bool modified = false;
+    for (int i = 0; i < expenses.length; i++) {
+      final e = expenses[i];
+      if (e.splitwiseGroupId == groupId) {
+        bool expModified = false;
+
+        final newPaidBy = Map<String, double>.from(e.paidBy);
+        if (newPaidBy.containsKey(oldName)) {
+          final val = newPaidBy.remove(oldName)!;
+          newPaidBy[cleanNewName] = val;
+          expModified = true;
+        }
+
+        final newDist = Map<String, double>.from(e.distribution);
+        if (newDist.containsKey(oldName)) {
+          final val = newDist.remove(oldName)!;
+          newDist[cleanNewName] = val;
+          expModified = true;
+        }
+
+        if (expModified) {
+          expenses[i] = SplitwiseExpenseModel(
+            id: e.id,
+            splitwiseGroupId: e.splitwiseGroupId,
+            title: e.title,
+            amount: e.amount,
+            date: e.date,
+            splitType: e.splitType,
+            paidBy: newPaidBy,
+            distribution: newDist,
+          );
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      await saveExpenses(expenses);
+    }
   }
 
   /// Sanitizes expenses for a group to ensure 'equal' splits are evenly divided across all members

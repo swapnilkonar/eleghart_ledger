@@ -35,10 +35,19 @@ class DatabaseService {
 
   static Future<void> _ensureColumns(Database db) async {
     try {
+      await db.execute('ALTER TABLE groups ADD COLUMN members TEXT');
+    } catch (_) {}
+    try {
       await db.execute('ALTER TABLE expenses ADD COLUMN paid_by TEXT');
     } catch (_) {}
     try {
       await db.execute('ALTER TABLE expenses ADD COLUMN split_type TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE persons ADD COLUMN photo_path TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE ledger_transactions ADD COLUMN attachment_path TEXT');
     } catch (_) {}
   }
 
@@ -47,9 +56,7 @@ class DatabaseService {
     if (oldVersion < 2) {
       await _createWealthTables(db);
     }
-    if (oldVersion < 3) {
-      await _ensureColumns(db);
-    }
+    await _ensureColumns(db);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -58,7 +65,8 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         image_path TEXT,
-        categories TEXT NOT NULL
+        categories TEXT NOT NULL,
+        members TEXT
       )
     ''');
     await db.execute('''
