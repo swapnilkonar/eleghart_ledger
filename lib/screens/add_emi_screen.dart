@@ -85,6 +85,12 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     return list;
   }
 
+  String get _categoryDisplayText {
+    final real = _realCategories;
+    if (real.isEmpty) return 'EMI';
+    return real.join(', ');
+  }
+
   Future<void> _loadGroups() async {
     final g = await StorageService.loadGroups();
     if (mounted) {
@@ -102,7 +108,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
   }
 
   Future<void> _showCategoryPicker() async {
-    final validCategories = _currentCategories;
+    final validCategories = _currentCategories.where((c) => c.toLowerCase().trim() != 'emi').toList();
     await showModalBottomSheet(
       context: context,
       backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
@@ -355,9 +361,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      _selectedCategories.isEmpty
-                                          ? 'Select Categories'
-                                          : _selectedCategories.join(', '),
+                                      _categoryDisplayText,
                                       style: GoogleFonts.sora(fontSize: 14, color: textPrimary),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
