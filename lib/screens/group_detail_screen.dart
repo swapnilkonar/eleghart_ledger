@@ -462,7 +462,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final inRange = _expenses
         .where((e) => DateFilter.isInRange(e.date))
         .toList();
-    final filtered = inRange.isNotEmpty ? inRange : _expenses;
+    final filtered = inRange;
     double totalDebit = 0;
     double totalCredit = 0;
     for (final e in filtered) {
@@ -914,10 +914,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ---------------- EXPENSE LIST ----------------
 
   Widget _buildExpenseList() {
-    final hasInRange = _expenses.any((e) => DateFilter.isInRange(e.date));
-
     final visibleExpenses = _expenses.where((e) {
-      if (hasInRange && !DateFilter.isInRange(e.date)) return false;
+      if (!DateFilter.isInRange(e.date)) return false;
       if (_expenseFilter.toLowerCase() != 'all' && e.type.toLowerCase() != _expenseFilter.toLowerCase()) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();

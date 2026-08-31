@@ -120,11 +120,11 @@ class ExpenseListScreenState extends State<ExpenseListScreen> {
       .where((e) {
         final matchesMonth = e.date.year == _selectedMonth.year &&
             e.date.month == _selectedMonth.month;
-        final matchesGlobalDate = DateFilter.isInRange(e.date);
-        final dateOk = (DateFilter.current == DateFilterType.allTime ||
-                DateFilter.current == DateFilterType.custom)
-            ? matchesGlobalDate
-            : (matchesMonth || matchesGlobalDate);
+        final dateOk = DateFilter.current == DateFilterType.allTime
+            ? true
+            : (DateFilter.current == DateFilterType.custom
+                ? DateFilter.isInRange(e.date)
+                : matchesMonth);
         return dateOk && _matchesTab(e);
       })
       .toList()
@@ -1413,12 +1413,10 @@ class _MonthPickerSheetState extends State<_MonthPickerSheet> {
                   m.month == widget.current.month;
               final future = m.isAfter(DateTime(now.year, now.month));
               return GestureDetector(
-                onTap: future
-                    ? null
-                    : () {
-                        widget.onSelected(m);
-                        Navigator.pop(context);
-                      },
+                onTap: () {
+                  widget.onSelected(m);
+                  Navigator.pop(context);
+                },
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
