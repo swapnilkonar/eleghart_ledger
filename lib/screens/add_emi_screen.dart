@@ -80,6 +80,17 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     return group.categories.isNotEmpty ? group.categories : _categories;
   }
 
+  List<String> get _realCategories {
+    final list = _selectedCategories.where((c) => c.toLowerCase().trim() != 'emi').toList();
+    return list;
+  }
+
+  String get _categoryDisplayText {
+    final real = _realCategories;
+    if (real.isEmpty) return 'EMI';
+    return real.join(', ');
+  }
+
   Future<void> _loadGroups() async {
     final g = await StorageService.loadGroups();
     if (mounted) {
@@ -97,7 +108,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
   }
 
   Future<void> _showCategoryPicker() async {
-    final validCategories = _currentCategories;
+    final validCategories = _currentCategories.where((c) => c.toLowerCase().trim() != 'emi').toList();
     await showModalBottomSheet(
       context: context,
       backgroundColor: AppThemeNotifier.isWhite ? Colors.white : const Color(0xFF120404),
@@ -350,9 +361,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      _selectedCategories.isEmpty
-                                          ? 'Select Categories'
-                                          : _selectedCategories.join(', '),
+                                      _categoryDisplayText,
                                       style: GoogleFonts.sora(fontSize: 14, color: textPrimary),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -368,7 +377,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                               'e.g. iPhone Purchase',
                               textPrimary, textSec, border, cardBg),
                           const SizedBox(height: 16),
-                          if (_selectedCategories.length > 1) ...
+                          if (_realCategories.length > 1) ...
                             [
                               Text('Expense Distribution',
                                   style: GoogleFonts.sora(
@@ -378,11 +387,11 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
                               const SizedBox(height: 6),
                               ExpenseDistributionWidget(
                                 key: ValueKey(
-                                    _selectedCategories.join(',')),
+                                    _realCategories.join(',')),
                                 totalAmount:
                                     double.tryParse(_amountCtrl.text.trim()) ??
                                         0,
-                                items: _selectedCategories.toList(),
+                                items: _realCategories,
                                 initialDistribution: _distribution,
                                 onChanged: (dist, valid) {
                                   setState(() {
