@@ -68,7 +68,12 @@ class SplitwiseStorageService {
 
   static Future<void> addExpense(SplitwiseExpenseModel expense) async {
     final list = await loadExpenses();
-    list.insert(0, expense);
+    final idx = list.indexWhere((e) => e.id == expense.id);
+    if (idx != -1) {
+      list[idx] = expense;
+    } else {
+      list.insert(0, expense);
+    }
     await saveExpenses(list);
   }
 
@@ -78,6 +83,8 @@ class SplitwiseStorageService {
     if (idx != -1) {
       list[idx] = expense;
       await saveExpenses(list);
+    } else {
+      await addExpense(expense);
     }
   }
 
@@ -155,7 +162,7 @@ class SplitwiseStorageService {
     }
   }
 
-  /// Sanitizes expenses for a group to ensure 'equal' splits are evenly divided across all members
+  /// Sanitizes expenses for a group ONLY if distribution map is completely empty
   static Future<void> sanitizeExpensesForGroup(SplitwiseGroupModel group) async {
     if (group.members.length <= 1) return;
 
@@ -165,8 +172,8 @@ class SplitwiseStorageService {
     for (int i = 0; i < allExpenses.length; i++) {
       final e = allExpenses[i];
       if (e.splitwiseGroupId == group.id && e.splitType == 'equal') {
-        // If distribution is empty or has fewer members than the group
-        if (e.distribution.isEmpty || e.distribution.length < group.members.length) {
+        // Only populate if distribution is completely empty
+        if (e.distribution.isEmpty) {
           final Map<String, double> newDist = {};
           final share = e.amount / group.members.length;
           for (final m in group.members) {

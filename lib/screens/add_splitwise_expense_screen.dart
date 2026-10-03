@@ -147,6 +147,17 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
           dist[m] = share;
         }
       }
+    } else if (_splitType == 'lent_full') {
+      // Payer paid 100%, other members owe 100% of bill
+      final debtors = _members.where((m) => m != _singlePayer).toList();
+      final shareList = debtors.isEmpty ? _members : debtors;
+      final perPerson = total / shareList.length;
+      for (final m in shareList) {
+        dist[m] = perPerson;
+      }
+    } else if (_splitType == 'owe_full') {
+      // Other person paid 100%, singlePayer (You) owe 100% of bill
+      dist[_singlePayer] = total;
     } else if (_splitType == 'exact') {
       for (final m in _members) {
         final val = double.tryParse(_exactCtrls[m]?.text.trim() ?? '0') ?? 0;
@@ -176,6 +187,10 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
 
   Map<String, double> _calculatePaidBy() {
     final total = _totalAmount;
+    if (_splitType == 'owe_full') {
+      final otherPerson = _members.where((m) => m != _singlePayer).firstOrNull ?? _members.last;
+      return {otherPerson: total};
+    }
     if (!_isMultiPayer) {
       return {_singlePayer: total};
     }
@@ -211,6 +226,11 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
       final count = dist.length;
       final perPerson = total / count;
       return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Split equally between $count members ($_currSymbol${perPerson.toStringAsFixed(0)} each).';
+    } else if (_splitType == 'lent_full') {
+      final otherName = dist.keys.firstWhere((k) => k != _singlePayer, orElse: () => 'others');
+      return 'Paid by $_singlePayer ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). $otherName owes full amount ($_currSymbol${total.toStringAsFixed(0)}).';
+    } else if (_splitType == 'owe_full') {
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). You owe full amount ($_currSymbol${total.toStringAsFixed(0)}).';
     } else if (_splitType == 'exact') {
       final sumExact = dist.values.fold(0.0, (a, b) => a + b);
       final diff = total - sumExact;
@@ -636,9 +656,9 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   Widget _buildSplitMethodSelector(bool isWhite) {
     final methods = [
       {'id': 'equal', 'label': '= Equal'},
-      {'id': 'exact', 'label': '₹ Exact'},
-      {'id': 'percentage', 'label': '% Pct'},
-      {'id': 'shares', 'label': 'x Shares'},
+      {'id': 'lent_full', 'label': '🟢 Lent 100%'},
+      {'id': 'owe_full', 'label': '🔴 Owe 100%'},
+      {'id': 'exact', 'label': '⚙️ Custom'},
     ];
 
     return Row(
@@ -660,7 +680,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                 child: Text(
                   m['label']!,
                   style: GoogleFonts.sora(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? Colors.white : (isWhite ? EleghartColors.accentDark : Colors.white70),
                   ),
@@ -701,13 +721,13 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                   ),
                 Text(m, style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
                 const Spacer(),
-                if (_splitType == 'equal') ...[
+                if (_splitType == 'equal' || _splitType == 'lent_full' || _splitType == 'owe_full') ...[
                   Text(
-                    isIncluded ? 'Owes ₹${shareVal.toStringAsFixed(0)}' : 'Excluded (₹0)',
+                    shareVal > 0 ? 'Owes $_currSymbol${shareVal.toStringAsFixed(0)}' : 'Owes ${_currSymbol}0',
                     style: GoogleFonts.sora(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isIncluded ? const Color(0xFFCC0020) : Colors.grey,
+                      color: shareVal > 0 ? const Color(0xFFCC0020) : Colors.grey,
                     ),
                   ),
                 ] else ...[
