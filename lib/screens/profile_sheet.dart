@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../services/auth_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/data_sync.dart';
 import '../utils/image_picker_helper.dart';
 import '../utils/responsive.dart';
 
@@ -251,7 +254,9 @@ class _ProfileSheetState extends State<ProfileSheet> {
                   ),
                 ),
 
-                SizedBox(height: Responsive.height(context, 0.012)),
+                const SizedBox(height: 12),
+                _buildGoogleAccountTile(),
+                const SizedBox(height: 8),
 
                 // ---- THEME TOGGLE ----
                 ValueListenableBuilder<bool>(
@@ -353,6 +358,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
                           ),
                   ),
                 ),
+                _buildSignOutSheetButton(),
               ],
             ),
           ),
@@ -514,6 +520,127 @@ class _ProfileSheetState extends State<ProfileSheet> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildGoogleAccountTile() {
+    final user = AuthService().currentUser;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE9ECEF)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: const Color(0xFF4285F4).withValues(alpha: 0.1),
+            backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+            child: user?.photoURL == null
+                ? Image.network(
+                    'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
+                    height: 22,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.g_mobiledata_rounded,
+                      color: Color(0xFF4285F4),
+                      size: 26,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user != null ? (user.displayName ?? 'Google Account') : 'Google Account',
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user != null ? (user.email ?? 'Connected') : 'Connect for group split sync',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () async {
+              if (user != null) {
+                await AuthService().signOut();
+                if (mounted) setState(() {});
+              } else {
+                final cred = await AuthService().signInWithGoogle();
+                if (cred != null) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('skipped_google_login', true);
+                  if (mounted) setState(() {});
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: user != null ? Colors.red.shade50 : const Color(0xFF4285F4),
+              foregroundColor: user != null ? Colors.red : Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              user != null ? 'Sign Out' : 'Sign In',
+              style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignOutSheetButton() {
+    final user = AuthService().currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: OutlinedButton.icon(
+          onPressed: () async {
+            await AuthService().signOut();
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('skipped_google_login', false);
+            if (mounted) {
+              Navigator.pop(context);
+              widget.onUpdated();
+            }
+          },
+          icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+          label: Text(
+            'Sign Out of Google',
+            style: GoogleFonts.sora(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.redAccent,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.red.shade300, width: 1.2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ),
     );
   }
 }

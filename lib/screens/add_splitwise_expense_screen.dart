@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/splitwise_models.dart';
+import '../services/auth_service.dart';
+import '../services/currency_service.dart';
+import '../services/firestore_split_service.dart';
+import '../services/live_notification_service.dart';
 import '../services/splitwise_storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
@@ -27,9 +31,12 @@ class AddSplitwiseExpenseScreen extends StatefulWidget {
 class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   final _amountCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
+  final _exchangeRateCtrl = TextEditingController(text: '1.0');
 
   DateTime _selectedDate = DateTime.now();
   String _splitType = 'equal'; // 'equal', 'exact', 'percentage', 'shares'
+  String _selectedCurrency = 'INR';
+  double _exchangeRate = 1.0;
 
   bool _isMultiPayer = false;
   String _singlePayer = 'You';
@@ -47,6 +54,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   void initState() {
     super.initState();
     _singlePayer = _members.first;
+    _selectedCurrency = widget.group.currency.isNotEmpty ? widget.group.currency : 'INR';
 
     for (final m in _members) {
       _equalIncluded[m] = true;
@@ -62,6 +70,15 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
       _amountCtrl.text = e.amount.toStringAsFixed(e.amount.truncateToDouble() == e.amount ? 0 : 2);
       _splitType = e.splitType;
       _selectedDate = e.date;
+      _selectedCurrency = e.currency;
+      _exchangeRate = e.exchangeRate;
+      _exchangeRateCtrl.text = _exchangeRate.toString();
+
+      if (e.excludedMembers.isNotEmpty) {
+        for (final m in _members) {
+          _equalIncluded[m] = !e.excludedMembers.contains(m);
+        }
+      }
 
       if (e.paidBy.length > 1) {
         _isMultiPayer = true;
@@ -88,6 +105,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   void dispose() {
     _amountCtrl.dispose();
     _titleCtrl.dispose();
+    _exchangeRateCtrl.dispose();
     for (final c in _paidCtrls.values) {
       c.dispose();
     }
@@ -104,6 +122,16 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   }
 
   double get _totalAmount => double.tryParse(_amountCtrl.text.trim()) ?? 0;
+  String get _currSymbol => CurrencyService.getSymbol(_selectedCurrency);
+  String get _groupSymbol => widget.group.currencySymbol;
+
+  void _onCurrencyChanged(String newCurr) {
+    setState(() {
+      _selectedCurrency = newCurr;
+      _exchangeRate = CurrencyService.getExchangeRate(newCurr, widget.group.currency);
+      _exchangeRateCtrl.text = _exchangeRate.toStringAsFixed(4);
+    });
+  }
 
   Map<String, double> _calculateDistribution() {
     final Map<String, double> dist = {};
@@ -119,6 +147,17 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
           dist[m] = share;
         }
       }
+    } else if (_splitType == 'lent_full') {
+      // Payer paid 100%, other members owe 100% of bill
+      final debtors = _members.where((m) => m != _singlePayer).toList();
+      final shareList = debtors.isEmpty ? _members : debtors;
+      final perPerson = total / shareList.length;
+      for (final m in shareList) {
+        dist[m] = perPerson;
+      }
+    } else if (_splitType == 'owe_full') {
+      // Other person paid 100%, singlePayer (You) owe 100% of bill
+      dist[_singlePayer] = total;
     } else if (_splitType == 'exact') {
       for (final m in _members) {
         final val = double.tryParse(_exactCtrls[m]?.text.trim() ?? '0') ?? 0;
@@ -148,6 +187,10 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
 
   Map<String, double> _calculatePaidBy() {
     final total = _totalAmount;
+    if (_splitType == 'owe_full') {
+      final otherPerson = _members.where((m) => m != _singlePayer).firstOrNull ?? _members.last;
+      return {otherPerson: total};
+    }
     if (!_isMultiPayer) {
       return {_singlePayer: total};
     }
@@ -171,25 +214,38 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
     final dist = _calculateDistribution();
     if (dist.isEmpty) return 'Select members or enter split shares.';
 
+    final isDiffCurrency = _selectedCurrency.toUpperCase() != widget.group.currency.toUpperCase();
+    final rate = double.tryParse(_exchangeRateCtrl.text.trim()) ?? _exchangeRate;
+    final baseTotal = total * rate;
+
+    String currencySuffix = isDiffCurrency
+        ? ' (≈ $_groupSymbol${baseTotal.toStringAsFixed(0)} ${widget.group.currency})'
+        : '';
+
     if (_splitType == 'equal') {
       final count = dist.length;
       final perPerson = total / count;
-      return 'Paid by $payerStr (₹${total.toStringAsFixed(0)}). Split equally between $count members (₹${perPerson.toStringAsFixed(0)} each).';
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Split equally between $count members ($_currSymbol${perPerson.toStringAsFixed(0)} each).';
+    } else if (_splitType == 'lent_full') {
+      final otherName = dist.keys.firstWhere((k) => k != _singlePayer, orElse: () => 'others');
+      return 'Paid by $_singlePayer ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). $otherName owes full amount ($_currSymbol${total.toStringAsFixed(0)}).';
+    } else if (_splitType == 'owe_full') {
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). You owe full amount ($_currSymbol${total.toStringAsFixed(0)}).';
     } else if (_splitType == 'exact') {
       final sumExact = dist.values.fold(0.0, (a, b) => a + b);
       final diff = total - sumExact;
       if (diff.abs() > 0.01) {
-        return 'Paid by $payerStr (₹${total.toStringAsFixed(0)}). Total exact split: ₹${sumExact.toStringAsFixed(0)} (Remaining: ₹${diff.toStringAsFixed(0)}).';
+        return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Total exact split: $_currSymbol${sumExact.toStringAsFixed(0)} (Remaining: $_currSymbol${diff.toStringAsFixed(0)}).';
       }
-      return 'Paid by $payerStr (₹${total.toStringAsFixed(0)}). Exact custom split applied.';
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Exact custom split applied.';
     } else if (_splitType == 'percentage') {
       double totalPct = 0;
       for (final m in _members) {
         totalPct += double.tryParse(_pctCtrls[m]?.text.trim() ?? '0') ?? 0;
       }
-      return 'Paid by $payerStr (₹${total.toStringAsFixed(0)}). Total percentage entered: ${totalPct.toStringAsFixed(0)}% / 100%.';
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Total percentage entered: ${totalPct.toStringAsFixed(0)}% / 100%.';
     } else {
-      return 'Paid by $payerStr (₹${total.toStringAsFixed(0)}). Split by relative member shares.';
+      return 'Paid by $payerStr ($_currSymbol${total.toStringAsFixed(0)}$currencySuffix). Split by relative member shares.';
     }
   }
 
@@ -206,22 +262,44 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
 
     final dist = _calculateDistribution();
     final paidBy = _calculatePaidBy();
+    final rate = double.tryParse(_exchangeRateCtrl.text.trim()) ?? _exchangeRate;
+
+    final excluded = _members.where((m) => _equalIncluded[m] == false).toList();
 
     final expense = SplitwiseExpenseModel(
       id: widget.existingExpense?.id ?? const Uuid().v4(),
       splitwiseGroupId: widget.group.id,
       title: title.isEmpty ? 'Bill' : title,
       amount: total,
+      currency: _selectedCurrency,
+      exchangeRate: rate,
       date: _selectedDate,
       splitType: _splitType,
       paidBy: paidBy,
       distribution: dist,
+      excludedMembers: excluded,
     );
+
+    final currentUser = AuthService().currentUser;
+    final actorName = currentUser?.displayName ?? 'You';
 
     if (widget.existingExpense != null) {
       await SplitwiseStorageService.updateExpense(expense);
+      await FirestoreSplitService().updateExpense(
+        newExpense: expense,
+        oldExpense: widget.existingExpense!,
+        actorName: actorName,
+      );
     } else {
       await SplitwiseStorageService.addExpense(expense);
+      await FirestoreSplitService().addExpense(expense, actorName);
+
+      // Trigger instant system push notification for shared bill
+      await LiveNotificationService.showNotification(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: '💸 New Shared Expense Added',
+        body: '$actorName added "${expense.title}" (${expense.currencySymbol}${expense.amount.toStringAsFixed(0)}) in ${widget.group.name}',
+      );
     }
     DataSyncNotifier.notifyDataChanged();
 
@@ -278,7 +356,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Bill Amount & Title Card
+                        // Bill Amount & Currency Selector Card
                         _buildAmountCard(isWhite),
                         const SizedBox(height: 16),
 
@@ -311,6 +389,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
 
   Widget _buildAmountCard(bool isWhite) {
     final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final isDiffCurrency = _selectedCurrency.toUpperCase() != widget.group.currency.toUpperCase();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -323,24 +402,81 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
         children: [
           Row(
             children: [
-              Text('₹', style: GoogleFonts.sora(fontSize: 32, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
-              const SizedBox(width: 10),
+              // Currency Selector Button
+              GestureDetector(
+                onTap: () => _showCurrencyPickerDialog(isWhite),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCC0020).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '$_currSymbol $_selectedCurrency',
+                        style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020)),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFCC0020), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                   onChanged: (_) => setState(() {}),
-                  style: GoogleFonts.sora(fontSize: 32, fontWeight: FontWeight.w800, color: textPrimary),
+                  style: GoogleFonts.sora(fontSize: 30, fontWeight: FontWeight.w800, color: textPrimary),
                   decoration: InputDecoration(
                     hintText: '0.00',
-                    hintStyle: GoogleFonts.sora(fontSize: 32, fontWeight: FontWeight.w800, color: textPrimary.withOpacity(0.3)),
+                    hintStyle: GoogleFonts.sora(fontSize: 30, fontWeight: FontWeight.w800, color: textPrimary.withOpacity(0.3)),
                     border: InputBorder.none,
                   ),
                 ),
               ),
             ],
           ),
+
+          if (isDiffCurrency) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Text('Rate vs ${widget.group.currency}:', style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black54 : Colors.white54)),
+                  const Spacer(),
+                  Text('1 $_selectedCurrency = ', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                  SizedBox(
+                    width: 75,
+                    height: 32,
+                    child: TextField(
+                      controller: _exchangeRateCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                      style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: textPrimary),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        filled: true,
+                        fillColor: isWhite ? Colors.white : const Color(0xFF140404),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.red.withOpacity(0.3))),
+                      ),
+                    ),
+                  ),
+                  Text(' ${widget.group.currency}', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 12),
           TextField(
             controller: _titleCtrl,
@@ -356,6 +492,46 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showCurrencyPickerDialog(bool isWhite) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isWhite ? Colors.white : const Color(0xFF140404),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Select Currency', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: CurrencyService.currencies.length,
+                  itemBuilder: (context, index) {
+                    final c = CurrencyService.currencies[index];
+                    final isSelected = c.code.toUpperCase() == _selectedCurrency.toUpperCase();
+                    return ListTile(
+                      leading: Text(c.symbol, style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                      title: Text('${c.name} (${c.code})', style: GoogleFonts.sora(fontSize: 14, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                      trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: Color(0xFFCC0020)) : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _onCurrencyChanged(c.code);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -480,9 +656,9 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
   Widget _buildSplitMethodSelector(bool isWhite) {
     final methods = [
       {'id': 'equal', 'label': '= Equal'},
-      {'id': 'exact', 'label': '₹ Exact'},
-      {'id': 'percentage', 'label': '% Pct'},
-      {'id': 'shares', 'label': 'x Shares'},
+      {'id': 'lent_full', 'label': '🟢 Lent 100%'},
+      {'id': 'owe_full', 'label': '🔴 Owe 100%'},
+      {'id': 'exact', 'label': '⚙️ Custom'},
     ];
 
     return Row(
@@ -504,7 +680,7 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                 child: Text(
                   m['label']!,
                   style: GoogleFonts.sora(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? Colors.white : (isWhite ? EleghartColors.accentDark : Colors.white70),
                   ),
@@ -545,13 +721,13 @@ class _AddSplitwiseExpenseScreenState extends State<AddSplitwiseExpenseScreen> {
                   ),
                 Text(m, style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
                 const Spacer(),
-                if (_splitType == 'equal') ...[
+                if (_splitType == 'equal' || _splitType == 'lent_full' || _splitType == 'owe_full') ...[
                   Text(
-                    isIncluded ? 'Owes ₹${shareVal.toStringAsFixed(0)}' : 'Excluded (₹0)',
+                    shareVal > 0 ? 'Owes $_currSymbol${shareVal.toStringAsFixed(0)}' : 'Owes ${_currSymbol}0',
                     style: GoogleFonts.sora(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isIncluded ? const Color(0xFFCC0020) : Colors.grey,
+                      color: shareVal > 0 ? const Color(0xFFCC0020) : Colors.grey,
                     ),
                   ),
                 ] else ...[

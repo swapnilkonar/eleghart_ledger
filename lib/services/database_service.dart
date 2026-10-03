@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,7 @@ class DatabaseService {
 
   static Future<Database> _open() async {
     final dbPath = join(await getDatabasesPath(), 'eleghart_ledger.db');
+
     final db = await openDatabase(
       dbPath,
       version: _dbVersion,
@@ -30,6 +32,52 @@ class DatabaseService {
       onUpgrade: _onUpgrade,
     );
     await _ensureColumns(db);
+
+    // 🔄 Package Migration Helper: Check if old database file from com.example.eleghart_ledger exists
+    try {
+      final oldDbPath = '/data/data/com.example.eleghart_ledger/databases/eleghart_ledger.db';
+      final oldFile = File(oldDbPath);
+      if (oldFile.existsSync()) {
+        final countResult = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM groups')) ?? 0;
+        if (countResult == 0) {
+          final oldDb = await openDatabase(oldDbPath, readOnly: true);
+          final oldGroups = await oldDb.query('groups');
+          for (final g in oldGroups) {
+            await db.insert('groups', g, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+          final oldExpenses = await oldDb.query('expenses');
+          for (final e in oldExpenses) {
+            await db.insert('expenses', e, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+          try {
+            final oldRec = await oldDb.query('recurring_expenses');
+            for (final r in oldRec) {
+              await db.insert('recurring_expenses', r, conflictAlgorithm: ConflictAlgorithm.ignore);
+            }
+          } catch (_) {}
+          try {
+            final oldEmis = await oldDb.query('emis');
+            for (final em in oldEmis) {
+              await db.insert('emis', em, conflictAlgorithm: ConflictAlgorithm.ignore);
+            }
+          } catch (_) {}
+          try {
+            final oldPersons = await oldDb.query('persons');
+            for (final p in oldPersons) {
+              await db.insert('persons', p, conflictAlgorithm: ConflictAlgorithm.ignore);
+            }
+          } catch (_) {}
+          try {
+            final oldLedger = await oldDb.query('ledger_transactions');
+            for (final l in oldLedger) {
+              await db.insert('ledger_transactions', l, conflictAlgorithm: ConflictAlgorithm.ignore);
+            }
+          } catch (_) {}
+          await oldDb.close();
+        }
+      }
+    } catch (_) {}
+
     return db;
   }
 

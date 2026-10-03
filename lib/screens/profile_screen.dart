@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../main.dart';
+import '../services/auth_service.dart';
 import '../services/live_notification_service.dart';
 import '../services/pin_service.dart';
 import '../theme/eleghart_colors.dart';
@@ -309,7 +311,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       children: [
                         _buildProfileHeader(),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
+                        _buildGoogleAccountCard(),
+                        const SizedBox(height: 24),
                         _buildAppearanceCard(),
                         const SizedBox(height: 24),
                         _buildSectionTitle('Personal Information'),
@@ -367,12 +371,140 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                         ]),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 24),
+                        _buildSignOutBottomButton(),
+                        const SizedBox(height: 32),
                       ],
                     ),
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignOutBottomButton() {
+    final user = AuthService().currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: () async {
+          await AuthService().signOut();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('skipped_google_login', false);
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const AppEntryGate()),
+              (route) => false,
+            );
+          }
+        },
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.red.shade400, width: 1.5),
+          backgroundColor: Colors.red.shade50.withValues(alpha: 0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              'Sign Out of Google',
+              style: GoogleFonts.sora(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.redAccent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoogleAccountCard() {
+    final user = AuthService().currentUser;
+    final isDark = !AppThemeNotifier.isWhite;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.grey.shade200,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(0xFF4285F4).withValues(alpha: 0.15),
+            backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+            child: user?.photoURL == null
+                ? const Icon(Icons.g_mobiledata_rounded, color: Color(0xFF4285F4), size: 30)
+                : null,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user != null ? (user.displayName ?? 'Google Account') : 'Connect Google Account',
+                  style: GoogleFonts.sora(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user != null
+                      ? (user.email ?? 'Cloud Sync Active')
+                      : 'Enable Real-Time Split Sync & Notifications',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () async {
+              if (user != null) {
+                await AuthService().signOut();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('skipped_google_login', false);
+                setState(() {});
+              } else {
+                final cred = await AuthService().signInWithGoogle();
+                if (cred != null) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('skipped_google_login', true);
+                  setState(() {});
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: user != null ? Colors.red.shade50 : const Color(0xFF4285F4),
+              foregroundColor: user != null ? Colors.red : Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              user != null ? 'Sign Out' : 'Sign In',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -504,7 +636,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(width: 6),
               const Icon(
-                Icons.verified_rounded,
+                Icons.edit_rounded,
                 color: Color(0xFFCC0020),
                 size: 18,
               ),

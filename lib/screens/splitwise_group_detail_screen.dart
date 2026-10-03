@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/splitwise_models.dart';
+import '../services/currency_service.dart';
 import '../services/splitwise_storage_service.dart';
 import '../services/splitwise_service.dart';
 import '../theme/eleghart_colors.dart';
@@ -94,22 +96,61 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
 
   void _addMemberDialog(bool isWhite) {
     final memberCtrl = TextEditingController();
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Add Member to ${_group.name}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
-        content: TextField(
-          controller: memberCtrl,
-          style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Member Name (e.g. Amit)',
-            hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
-            filled: true,
-            fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          ),
+        title: Text('Add Member to ${_group.name}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: memberCtrl,
+              style: GoogleFonts.sora(fontSize: 13, color: textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Member Name (e.g. Amit)',
+                hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
+                filled: true,
+                fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () {
+                Navigator.pop(context);
+                final code = _group.effectiveInviteCode;
+                Share.share(
+                  'Join my group "${_group.name}" on Eleghart Ledger!\n\n👉 Join Link: https://eleghartledger.app/join?code=$code\n🔑 Invite Code: $code',
+                  subject: 'Join ${_group.name} on Eleghart Ledger',
+                );
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCC0020).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.share_rounded, color: Color(0xFFCC0020), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Share Join Link / Code to Any App',
+                        style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFCC0020)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
@@ -305,7 +346,66 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
     );
   }
 
-  void _shareWhatsAppSummary() {
+  void _changeGroupCurrencyDialog(bool isWhite) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Change Group Base Currency', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+              Text('All group balances and simplified settlements will be converted to this currency.', style: GoogleFonts.sora(fontSize: 11, color: isWhite ? Colors.black54 : Colors.white54)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: CurrencyService.currencies.length,
+                  itemBuilder: (context, index) {
+                    final c = CurrencyService.currencies[index];
+                    final isSelected = c.code.toUpperCase() == _group.currency.toUpperCase();
+                    return ListTile(
+                      leading: Text(c.symbol, style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                      title: Text('${c.name} (${c.code})', style: GoogleFonts.sora(fontSize: 14, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                      trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: Color(0xFFCC0020)) : null,
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final updated = _group.copyWith(currency: c.code);
+                        await SplitwiseStorageService.updateGroup(updated);
+                        DataSyncNotifier.notifyDataChanged();
+                        _loadData();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _sendWhatsAppNudge(SplitTransfer transfer) async {
+    final msg = SplitwiseService.generateWhatsAppNudgeMessage(
+      debtorName: transfer.fromMember,
+      creditorName: transfer.toMember,
+      amount: transfer.amount,
+      currencySymbol: _group.currencySymbol,
+      groupName: _group.name,
+    );
+    Clipboard.setData(ClipboardData(text: msg));
+    await Share.share(
+      msg,
+      subject: 'Payment Reminder - ${_group.name}',
+    );
+  }
+
+  void _shareWhatsAppSummary() async {
     final summary = SplitwiseService.generateWhatsAppSummary(
       group: _group,
       balances: _balances,
@@ -313,8 +413,9 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
       totalGroupExpenses: _totalGroupExpenses,
     );
     Clipboard.setData(ClipboardData(text: summary));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
+    await Share.share(
+      summary,
+      subject: 'Eleghart Splitz - ${_group.name}',
     );
   }
 
@@ -352,19 +453,38 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_group.name, style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: textPrimary)),
-                          Text('${_group.members.length} members', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
+                          Row(
+                            children: [
+                              Text(_group.name, style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: textPrimary)),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => _changeGroupCurrencyDialog(isWhite),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFCC0020).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${_group.currencySymbol} ${_group.currency}',
+                                    style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text('${_group.members.length} members • Code: ${_group.effectiveInviteCode}', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
                         ],
                       ),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFCC0020), size: 22),
-                        tooltip: 'Add Member',
+                        tooltip: 'Add Member / Share Link',
                         onPressed: () => _addMemberDialog(isWhite),
                       ),
                       IconButton(
                         icon: const Icon(Icons.share_rounded, color: Color(0xFFCC0020), size: 20),
-                        tooltip: 'Share WhatsApp Summary',
+                        tooltip: 'Share Group & Join Link',
                         onPressed: _shareWhatsAppSummary,
                       ),
                       PopupMenuButton<String>(
@@ -372,10 +492,21 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                         icon: Icon(Icons.more_vert_rounded, color: textPrimary),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         onSelected: (val) {
+                          if (val == 'currency') _changeGroupCurrencyDialog(isWhite);
                           if (val == 'edit') _editGroupDialog(isWhite);
                           if (val == 'delete') _deleteGroupDialog(isWhite);
                         },
                         itemBuilder: (ctx) => [
+                          PopupMenuItem(
+                            value: 'currency',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.currency_exchange_rounded, color: Color(0xFFCC0020), size: 18),
+                                const SizedBox(width: 10),
+                                Text('Change Group Currency', style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white)),
+                              ],
+                            ),
+                          ),
                           PopupMenuItem(
                             value: 'edit',
                             child: Row(
@@ -452,6 +583,8 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
   }
 
   Widget _buildHeroGroupCard(bool isWhite, bool isOwed, bool owes, double net) {
+    final symbol = _group.currencySymbol;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -479,16 +612,16 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('YOUR GROUP POSITION', style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white70)),
+                Text('YOUR GROUP POSITION (${_group.currency})', style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white70)),
                 const SizedBox(height: 4),
                 Text(
                   isOwed
-                      ? 'You are owed ₹${net.toStringAsFixed(0)}'
-                      : (owes ? 'You owe ₹${net.abs().toStringAsFixed(0)}' : 'You are fully settled!'),
+                      ? 'You are owed $symbol${net.toStringAsFixed(0)}'
+                      : (owes ? 'You owe $symbol${net.abs().toStringAsFixed(0)}' : 'You are fully settled!'),
                   style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
                 const SizedBox(height: 6),
-                Text('Total Group Expenses: ₹${_totalGroupExpenses.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 11, color: Colors.white70)),
+                Text('Total Group Expenses: $symbol${_totalGroupExpenses.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 11, color: Colors.white70)),
               ],
             ),
           ),
@@ -509,6 +642,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
   Widget _buildBillsTab(bool isWhite) {
     final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
     final textSec = isWhite ? Colors.black45 : Colors.white54;
+    final symbol = _group.currencySymbol;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
@@ -546,7 +680,22 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                                   TextSpan(text: t.fromMember, style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFEF4444))),
                                   TextSpan(text: ' pays ', style: GoogleFonts.sora(fontSize: 12, color: textPrimary)),
                                   TextSpan(text: t.toMember, style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
-                                  TextSpan(text: ': ₹${t.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                                  TextSpan(text: ': $symbol${t.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                                ],
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _sendWhatsAppNudge(t),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(color: const Color(0xFF25D366).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366), size: 12),
+                                  const SizedBox(width: 3),
+                                  Text('Remind', style: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF25D366))),
                                 ],
                               ),
                             ),
@@ -598,6 +747,9 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
             final isYouLent = netBillYou > 0.01;
             final isYouOwe = netBillYou < -0.01;
 
+            final expSymbol = e.currencySymbol;
+            final isDiff = e.currency.toUpperCase() != _group.currency.toUpperCase();
+
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
@@ -625,9 +777,9 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
 
                         // Bill Impact Badge
                         if (isYouLent)
-                          Text('🟢 You lent ₹${netBillYou.toStringAsFixed(0)} on this bill', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF10B981)))
+                          Text('🟢 You lent $expSymbol${netBillYou.toStringAsFixed(0)} on this bill', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF10B981)))
                         else if (isYouOwe)
-                          Text('🔴 You owe ₹${netBillYou.abs().toStringAsFixed(0)} on this bill', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFEF4444)))
+                          Text('🔴 You owe $expSymbol${netBillYou.abs().toStringAsFixed(0)} on this bill', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFEF4444)))
                         else
                           Text('⚪ You are even on this bill', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
                       ],
@@ -636,7 +788,9 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('₹${e.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                      Text('$expSymbol${e.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                      if (isDiff)
+                        Text('≈ $symbol${e.convertedAmount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 10, color: textSec)),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -673,13 +827,14 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
 
   Widget _buildBalancesTab(bool isWhite) {
     final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    final symbol = _group.currencySymbol;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Member Net Positions', style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: textPrimary)),
+          Text('Member Net Positions (${_group.currency})', style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: textPrimary)),
           const SizedBox(height: 10),
           Column(
             children: _balances.map((b) {
@@ -708,7 +863,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(b.member, style: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary)),
-                          Text('Paid ₹${b.totalPaid.toStringAsFixed(0)} • Share ₹${b.totalOwed.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 10.5, color: isWhite ? Colors.black45 : Colors.white54)),
+                          Text('Paid $symbol${b.totalPaid.toStringAsFixed(0)} • Share $symbol${b.totalOwed.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 10.5, color: isWhite ? Colors.black45 : Colors.white54)),
                         ],
                       ),
                     ),
@@ -716,7 +871,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
                       child: Text(
-                        isOwed ? 'Gets ₹${b.netBalance.toStringAsFixed(0)}' : (owes ? 'Owes ₹${b.netBalance.abs().toStringAsFixed(0)}' : 'Settled'),
+                        isOwed ? 'Gets $symbol${b.netBalance.toStringAsFixed(0)}' : (owes ? 'Owes $symbol${b.netBalance.abs().toStringAsFixed(0)}' : 'Settled'),
                         style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700, color: color),
                       ),
                     ),
@@ -769,10 +924,16 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                                 ],
                               ),
                             ),
-                            Text('₹${t.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
+                            Text('$symbol${t.amount.toStringAsFixed(0)}', style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFFCC0020))),
                           ],
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366), size: 20),
+                        tooltip: 'WhatsApp Reminder',
+                        onPressed: () => _sendWhatsAppNudge(t),
+                      ),
+                      const SizedBox(width: 4),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFCC0020),

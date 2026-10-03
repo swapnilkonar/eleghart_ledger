@@ -1,4 +1,4 @@
-package com.example.eleghart_ledger
+package com.eleghart.ledger
 
 import android.content.Intent
 import android.net.Uri
