@@ -137,10 +137,13 @@ class SplitwiseStorageService {
             splitwiseGroupId: e.splitwiseGroupId,
             title: e.title,
             amount: e.amount,
+            currency: e.currency,
+            exchangeRate: e.exchangeRate,
             date: e.date,
             splitType: e.splitType,
             paidBy: newPaidBy,
             distribution: newDist,
+            excludedMembers: e.excludedMembers,
           );
           modified = true;
         }
@@ -174,10 +177,13 @@ class SplitwiseStorageService {
             splitwiseGroupId: e.splitwiseGroupId,
             title: e.title,
             amount: e.amount,
+            currency: e.currency,
+            exchangeRate: e.exchangeRate,
             date: e.date,
             splitType: e.splitType,
             paidBy: e.paidBy,
             distribution: newDist,
+            excludedMembers: e.excludedMembers,
           );
           modified = true;
         }
