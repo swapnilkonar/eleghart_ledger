@@ -163,12 +163,11 @@ class SplitwiseService {
       }
     }
 
-    if (group.inviteCode.isNotEmpty) {
-      buffer.writeln("");
-      buffer.writeln("📲 *JOIN GROUP ON ELEGHART LEDGER:*");
-      buffer.writeln("👉 Join Link: https://eleghartledger.app/join?code=${group.inviteCode}");
-      buffer.writeln("🔑 Invite Code: *${group.inviteCode}*");
-    }
+    final code = group.effectiveInviteCode;
+    buffer.writeln("");
+    buffer.writeln("📲 *JOIN THIS GROUP ON ELEGHART LEDGER:*");
+    buffer.writeln("👉 Join Link: https://eleghartledger.app/join?code=$code");
+    buffer.writeln("🔑 Invite Code: *$code*");
 
     buffer.writeln("");
     buffer.writeln("Sent via Eleghart Ledger 📱");

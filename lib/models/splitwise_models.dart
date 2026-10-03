@@ -20,9 +20,19 @@ class SplitwiseGroupModel {
     this.inviteCode = '',
     this.currency = 'INR',
     this.createdBy = '',
-    required this.createdAt,
+    DateTime? createdAt,
     this.imagePath,
-  });
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  String get effectiveInviteCode {
+    if (inviteCode.isNotEmpty) return inviteCode;
+    final prefix = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    final cleanPrefix = prefix.isEmpty
+        ? 'SPL'
+        : (prefix.length >= 3 ? prefix.substring(0, 3) : prefix.padRight(3, 'X'));
+    final codeNum = (1000 + (id.hashCode % 8999).abs());
+    return '$cleanPrefix-$codeNum';
+  }
 
   String get currencySymbol {
     switch (currency.toUpperCase()) {

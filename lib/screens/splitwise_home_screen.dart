@@ -3,8 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/splitwise_models.dart';
-import '../services/splitwise_storage_service.dart';
+import '../services/firestore_split_service.dart';
 import '../services/splitwise_service.dart';
+import '../services/splitwise_storage_service.dart';
 import '../theme/eleghart_colors.dart';
 import '../utils/app_theme.dart';
 import '../utils/data_sync.dart';
@@ -185,6 +186,91 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
     );
   }
 
+  void _showJoinGroupModal(bool isWhite) {
+    final codeCtrl = TextEditingController();
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
+    bool joining = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isWhite ? Colors.white : const Color(0xFF160606),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Join Group via Code', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary)),
+                    IconButton(icon: Icon(Icons.close_rounded, color: textPrimary), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('Enter the 6-character group invite code shared with you (e.g. GOA-8492):', style: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black54 : Colors.white60)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: codeCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. GOA-8492',
+                    hintStyle: GoogleFonts.sora(fontSize: 14, color: isWhite ? Colors.black38 : Colors.white38, letterSpacing: 1.0),
+                    filled: true,
+                    fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFCC0020),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: joining
+                        ? null
+                        : () async {
+                            final code = codeCtrl.text.trim();
+                            if (code.isEmpty) return;
+                            setModalState(() => joining = true);
+                            final success = await FirestoreSplitService().joinGroupWithInviteCode(code);
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Successfully joined group!')),
+                                );
+                                _loadData();
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Invalid code or group not found. Check the invite code and try again.')),
+                                );
+                              }
+                            }
+                          },
+                    child: joining
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text('Join Group', style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWhite = AppThemeNotifier.isWhite;
@@ -223,7 +309,13 @@ class _SplitwiseHomeScreenState extends State<SplitwiseHomeScreen> {
                       ),
                       const Spacer(),
                       IconButton(
+                        icon: const Icon(Icons.group_add_rounded, color: Color(0xFFCC0020), size: 24),
+                        tooltip: 'Join Group via Code',
+                        onPressed: () => _showJoinGroupModal(isWhite),
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFFCC0020), size: 24),
+                        tooltip: 'Create Group',
                         onPressed: () => _showCreateGroupModal(isWhite),
                       ),
                     ],

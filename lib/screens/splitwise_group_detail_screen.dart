@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/splitwise_models.dart';
 import '../services/currency_service.dart';
@@ -95,22 +96,61 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
 
   void _addMemberDialog(bool isWhite) {
     final memberCtrl = TextEditingController();
+    final textPrimary = isWhite ? EleghartColors.accentDark : Colors.white;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: isWhite ? Colors.white : const Color(0xFF180808),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Add Member to ${_group.name}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: isWhite ? EleghartColors.accentDark : Colors.white)),
-        content: TextField(
-          controller: memberCtrl,
-          style: GoogleFonts.sora(fontSize: 13, color: isWhite ? EleghartColors.accentDark : Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Member Name (e.g. Amit)',
-            hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
-            filled: true,
-            fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          ),
+        title: Text('Add Member to ${_group.name}', style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: memberCtrl,
+              style: GoogleFonts.sora(fontSize: 13, color: textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Member Name (e.g. Amit)',
+                hintStyle: GoogleFonts.sora(fontSize: 12, color: isWhite ? Colors.black38 : Colors.white38),
+                filled: true,
+                fillColor: isWhite ? const Color(0xFFF8FAFC) : const Color(0xFF220A0A),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () {
+                Navigator.pop(context);
+                final code = _group.effectiveInviteCode;
+                Share.share(
+                  'Join my group "${_group.name}" on Eleghart Ledger!\n\n👉 Join Link: https://eleghartledger.app/join?code=$code\n🔑 Invite Code: $code',
+                  subject: 'Join ${_group.name} on Eleghart Ledger',
+                );
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCC0020).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCC0020).withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.share_rounded, color: Color(0xFFCC0020), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Share Join Link / Code to Any App',
+                        style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFCC0020)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.sora(color: isWhite ? Colors.black54 : Colors.white54))),
@@ -350,7 +390,7 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
     );
   }
 
-  void _sendWhatsAppNudge(SplitTransfer transfer) {
+  void _sendWhatsAppNudge(SplitTransfer transfer) async {
     final msg = SplitwiseService.generateWhatsAppNudgeMessage(
       debtorName: transfer.fromMember,
       creditorName: transfer.toMember,
@@ -359,12 +399,13 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
       groupName: _group.name,
     );
     Clipboard.setData(ClipboardData(text: msg));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('WhatsApp reminder message for ${transfer.fromMember} copied to clipboard!')),
+    await Share.share(
+      msg,
+      subject: 'Payment Reminder - ${_group.name}',
     );
   }
 
-  void _shareWhatsAppSummary() {
+  void _shareWhatsAppSummary() async {
     final summary = SplitwiseService.generateWhatsAppSummary(
       group: _group,
       balances: _balances,
@@ -372,8 +413,9 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
       totalGroupExpenses: _totalGroupExpenses,
     );
     Clipboard.setData(ClipboardData(text: summary));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
+    await Share.share(
+      summary,
+      subject: 'Eleghart Splitz - ${_group.name}',
     );
   }
 
@@ -431,18 +473,18 @@ class _SplitwiseGroupDetailScreenState extends State<SplitwiseGroupDetailScreen>
                               ),
                             ],
                           ),
-                          Text('${_group.members.length} members • Code: ${_group.inviteCode}', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
+                          Text('${_group.members.length} members • Code: ${_group.effectiveInviteCode}', style: GoogleFonts.sora(fontSize: 11, color: textSec)),
                         ],
                       ),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFCC0020), size: 22),
-                        tooltip: 'Add Member',
+                        tooltip: 'Add Member / Share Link',
                         onPressed: () => _addMemberDialog(isWhite),
                       ),
                       IconButton(
                         icon: const Icon(Icons.share_rounded, color: Color(0xFFCC0020), size: 20),
-                        tooltip: 'Share WhatsApp Summary',
+                        tooltip: 'Share Group & Join Link',
                         onPressed: _shareWhatsAppSummary,
                       ),
                       PopupMenuButton<String>(

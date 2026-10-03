@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/splitwise_models.dart';
 import '../services/splitwise_service.dart';
@@ -94,7 +95,7 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
     }
   }
 
-  void _shareWhatsAppSummary() {
+  void _shareWhatsAppSummary() async {
     if (_activeGroup == null) return;
     final summary = SplitwiseService.generateWhatsAppSummary(
       group: _activeGroup!,
@@ -103,8 +104,9 @@ class _SplitwiseDashboardScreenState extends State<SplitwiseDashboardScreen> {
       totalGroupExpenses: _totalGroupExpenses,
     );
     Clipboard.setData(ClipboardData(text: summary));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Splitz summary copied to clipboard! Ready to paste into WhatsApp.')),
+    await Share.share(
+      summary,
+      subject: 'Eleghart Splitz - ${_activeGroup!.name}',
     );
   }
 
