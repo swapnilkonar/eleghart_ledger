@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../main.dart';
 import '../utils/app_theme.dart';
-import 'welcome_screen.dart';
-import 'pin_unlock_screen.dart';
 
 /// Ultra-Premium Animated Splash Screen for Eleghart Ledger
 class PremiumSplashScreen extends StatefulWidget {
@@ -122,22 +121,12 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
 
   Future<void> _navigateNext() async {
     if (!mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('user_name');
-    final pin =
-        prefs.getString('user_pin_hash') ?? prefs.getString('user_pin');
-
-    if (!mounted) return;
-
-    final Widget nextScreen = (pin == null || pin.isEmpty)
-        ? const WelcomeScreen()
-        : PinUnlockScreen(userName: name ?? '');
 
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 800),
-        pageBuilder: (_, __, ___) => nextScreen,
+        pageBuilder: (_, __, ___) => const AppEntryGate(),
         transitionsBuilder: (_, animation, __, child) {
           final fade = CurvedAnimation(
             parent: animation,

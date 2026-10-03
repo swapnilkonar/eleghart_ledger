@@ -4,6 +4,7 @@ import '../theme/eleghart_colors.dart';
 import '../widgets/themed_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 import 'set_pin_screen.dart';
 
@@ -27,6 +28,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    final googleUser = AuthService().currentUser;
+    if (googleUser?.displayName != null && googleUser!.displayName!.isNotEmpty) {
+      _controller.text = googleUser.displayName!;
+    }
   }
 
   @override

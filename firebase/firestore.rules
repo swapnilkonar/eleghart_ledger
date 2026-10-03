@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. User Profile Ownership
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      match /devices/{deviceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // 2. Group Membership Isolation
+    match /splitGroups/{groupId} {
+      function isMember() {
+        return request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/splitGroups/$(groupId)).data.memberUids ||
+          request.auth.token.name in get(/databases/$(database)/documents/splitGroups/$(groupId)).data.memberIds
+        );
+      }
+      
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null && (
+        request.auth.uid in resource.data.memberUids ||
+        request.auth.token.name in resource.data.memberIds
+      );
+
+      // Restrict all subcollections (expenses, settlements, activities) to members
+      match /{allSubcollections=**} {
+        allow read, write: if isMember();
+      }
+    }
+  }
+}
